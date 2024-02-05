@@ -1,9 +1,10 @@
 mod model_data;
+mod constants;
 
 use openskill;
 use openskill::model::plackett_luce::*;
 use openskill::rating::*;
-use crate::constants::{default_constants};
+use crate::model::constants::default_constants;
 
 pub fn create_model() -> PlackettLuce {
     let constants = default_constants();

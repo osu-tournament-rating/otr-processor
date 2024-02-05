@@ -6,6 +6,7 @@ use reqwest::{Client, ClientBuilder, Error};
 use reqwest::header::{HeaderMap, HeaderValue};
 use serde::{Deserialize};
 use crate::api::api_structs::MatchDTO;
+use crate::utils::progress_utils::progress_bar;
 
 use crate::env;
 
@@ -91,11 +92,13 @@ pub async fn get_match_ids(limit: Option<i32>, token: &String) -> Result<Vec<i32
 
 pub async fn get_matches(match_ids: Vec<i32>, token: &String) -> Result<Vec<MatchDTO>, Error> {
     let chunk_size = 250;
+    let pbar_size = (match_ids.len() / chunk_size) as u64;
     let client = client(Some(authorized_headers(&token)));
     let env = env::get_env();
     let mut match_data: Vec<MatchDTO> = Vec::new();
 
-    let bar = ProgressBar::new((match_ids.len() / chunk_size) as u64);
+    let bar = progress_bar(pbar_size);
+    bar.println("Fetching match data...");
 
     // Group matches into 250 different lists, then form
     // ret with all values. This is to reduce API strain.

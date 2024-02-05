@@ -1,7 +1,7 @@
-mod constants;
 mod api;
 mod env;
 mod model;
+mod utils;
 
 use tokio;
 
