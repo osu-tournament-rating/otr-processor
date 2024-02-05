@@ -1,14 +1,14 @@
 pub struct RatingConstants {
-    multiplier: i32,
-    default_mu: f32,
-    default_sigma: f32,
-    default_tau: f32,
-    default_beta: f32,
-    default_kappa: f32,
-    decay_minimum: i32,
-    decay_days: i32,
-    decay_rate: f32,
-    volatility_growth_rate: f32
+    pub multiplier: i32,
+    pub default_mu: f32,
+    pub default_sigma: f32,
+    pub default_tau: f32,
+    pub default_beta: f32,
+    pub default_kappa: f32,
+    pub decay_minimum: i32,
+    pub decay_days: i32,
+    pub decay_rate: f32,
+    pub volatility_growth_rate: f32
 }
 
 pub fn default_constants() -> RatingConstants {
