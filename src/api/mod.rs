@@ -1,11 +1,10 @@
-mod api_structs;
+pub mod api_structs;
 
 use std::any::Any;
-use indicatif::ProgressBar;
 use reqwest::{Client, ClientBuilder, Error};
 use reqwest::header::{HeaderMap, HeaderValue};
 use serde::{Deserialize};
-use crate::api::api_structs::MatchDTO;
+use crate::api::api_structs::Match;
 use crate::utils::progress_utils::progress_bar;
 
 use crate::env;
@@ -90,12 +89,12 @@ pub async fn get_match_ids(limit: Option<i32>, token: &String) -> Result<Vec<i32
     Ok(take)
 }
 
-pub async fn get_matches(match_ids: Vec<i32>, token: &String) -> Result<Vec<MatchDTO>, Error> {
+pub async fn get_matches(match_ids: Vec<i32>, token: &String) -> Result<Vec<Match>, Error> {
     let chunk_size = 250;
     let pbar_size = (match_ids.len() / chunk_size) as u64;
     let client = client(Some(authorized_headers(&token)));
     let env = env::get_env();
-    let mut match_data: Vec<MatchDTO> = Vec::new();
+    let mut match_data: Vec<Match> = Vec::new();
 
     let bar = progress_bar(pbar_size);
     bar.println("Fetching match data...");
@@ -103,7 +102,7 @@ pub async fn get_matches(match_ids: Vec<i32>, token: &String) -> Result<Vec<Matc
     // Group matches into 250 different lists, then form
     // ret with all values. This is to reduce API strain.
     for chunk in match_ids.chunks(chunk_size) {
-        let response: Vec<MatchDTO> = client
+        let response: Vec<Match> = client
             .post(format!("{}/matches/convert", env.api_root))
             .json(&chunk)
             .send()

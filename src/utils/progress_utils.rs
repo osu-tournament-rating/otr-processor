@@ -8,3 +8,12 @@ pub fn progress_bar(len: u64) -> ProgressBar {
 
     bar
 }
+
+pub fn progress_bar_spinner(len: u64) -> ProgressBar {
+    let bar = ProgressBar::new(len);
+    bar.set_style(indicatif::ProgressStyle::default_spinner()
+        .template("[{elapsed_precise} / {eta_precise}] {spinner:.green} {msg}")
+        .unwrap());
+
+    bar
+}

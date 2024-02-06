@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RatingAdjustmentDTO {
+pub struct RatingAdjustment {
     pub player_id: i32,
     pub mode: i32,
     pub rating_adjustment_amount: f64,
@@ -18,7 +18,7 @@ pub struct RatingAdjustmentDTO {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PlayerMatchStatsDTO {
+pub struct PlayerMatchStats {
     pub player_id: i32,
     pub match_id: i32,
     pub won: bool,
@@ -35,7 +35,7 @@ pub struct PlayerMatchStatsDTO {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct MatchRatingStatsDTO {
+pub struct MatchRatingStats {
     pub player_id: i32,
     pub match_id: i32,
     pub match_cost: f64,
@@ -60,7 +60,7 @@ pub struct MatchRatingStatsDTO {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct BaseStatsPostDTO {
+pub struct BaseStatsPost {
     pub player_id: i32,
     pub match_cost_average: f64,
     pub rating: f64,
@@ -73,7 +73,7 @@ pub struct BaseStatsPostDTO {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GameWinRecordDTO {
+pub struct GameWinRecord {
     pub game_id: i32,
     pub winners: Vec<i32>,
     pub losers: Vec<i32>,
@@ -83,7 +83,7 @@ pub struct GameWinRecordDTO {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct MatchWinRecordDTO {
+pub struct MatchWinRecord {
     pub match_id: i32,
     pub team_blue: Vec<i32>,
     pub team_red: Vec<i32>,
@@ -96,18 +96,18 @@ pub struct MatchWinRecordDTO {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct MatchDTO {
+pub struct Match {
     pub id: i32,
     pub match_id: i64,
     pub name: Option<String>,
     pub start_time: Option<DateTime<FixedOffset>>,
     pub end_time: Option<DateTime<FixedOffset>>,
-    pub games: Vec<GameDTO>,
+    pub games: Vec<Game>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GameDTO {
+pub struct Game {
     pub id: i32,
     pub play_mode: i32,
     pub scoring_type: i32,
@@ -116,13 +116,13 @@ pub struct GameDTO {
     pub game_id: i64,
     pub start_time: DateTime<FixedOffset>,
     pub end_time: Option<DateTime<FixedOffset>>,
-    pub beatmap: Option<BeatmapDTO>,
-    pub match_scores: Vec<MatchScoreDTO>,
+    pub beatmap: Option<Beatmap>,
+    pub match_scores: Vec<MatchScore>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct MatchScoreDTO {
+pub struct MatchScore {
     pub player_id: i32,
     pub team: i32,
     pub score: i64,
@@ -136,7 +136,7 @@ pub struct MatchScoreDTO {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct BeatmapDTO {
+pub struct Beatmap {
     pub artist: String,
     pub beatmap_id: i64,
     pub bpm: Option<f64>,
@@ -151,4 +151,25 @@ pub struct BeatmapDTO {
     pub length: f64,
     pub title: String,
     pub diff_name: Option<String>,
+}
+
+use chrono::NaiveDateTime;
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlayerRanks {
+    pub id: i32,
+    pub osu_id: i64,
+    pub rank_standard: Option<i32>,
+    pub rank_taiko: Option<i32>,
+    pub rank_catch: Option<i32>,
+    pub rank_mania: Option<i32>,
+    pub earliest_osu_global_rank: Option<i32>,
+    pub earliest_osu_global_rank_date: Option<NaiveDateTime>,
+    pub earliest_taiko_global_rank: Option<i32>,
+    pub earliest_taiko_global_rank_date: Option<NaiveDateTime>,
+    pub earliest_catch_global_rank: Option<i32>,
+    pub earliest_catch_global_rank_date: Option<NaiveDateTime>,
+    pub earliest_mania_global_rank: Option<i32>,
+    pub earliest_mania_global_rank_date: Option<NaiveDateTime>,
 }
