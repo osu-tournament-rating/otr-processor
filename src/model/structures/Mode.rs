@@ -1,7 +1,7 @@
 use std::convert::TryFrom;
 
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum Mode {
     Osu = 0,
     Taiko = 1,

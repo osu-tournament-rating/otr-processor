@@ -1,4 +1,4 @@
-mod model;
+pub mod model;
 mod constants;
 mod data_processing;
 mod decay;
