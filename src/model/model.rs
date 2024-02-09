@@ -18,6 +18,82 @@ pub fn create_model() -> PlackettLuce {
                       default_gamma)
 }
 
+pub fn create_initial_ratings(matches: Vec<Match>, players: Vec<Player>) -> Vec<PlayerRating> {
+    // The first step in the rating algorithm. Generate ratings from known ranks.
+    let constants = default_constants();
+
+    // A fast lookup used for understanding who has default ratings created at this time.
+    let mut stored_lookup_log: HashSet<(i32, i32)> = HashSet::new();
+    let mut ratings: Vec<PlayerRating> = Vec::new();
+    let bar = progress_bar(matches.len() as u64);
+
+    // Map the osu ids for fast lookup
+    let mut player_hashmap: HashMap<i32, Player> = HashMap::new();
+
+    for player in players {
+        if !player_hashmap.contains_key(&player.id) {
+            player_hashmap.insert(player.id, player);
+        }
+    }
+
+    for m in matches {
+        for game in m.games {
+            let mode = game.play_mode;
+            let enum_mode = match mode.try_into() {
+                Ok(mode @ (Mode::Osu | Mode::Taiko | Mode::Catch | Mode::Mania)) => mode,
+                _ => panic!("Expected one of [0, 1, 2, 3] to convert to mode enum. Found {} instead.", mode),
+            };
+
+            for score in game.match_scores {
+                // Check if the player_id and enum_mode combination is already in created_ratings
+                if stored_lookup_log.contains(&(score.player_id, enum_mode as i32)) {
+                    // We've already initialized this player.
+                    continue;
+                }
+
+                // Create ratings using the earliest known rank
+                let player = player_hashmap.get(&score.player_id).expect("Player should be present in the hashmap.");
+                let rank: Option<i32> = match enum_mode {
+                    Mode::Osu => player.earliest_osu_global_rank.or(player.rank_standard),
+                    Mode::Taiko => player.earliest_taiko_global_rank.or(player.rank_taiko),
+                    Mode::Catch => player.earliest_catch_global_rank.or(player.rank_catch),
+                    Mode::Mania => player.earliest_mania_global_rank.or(player.rank_mania)
+                };
+
+                let mu;
+                let sigma;
+                match rank {
+                    Some(rank) => {
+                        // Player has a valid identified rank (either the earliest known
+                        // rank, or their current rank)
+                        mu = mu_for_rank(rank);
+                        sigma = constants.default_sigma;
+                    },
+                    None => {
+                        // Player may be restricted / we cannot get hold of their rank info. Use default.
+                        mu = constants.default_mu;
+                        sigma = constants.default_sigma;
+                    }
+                }
+
+                let rating = Rating::new(mu, sigma);
+                let player_rating = PlayerRating {
+                    player_id: score.player_id,
+                    mode: enum_mode,
+                    rating
+                };
+                ratings.push(player_rating);
+
+                stored_lookup_log.insert((score.player_id, enum_mode as i32));
+            }
+        }
+
+        bar.inc(1);
+    }
+
+    ratings
+}
+
 pub fn mu_for_rank(rank: i32) -> f64 {
     let constants = default_constants();
     let multiplier = constants.multiplier as f64;
@@ -116,82 +192,6 @@ pub fn match_costs(m: &Match) -> Option<Vec<MatchCost>> {
     }
 
     Some(match_costs)
-}
-
-pub fn create_initial_ratings(matches: Vec<Match>, players: Vec<Player>) -> Vec<PlayerRating> {
-    // The first step in the rating algorithm. Generate ratings from known ranks.
-    let constants = default_constants();
-
-    // A fast lookup used for understanding who has default ratings created at this time.
-    let mut stored_lookup_log: HashSet<(i32, i32)> = HashSet::new();
-    let mut ratings: Vec<PlayerRating> = Vec::new();
-    let bar = progress_bar(matches.len() as u64);
-
-    // Map the osu ids for fast lookup
-    let mut player_hashmap: HashMap<i32, Player> = HashMap::new();
-
-    for player in players {
-        if !player_hashmap.contains_key(&player.id) {
-            player_hashmap.insert(player.id, player);
-        }
-    }
-
-    for m in matches {
-        for game in m.games {
-            let mode = game.play_mode;
-            let enum_mode = match mode.try_into() {
-                Ok(mode @ (Mode::Osu | Mode::Taiko | Mode::Catch | Mode::Mania)) => mode,
-                _ => panic!("Expected one of [0, 1, 2, 3] to convert to mode enum. Found {} instead.", mode),
-            };
-
-            for score in game.match_scores {
-                // Check if the player_id and enum_mode combination is already in created_ratings
-                if stored_lookup_log.contains(&(score.player_id, enum_mode as i32)) {
-                    // We've already initialized this player.
-                    continue;
-                }
-
-                // Create ratings using the earliest known rank
-                let player = player_hashmap.get(&score.player_id).expect("Player should be present in the hashmap.");
-                let rank: Option<i32> = match enum_mode {
-                    Mode::Osu => player.earliest_osu_global_rank.or(player.rank_standard),
-                    Mode::Taiko => player.earliest_taiko_global_rank.or(player.rank_taiko),
-                    Mode::Catch => player.earliest_catch_global_rank.or(player.rank_catch),
-                    Mode::Mania => player.earliest_mania_global_rank.or(player.rank_mania)
-                };
-
-                let mu;
-                let sigma;
-                match rank {
-                    Some(rank) => {
-                        // Player has a valid identified rank (either the earliest known
-                        // rank, or their current rank)
-                        mu = mu_for_rank(rank);
-                        sigma = constants.default_sigma;
-                    },
-                    None => {
-                        // Player may be restricted / we cannot get hold of their rank info. Use default.
-                        mu = constants.default_mu;
-                        sigma = constants.default_sigma;
-                    }
-                }
-
-                let rating = Rating::new(mu, sigma);
-                let player_rating = PlayerRating {
-                    player_id: score.player_id,
-                    mode: enum_mode,
-                    rating
-                };
-                ratings.push(player_rating);
-
-                stored_lookup_log.insert((score.player_id, enum_mode as i32));
-            }
-        }
-
-        bar.inc(1);
-    }
-
-    ratings
 }
 
 #[cfg(test)]
