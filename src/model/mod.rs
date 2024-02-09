@@ -2,6 +2,6 @@ pub mod model;
 mod constants;
 mod data_processing;
 mod decay;
-mod structures;
+pub mod structures;
 
 use openskill;

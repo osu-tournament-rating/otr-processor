@@ -837,6 +837,7 @@ dependencies = [
  "openskill",
  "reqwest",
  "serde",
+ "statrs",
  "tokio",
 ]
 

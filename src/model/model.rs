@@ -1,11 +1,14 @@
+use statrs::statistics::Statistics;
+use statrs::distribution::{ContinuousCDF, Normal};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use openskill::model::plackett_luce::PlackettLuce;
 use openskill::rating::{default_gamma, Rating};
 use crate::api::api_structs::{Match, Player};
 use crate::model::constants::default_constants;
-use crate::model::structures::Mode::Mode;
-use crate::model::structures::PlayerRating::PlayerRating;
+use crate::model::structures::match_cost::MatchCost;
+use crate::model::structures::mode::Mode;
+use crate::model::structures::player_rating::PlayerRating;
 use crate::utils::progress_utils::progress_bar;
 
 pub fn create_model() -> PlackettLuce {
@@ -29,6 +32,90 @@ pub fn mu_for_rank(rank: i32) -> f64 {
     }
 
     return val;
+}
+
+/// Returns a vector of matchcosts for the given match. If no games exist
+/// in the match, returns None.
+pub fn match_costs(m: &Match) -> Option<Vec<MatchCost>> {
+    let mut match_costs: Vec<MatchCost> = Vec::new();
+
+    // Map of { player_id, n_games_played }
+    let mut games_played: HashMap<i32, i32> = HashMap::new();
+
+    // Map of { player_id, normalized_score } - Used in matchcost formula
+    let mut normalized_scores: HashMap<i32, f64> = HashMap::new();
+
+    let n = m.games.len();
+    if n == 0 {
+        return None;
+    }
+
+    let normal = Normal::new(0.0, 1.0).unwrap();
+
+    for game in &m.games {
+        let match_scores = &game.match_scores;
+        let score_values: Vec<f64> = match_scores.iter().map(|x| x.score as f64).collect();
+        let sum_scores: f64 = score_values.iter().sum();
+        let average_score = sum_scores / match_scores.len() as f64;
+
+        if average_score == 0.0 {
+            continue;
+        }
+
+        let std_dev = score_values.std_dev();
+
+        for score in match_scores {
+            let player_id = score.player_id;
+
+            if !games_played.contains_key(&player_id) {
+                games_played.insert(player_id, 0);
+            }
+
+            if !normalized_scores.contains_key(&player_id) {
+                normalized_scores.insert(player_id, 0.0);
+            }
+
+            let cur_played = games_played.get(&player_id).unwrap();
+            games_played.insert(player_id, cur_played + 1);
+            let normalized_player_score = normalized_scores.get(&player_id).unwrap();
+
+            let mut z_score;
+            if std_dev == 0.0 {
+                z_score = 0.0;
+                normalized_scores.insert(player_id, normalized_player_score + 0.5);
+            } else {
+                z_score = (score.score as f64 - average_score) / std_dev;
+                normalized_scores.insert(player_id, normalized_player_score + normal.cdf(z_score));
+            }
+        }
+    }
+
+    for (player_id, n_played) in games_played {
+        // The minimum match cost possible: e.g. 0.5 if you played 0 games in the match
+        let base_score = 0.5 * n_played as f64;
+
+        // Match cost is multiplied by something between 1.0 and (1.0 + lobby_bonus),
+        // depending on whether 1 map was played vs all maps
+        let lobby_bonus = 0.3;
+        let norm_score = normalized_scores.get(&player_id).unwrap();
+
+        let result;
+        if n_played == 1 {
+            result = (norm_score + base_score) * (1.0 / n_played as f64) * (1.0 + lobby_bonus);
+        } else {
+            result = (norm_score + base_score) * (1.0 / n_played as f64) *
+                (1.0 + (lobby_bonus * ((n_played - 1) as f64) / (n as f64 / 1.0)).sqrt())
+        }
+
+        let mc = MatchCost {
+            player_id,
+            match_cost: result
+        };
+
+        match_costs.push(mc);
+    }
+
+    Some(match_costs)
 }
 
 pub fn create_initial_ratings(matches: Vec<Match>, players: Vec<Player>) -> Vec<PlayerRating> {

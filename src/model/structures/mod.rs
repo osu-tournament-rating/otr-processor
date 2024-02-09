@@ -1,2 +1,3 @@
-pub mod Mode;
-pub mod PlayerRating;
+pub mod mode;
+pub mod player_rating;
+pub mod match_cost;

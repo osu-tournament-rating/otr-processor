@@ -1,5 +1,5 @@
 use openskill::rating::Rating;
-use crate::model::structures::Mode::Mode;
+use crate::model::structures::mode::Mode;
 
 #[derive(Debug)]
 pub struct PlayerRating {

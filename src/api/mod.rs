@@ -56,8 +56,6 @@ pub async fn login_async() -> Result<LoginResponse, Error> {
         .json()
         .await?;
 
-    println!("{:#?}", response);
-
     Ok(response) // Return Ok wrapping the response
 }
 
@@ -72,8 +70,6 @@ pub async fn get_match_ids_async(limit: Option<i32>, token: &String) -> Result<V
         .await?
         .json()
         .await?;
-
-    println!("{:#?}", response);
 
     if size == 0 {
         return Ok(response);
