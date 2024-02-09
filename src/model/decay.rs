@@ -3,7 +3,7 @@ use crate::model::constants::default_constants;
 pub fn is_decay_possible(mu: f64) -> bool {
     let constants = default_constants();
 
-    mu > constants.decay_minimum as f64
+    mu > constants.decay_minimum
 }
 
 pub fn decay_sigma(sigma: f64) -> f64 {

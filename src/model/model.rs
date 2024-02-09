@@ -1,6 +1,12 @@
+use std::collections::{HashMap, HashSet};
+use std::fmt::Debug;
 use openskill::model::plackett_luce::PlackettLuce;
 use openskill::rating::default_gamma;
+use crate::api::api_structs::{Match, Player};
 use crate::model::constants::default_constants;
+use crate::model::structures::Mode::Mode;
+use crate::model::structures::PlayerRating::PlayerRating;
+use crate::utils::progress_utils::progress_bar;
 
 pub fn create_model() -> PlackettLuce {
     let constants = default_constants();
@@ -23,6 +29,47 @@ pub fn mu_for_rank(rank: i32) -> f64 {
     }
 
     return val;
+}
+
+pub fn create_initial_ratings(matches: Vec<Match>, model: PlackettLuce, players: Vec<Player>) -> Vec<PlayerRating> {
+    // The first step in the rating algorithm. Generate ratings from known ranks.
+
+    let mut created_ratings: HashSet<(i32, Mode)> = HashSet::new();
+    let mut ratings: Vec<PlayerRating> = Vec::new();
+    let bar = progress_bar(players.len() as u64);
+
+    // Map the osu ids for fast lookup
+    let mut player_hashmap: HashMap<i64, Player> = HashMap::new();
+
+    for player in players {
+        if !player_hashmap.contains_key(&player.osu_id) {
+            player_hashmap.insert(player.osu_id, player);
+        }
+    }
+
+    for m in matches {
+        for game in m.games {
+            let mode = game.play_mode;
+            let enum_mode = match mode.try_into() {
+                Ok(mode @ (Mode::Taiko | Mode::Catch | Mode::Mania)) => mode,
+                _ => panic!("Expected one of [0, 1, 2, 3] to convert to mode enum. Found {} instead.", mode),
+            };
+
+            for score in game.match_scores {
+                // Check if the player_id and enum_mode combination is already in created_ratings
+                if created_ratings.contains(&(score.player_id, enum_mode)) {
+                    // We've already initialized this player.
+                    continue;
+                }
+
+                created_ratings.insert((score.player_id, enum_mode));
+
+                // TODO: Complete
+            }
+        }
+    }
+
+    ratings
 }
 
 #[cfg(test)]

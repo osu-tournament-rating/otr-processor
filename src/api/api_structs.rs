@@ -3,6 +3,12 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct LoginResponse {
+    pub token: String
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RatingAdjustment {
     pub player_id: i32,
     pub mode: i32,
@@ -107,6 +113,13 @@ pub struct Match {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct MatchIdMapping {
+    pub id: i32,
+    pub osu_match_id: i64
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Game {
     pub id: i32,
     pub play_mode: i32,
@@ -153,11 +166,9 @@ pub struct Beatmap {
     pub diff_name: Option<String>,
 }
 
-use chrono::NaiveDateTime;
-
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PlayerRanks {
+pub struct Player {
     pub id: i32,
     pub osu_id: i64,
     pub rank_standard: Option<i32>,
@@ -165,11 +176,13 @@ pub struct PlayerRanks {
     pub rank_catch: Option<i32>,
     pub rank_mania: Option<i32>,
     pub earliest_osu_global_rank: Option<i32>,
-    pub earliest_osu_global_rank_date: Option<NaiveDateTime>,
+    pub earliest_osu_global_rank_date: Option<DateTime<FixedOffset>>,
     pub earliest_taiko_global_rank: Option<i32>,
-    pub earliest_taiko_global_rank_date: Option<NaiveDateTime>,
+    pub earliest_taiko_global_rank_date: Option<DateTime<FixedOffset>>,
     pub earliest_catch_global_rank: Option<i32>,
-    pub earliest_catch_global_rank_date: Option<NaiveDateTime>,
+    pub earliest_catch_global_rank_date: Option<DateTime<FixedOffset>>,
     pub earliest_mania_global_rank: Option<i32>,
-    pub earliest_mania_global_rank_date: Option<NaiveDateTime>,
+    pub earliest_mania_global_rank_date: Option<DateTime<FixedOffset>>,
+    pub username: Option<String>,
+    pub country: Option<String>,
 }

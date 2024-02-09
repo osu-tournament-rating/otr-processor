@@ -4,16 +4,10 @@ use std::any::Any;
 use reqwest::{Client, ClientBuilder, Error};
 use reqwest::header::{HeaderMap, HeaderValue};
 use serde::{Deserialize};
-use crate::api::api_structs::Match;
+use crate::api::api_structs::{LoginResponse, Match, MatchIdMapping, Player};
 use crate::utils::progress_utils::progress_bar;
 
 use crate::env;
-
-#[derive(Deserialize)]
-#[derive(Debug)]
-pub struct LoginResponse {
-    pub token: String
-}
 
 fn client(headers: Option<HeaderMap>) -> Client {
     let valid_headers = headers.unwrap_or(privileged_headers());
@@ -51,7 +45,7 @@ fn authorized_headers(token: &String) -> HeaderMap {
     headers
 }
 
-pub async fn login() -> Result<LoginResponse, Error> {
+pub async fn login_async() -> Result<LoginResponse, Error> {
     let client = client(None);
 
     let env = env::get_env();
@@ -67,7 +61,7 @@ pub async fn login() -> Result<LoginResponse, Error> {
     Ok(response) // Return Ok wrapping the response
 }
 
-pub async fn get_match_ids(limit: Option<i32>, token: &String) -> Result<Vec<i32>, Error> {
+pub async fn get_match_ids_async(limit: Option<i32>, token: &String) -> Result<Vec<i32>, Error> {
     let size = limit.unwrap_or(0);
 
     let client = client(Some(authorized_headers(&token)));
@@ -89,7 +83,7 @@ pub async fn get_match_ids(limit: Option<i32>, token: &String) -> Result<Vec<i32
     Ok(take)
 }
 
-pub async fn get_matches(match_ids: Vec<i32>, token: &String) -> Result<Vec<Match>, Error> {
+pub async fn get_matches_async(match_ids: Vec<i32>, token: &String) -> Result<Vec<Match>, Error> {
     let chunk_size = 250;
     let pbar_size = (match_ids.len() / chunk_size) as u64;
     let client = client(Some(authorized_headers(&token)));
@@ -118,3 +112,28 @@ pub async fn get_matches(match_ids: Vec<i32>, token: &String) -> Result<Vec<Matc
     Ok(match_data)
 }
 
+pub async fn get_match_id_mapping_async(token: &String) -> Result<Vec<MatchIdMapping>, Error> {
+    let client = client(Some(authorized_headers(&token)));
+    let env = env::get_env();
+    let response: Vec<MatchIdMapping> = client
+        .get(format!("{}/matches/id-mapping", env.api_root))
+        .send()
+        .await?
+        .json()
+        .await?;
+
+    Ok(response)
+}
+
+pub async fn get_players_async(token: &String) -> Result<Vec<Player>, Error> {
+    let client = client(Some(authorized_headers(&token)));
+    let env = env::get_env();
+    let response: Vec<Player> = client
+        .get(format!("{}/players/ranks/all", env.api_root))
+        .send()
+        .await?
+        .json()
+        .await?;
+
+    Ok(response)
+}
