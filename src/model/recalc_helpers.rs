@@ -6,7 +6,7 @@ use crate::api::api_structs::{Game, Match};
 /// Assumes the match has at least one game.
 pub fn valid_games(m: &Match) -> Vec<&Game> {
     let mut valid = Vec::new();
-    let mut games = &m.games;
+    let games = &m.games;
 
     for g in games {
         if g.play_mode == m.mode {
