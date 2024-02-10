@@ -6,7 +6,7 @@ pub struct RatingConstants {
     pub default_beta: f64,
     pub default_kappa: f64,
     pub decay_minimum: f64,
-    pub decay_days: i32,
+    pub decay_days: i64,
     pub decay_rate: f64,
     pub volatility_growth_rate: f64
 }

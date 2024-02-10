@@ -4,19 +4,22 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use openskill::model::plackett_luce::PlackettLuce;
 use openskill::rating::{default_gamma, Rating};
-use crate::api::api_structs::{Match, Player};
+use crate::api::api_structs::{Match, MatchRatingStats, Player, RatingAdjustment};
 use crate::model::constants::default_constants;
 use crate::model::structures::match_cost::MatchCost;
 use crate::model::structures::mode::Mode;
 use crate::model::structures::player_rating::PlayerRating;
+use crate::model::structures::rating_calculation_result::RatingCalculationResult;
 use crate::utils::progress_utils::progress_bar;
 
 pub fn create_model() -> PlackettLuce {
     let constants = default_constants();
-    PlackettLuce::new(constants.default_beta as f64,
-                      constants.default_kappa as f64,
+    PlackettLuce::new(constants.default_beta,
+                      constants.default_kappa,
                       default_gamma)
 }
+
+// Rating generation
 
 pub fn create_initial_ratings(matches: Vec<Match>, players: Vec<Player>) -> Vec<PlayerRating> {
     // The first step in the rating algorithm. Generate ratings from known ranks.
@@ -94,21 +97,35 @@ pub fn create_initial_ratings(matches: Vec<Match>, players: Vec<Player>) -> Vec<
     ratings
 }
 
-pub fn mu_for_rank(rank: i32) -> f64 {
-    let constants = default_constants();
-    let multiplier = constants.multiplier as f64;
-    let val = multiplier * (45.0 - (3.2 * (rank as f64).ln()));
+/// Calculates a vector of initial ratings based on match cost,
+/// returns the new ratings
+pub fn calc_ratings(initial_ratings: Vec<PlayerRating>, matches: Vec<Match>, model: PlackettLuce) -> RatingCalculationResult {
+    // Key = (player_id, mode as i32)
+    // Value = Associated PlayerRating (if available)
+    let mut ratings_hash: HashMap<(i32, i32), PlayerRating> = HashMap::new();
+    let mut rating_stats_hash: HashMap<i32, Vec<MatchRatingStats>> = HashMap::new();
+    let mut rating_adjustments_hash: HashMap<i32, Vec<RatingAdjustment>> = HashMap::new();
 
-    if val < multiplier * 5.0 {
-        return multiplier * 5.0;
+    for r in initial_ratings {
+        ratings_hash.insert((r.player_id, r.mode as i32), r);
     }
 
-    if val > multiplier * 30.0 {
-        return multiplier * 30.0;
-    }
+    let base_ratings: Vec<PlayerRating> = ratings_hash.into_values().collect();
 
-    return val;
+    let rating_stats: Vec<Vec<MatchRatingStats>> = rating_stats_hash.into_values().collect();
+    let flattened_stats: Vec<MatchRatingStats> = rating_stats.into_iter().flatten().collect();
+
+    let adjustments: Vec<Vec<RatingAdjustment>> = rating_adjustments_hash.into_values().collect();
+    let flattened_adjustments: Vec<RatingAdjustment> = adjustments.into_iter().flatten().collect();
+
+    RatingCalculationResult {
+        base_ratings,
+        rating_stats: flattened_stats,
+        adjustments: flattened_adjustments
+    }
 }
+
+// Utility
 
 /// Returns a vector of matchcosts for the given match. If no games exist
 /// in the match, returns None.
@@ -192,6 +209,22 @@ pub fn match_costs(m: &Match) -> Option<Vec<MatchCost>> {
     }
 
     Some(match_costs)
+}
+
+pub fn mu_for_rank(rank: i32) -> f64 {
+    let constants = default_constants();
+    let multiplier = constants.multiplier as f64;
+    let val = multiplier * (45.0 - (3.2 * (rank as f64).ln()));
+
+    if val < multiplier * 5.0 {
+        return multiplier * 5.0;
+    }
+
+    if val > multiplier * 30.0 {
+        return multiplier * 30.0;
+    }
+
+    return val;
 }
 
 #[cfg(test)]

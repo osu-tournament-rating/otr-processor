@@ -79,6 +79,7 @@ mod tests {
             id: 123,
             match_id: 12345,
             name: Some("STT3: (Coffee) vs (The voices are back)".to_string()),
+            mode: 0,
             start_time: None,
             end_time: None,
             games: vec![game],

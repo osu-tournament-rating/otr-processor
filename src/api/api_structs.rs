@@ -106,6 +106,7 @@ pub struct Match {
     pub id: i32,
     pub match_id: i64,
     pub name: Option<String>,
+    pub mode: i32,
     pub start_time: Option<DateTime<FixedOffset>>,
     pub end_time: Option<DateTime<FixedOffset>>,
     pub games: Vec<Game>,
@@ -186,3 +187,4 @@ pub struct Player {
     pub username: Option<String>,
     pub country: Option<String>,
 }
+
