@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use chrono::{DateTime, FixedOffset};
 use crate::api::api_structs::RatingAdjustment;
-use crate::model::constants::default_constants;
+use crate::model::constants::RatingConstants;
 
 /// Tracks decay activity for players
 pub struct DecayTracker {
@@ -79,7 +79,7 @@ impl DecayTracker {
     /// - d: The current time (in this context, it is the time the match was played)
     /// - t: The last time the user played
     fn n_decay(d: DateTime<FixedOffset>, t: DateTime<FixedOffset>) -> i64 {
-        let constants = default_constants();
+        let constants = RatingConstants::default();
         let decay_days = constants.decay_days;
 
         let duration = d.signed_duration_since(t);
@@ -95,20 +95,20 @@ impl DecayTracker {
 }
 
 pub fn is_decay_possible(mu: f64) -> bool {
-    let constants = default_constants();
+    let constants = RatingConstants::default();
 
     mu > constants.decay_minimum
 }
 
 pub fn decay_sigma(sigma: f64) -> f64 {
-    let constants = default_constants();
+    let constants = RatingConstants::default();
     let new_sigma = (sigma.powi(2) + constants.volatility_growth_rate).sqrt();
 
     return new_sigma.min(constants.default_sigma);
 }
 
 pub fn decay_mu(mu: f64) -> f64 {
-    let constants = default_constants();
+    let constants = RatingConstants::default();
     let new_mu = mu - constants.decay_rate;
 
     return new_mu.max(constants.decay_minimum);
@@ -119,13 +119,13 @@ pub fn decay_mu(mu: f64) -> f64 {
 mod tests {
     use std::ops::Add;
     use chrono::{DateTime};
-    use crate::model::constants::default_constants;
+    use crate::model::constants::RatingConstants;
     use crate::model::decay::{decay_mu, decay_sigma, DecayTracker, is_decay_possible};
 
     #[test]
     fn test_decay() {
         let id = 1;
-        let constants = default_constants();
+        let constants = RatingConstants::default();
         let mu = 1000.0;
         let sigma = 200.0;
 
@@ -166,7 +166,7 @@ mod tests {
 
     #[test]
     fn test_n_decay() {
-        let days = default_constants().decay_days;
+        let days = RatingConstants::default().decay_days;
 
         let t = DateTime::parse_from_rfc3339("2021-01-01T00:00:00+00:00").unwrap().fixed_offset();
         let d = t.add(chrono::Duration::days(days));
@@ -178,7 +178,7 @@ mod tests {
 
     #[test]
     fn test_n_decay_less_than_decay_days() {
-        let days = default_constants().decay_days - 1;
+        let days = RatingConstants::default().decay_days - 1;
 
         let t = DateTime::parse_from_rfc3339("2021-01-01T00:00:00+00:00").unwrap().fixed_offset();
         let d = t.add(chrono::Duration::days(days));
@@ -191,7 +191,7 @@ mod tests {
     #[test]
     fn test_decay_possible() {
         let mu = 500.0;
-        let decay_min = default_constants().decay_minimum;
+        let decay_min = RatingConstants::default().decay_minimum;
 
         let decay_possible = mu > (decay_min);
 
@@ -202,7 +202,7 @@ mod tests {
 
     #[test]
     fn test_decay_sigma_standard() {
-        let constants = default_constants();
+        let constants = RatingConstants::default();
 
         let sigma = 200.1;
         let new_sigma = decay_sigma(sigma);
@@ -213,7 +213,7 @@ mod tests {
 
     #[test]
     fn test_decay_sigma_maximum_default() {
-        let constants = default_constants();
+        let constants = RatingConstants::default();
 
         let sigma = 999.0;
         let new_sigma = decay_sigma(sigma);
@@ -224,7 +224,7 @@ mod tests {
 
     #[test]
     fn test_decay_mu_standard() {
-        let constants = default_constants();
+        let constants = RatingConstants::default();
 
         let mu = 1100.0;
         let new_mu = decay_mu(mu);
@@ -235,7 +235,7 @@ mod tests {
 
     #[test]
     fn test_decay_mu_min_decay() {
-        let constants = default_constants();
+        let constants = RatingConstants::default();
 
         let mu = 825.0;
         let new_mu = decay_mu(mu);
