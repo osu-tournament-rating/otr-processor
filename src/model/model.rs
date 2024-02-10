@@ -1,7 +1,6 @@
 use statrs::statistics::Statistics;
 use statrs::distribution::{ContinuousCDF, Normal};
 use std::collections::{HashMap, HashSet};
-use std::fmt::Debug;
 use openskill::model::plackett_luce::PlackettLuce;
 use openskill::rating::{default_gamma, Rating};
 use crate::api::api_structs::{Match, MatchRatingStats, Player, RatingAdjustment};
@@ -34,9 +33,7 @@ pub fn create_initial_ratings(matches: Vec<Match>, players: Vec<Player>) -> Vec<
     let mut player_hashmap: HashMap<i32, Player> = HashMap::new();
 
     for player in players {
-        if !player_hashmap.contains_key(&player.id) {
-            player_hashmap.insert(player.id, player);
-        }
+        player_hashmap.entry(player.id).or_insert(player);
     }
 
     for m in matches {
@@ -103,8 +100,8 @@ pub fn calc_ratings(initial_ratings: Vec<PlayerRating>, matches: Vec<Match>, mod
     // Key = (player_id, mode as i32)
     // Value = Associated PlayerRating (if available)
     let mut ratings_hash: HashMap<(i32, i32), PlayerRating> = HashMap::new();
-    let mut rating_stats_hash: HashMap<i32, Vec<MatchRatingStats>> = HashMap::new();
-    let mut rating_adjustments_hash: HashMap<i32, Vec<RatingAdjustment>> = HashMap::new();
+    let rating_stats_hash: HashMap<i32, Vec<MatchRatingStats>> = HashMap::new();
+    let rating_adjustments_hash: HashMap<i32, Vec<RatingAdjustment>> = HashMap::new();
 
     for r in initial_ratings {
         ratings_hash.insert((r.player_id, r.mode as i32), r);
@@ -159,25 +156,18 @@ pub fn match_costs(m: &Match) -> Option<Vec<MatchCost>> {
 
         for score in match_scores {
             let player_id = score.player_id;
-
-            if !games_played.contains_key(&player_id) {
-                games_played.insert(player_id, 0);
-            }
-
-            if !normalized_scores.contains_key(&player_id) {
-                normalized_scores.insert(player_id, 0.0);
-            }
+            
+            games_played.entry(player_id).or_insert(0);
+            normalized_scores.entry(player_id).or_insert(0.0);
 
             let cur_played = games_played.get(&player_id).unwrap();
             games_played.insert(player_id, cur_played + 1);
             let normalized_player_score = normalized_scores.get(&player_id).unwrap();
 
-            let mut z_score;
             if std_dev == 0.0 {
-                z_score = 0.0;
                 normalized_scores.insert(player_id, normalized_player_score + 0.5);
             } else {
-                z_score = (score.score as f64 - average_score) / std_dev;
+                let z_score = (score.score as f64 - average_score) / std_dev;
                 normalized_scores.insert(player_id, normalized_player_score + normal.cdf(z_score));
             }
         }
@@ -192,13 +182,12 @@ pub fn match_costs(m: &Match) -> Option<Vec<MatchCost>> {
         let lobby_bonus = 0.3;
         let norm_score = normalized_scores.get(&player_id).unwrap();
 
-        let result;
-        if n_played == 1 {
-            result = (norm_score + base_score) * (1.0 / n_played as f64) * (1.0 + lobby_bonus);
+        let result = if n_played == 1 {
+            (norm_score + base_score) * (1.0 / n_played as f64) * (1.0 + lobby_bonus)
         } else {
-            result = (norm_score + base_score) * (1.0 / n_played as f64) *
+            (norm_score + base_score) * (1.0 / n_played as f64) *
                 (1.0 + (lobby_bonus * ((n_played - 1) as f64) / (n as f64 / 1.0)).sqrt())
-        }
+        };
 
         let mc = MatchCost {
             player_id,
@@ -224,7 +213,7 @@ pub fn mu_for_rank(rank: i32) -> f64 {
         return multiplier * 30.0;
     }
 
-    return val;
+    val
 }
 
 #[cfg(test)]

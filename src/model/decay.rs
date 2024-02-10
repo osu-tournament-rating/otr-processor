@@ -89,8 +89,7 @@ impl DecayTracker {
             return 0;
         }
 
-        let decay_weeks = duration.num_days() / 7;
-        decay_weeks
+        duration.num_days() / 7
     }
 }
 
@@ -104,14 +103,14 @@ pub fn decay_sigma(sigma: f64) -> f64 {
     let constants = default_constants();
     let new_sigma = (sigma.powi(2) + constants.volatility_growth_rate).sqrt();
 
-    return new_sigma.min(constants.default_sigma);
+    new_sigma.min(constants.default_sigma)
 }
 
 pub fn decay_mu(mu: f64) -> f64 {
     let constants = default_constants();
     let new_mu = mu - constants.decay_rate;
 
-    return new_mu.max(constants.decay_minimum);
+    new_mu.max(constants.decay_minimum)
 }
 
 

@@ -3,7 +3,6 @@ mod env;
 mod model;
 mod utils;
 
-use tokio;
 use crate::model::model::match_costs;
 use crate::model::structures::match_cost::MatchCost;
 
