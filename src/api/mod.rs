@@ -1,5 +1,4 @@
 pub mod api_structs;
-pub mod error;
 
 use reqwest::{Client, ClientBuilder, Error, Method};
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
