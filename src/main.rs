@@ -14,19 +14,14 @@ async fn main() {
 
     let api = api::OtrApi::new_from_env().await
         .expect("Failed to intialize otr api");
-
-    dbg!("Initialized api");
     
     let match_ids = api.get_match_ids(Some(100))
         .await
         .expect("Match ids must be valid before proceeding");
-    dbg!("Got match ids");
 
     let matches = api.get_matches(&match_ids)
         .await
         .expect("Matches need to be loaded before continuing");
-
-    dbg!("Got matches");
 
     //let players = api.get_players().await.expect("Ranks must be identified");
 
