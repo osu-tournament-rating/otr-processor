@@ -124,9 +124,9 @@ pub fn calc_ratings(initial_ratings: Vec<PlayerRating>, matches: Vec<Match>, mod
 
 // Utility
 
-/// Returns a vector of matchcosts for the given match. If no games exist
+/// Returns a vector of matchcosts for the given collection of games. If no games exist
 /// in the match, returns None.
-pub fn match_costs(m: &[Game]) -> Option<Vec<MatchCost>> {
+pub fn match_costs(games: &[Game]) -> Option<Vec<MatchCost>> {
     let mut match_costs: Vec<MatchCost> = Vec::new();
 
     // Map of { player_id, n_games_played }
@@ -135,14 +135,14 @@ pub fn match_costs(m: &[Game]) -> Option<Vec<MatchCost>> {
     // Map of { player_id, normalized_score } - Used in matchcost formula
     let mut normalized_scores: HashMap<i32, f64> = HashMap::new();
 
-    let n = m.len();
+    let n = games.len();
     if n == 0 {
         return None;
     }
 
     let normal = Normal::new(0.0, 1.0).unwrap();
 
-    for game in m {
+    for game in games {
         let match_scores = &game.match_scores;
         let score_values: Vec<f64> = match_scores.iter().map(|x| x.score as f64).collect();
         let sum_scores: f64 = score_values.iter().sum();
