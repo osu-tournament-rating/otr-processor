@@ -16,7 +16,7 @@ async fn main() {
 
     let api = api::OtrApiClient::new_from_priv_env().await
         .expect("Failed to intialize otr api");
-    
+
     let match_ids = api.get_match_ids(Some(100))
         .await
         .expect("Match ids must be valid before proceeding");
