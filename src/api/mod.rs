@@ -6,13 +6,13 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 use crate::api::api_structs::{LoginResponse, Match, MatchIdMapping, Player};
 
-pub struct OtrApi {
+pub struct OtrApiClient {
     client: Client,
     token: String,
     api_root: String,
 }
 
-impl OtrApi {
+impl OtrApiClient {
     /// Constructs API client based on provided token
     pub async fn new(
         priv_secret: &str,
@@ -33,7 +33,7 @@ impl OtrApi {
     /// Constructs API client based environment variables
     /// see `env_example` or TODO
     pub async fn new_from_env() -> Result<Self, Error> {
-        OtrApi::new(
+        OtrApiClient::new(
             &std::env::var("PRIVILEGED_SECRET").unwrap(),
             &std::env::var("API_ROOT").unwrap(),
         ).await
@@ -154,18 +154,18 @@ impl OtrApi {
 mod api_client_tests {
     use async_once_cell::OnceCell;
 
-    use crate::api::OtrApi;
+    use crate::api::OtrApiClient;
 
-    static API_INSTANCE: OnceCell<OtrApi> = OnceCell::new();
+    static API_INSTANCE: OnceCell<OtrApiClient> = OnceCell::new();
 
     // Helper function that make sure OtrApi is not constructed
     // each time individual test runs
-    async fn get_api() -> &'static OtrApi {
+    async fn get_api() -> &'static OtrApiClient {
 
         API_INSTANCE.get_or_init(async {
             dotenv::dotenv().unwrap();
             
-            OtrApi::new_from_env()
+            OtrApiClient::new_from_env()
                 .await
                 .expect("Failed to initialize OtrApi")
 

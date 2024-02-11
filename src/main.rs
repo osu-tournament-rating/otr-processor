@@ -12,7 +12,7 @@ use crate::model::structures::match_cost::MatchCost;
 async fn main() {
     dotenv::dotenv().unwrap();
 
-    let api = api::OtrApi::new_from_env().await
+    let api = api::OtrApiClient::new_from_env().await
         .expect("Failed to intialize otr api");
     
     let match_ids = api.get_match_ids(Some(100))
@@ -24,7 +24,6 @@ async fn main() {
         .expect("Matches need to be loaded before continuing");
 
     //let players = api.get_players().await.expect("Ranks must be identified");
-
 
     // Model
     //let ratings = model::model::create_initial_ratings(matches, players);
