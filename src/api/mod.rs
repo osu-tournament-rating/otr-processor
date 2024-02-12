@@ -66,6 +66,13 @@ impl OtrApiClient {
     /// Wrapper to make authorized requests without body
     ///
     /// See [OtrApiClient::make_request_with_body]
+    ///
+    /// # Examples
+    /// 1. Fetch some endpoint
+    /// ```
+    /// let api = OtrApiClient::new("MYSECRET", "example.com/api");
+    /// api.make_request(Method::GET, "/fetch_something");
+    /// ```
     async fn make_request<T>(&self, method: Method, partial_url: &str) -> Result<T, Error> 
     where 
         T: DeserializeOwned, 
