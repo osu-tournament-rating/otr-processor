@@ -130,9 +130,13 @@ impl OtrApiClient {
     }
     
     /// Get matches based on provided list of match id's
-    pub async fn get_matches(&self, match_ids: &[u32]) -> Result<Vec<Match>, Error> {
+    /// # Arguments
+    /// * `match_ids` - valid id's of matches
+    /// * `chunk_size` - amount of matches that is going to be fetched
+    /// in one request. Done to reduce strain on API side. Recommended
+    /// value is `250`
+    pub async fn get_matches(&self, match_ids: &[u32], chunk_size: usize) -> Result<Vec<Match>, Error> {
         let link = "/matches/convert";
-        let chunk_size = 250; // TODO make this changeable through function argument?
 
         let mut data: Vec<Match> = Vec::new();
 
