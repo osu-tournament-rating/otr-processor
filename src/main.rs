@@ -18,7 +18,7 @@ async fn main() {
     //let ratings = model::model::create_initial_ratings(matches, players);
     let mut mcs: Vec<Vec<MatchCost>> = Vec::new();
     for m in matches {
-        let mc = match_costs(&m);
+        let mc = match_costs(&m.games);
 
         match mc {
             Some(match_costs) => mcs.push(match_costs),
