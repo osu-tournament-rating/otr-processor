@@ -178,8 +178,8 @@ mod api_client_tests {
 
     static API_INSTANCE: OnceCell<OtrApiClient> = OnceCell::new();
 
-    // Helper function that make sure OtrApi is not constructed
-    // each time individual test runs
+    // Helper function that ensures OtrApi is not constructed
+    // each time individual tests run
     async fn get_api() -> &'static OtrApiClient {
 
         API_INSTANCE.get_or_init(async {
