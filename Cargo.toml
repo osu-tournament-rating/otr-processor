@@ -16,6 +16,9 @@ chrono = {  version = "0.4.33", features = ["serde"] }
 openskill = "0.0.1"
 statrs = "0.16.0"
 
+[dev-dependencies]
+async-once-cell = "0.5.3"
+
 [lints.rust]
 dead_code = "allow"
 unused_variables = "allow"

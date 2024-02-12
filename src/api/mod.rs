@@ -1,133 +1,274 @@
 pub mod api_structs;
 
-use reqwest::{Client, ClientBuilder, Error};
-use reqwest::header::{HeaderMap, HeaderValue};
+use reqwest::{Client, ClientBuilder, Error, Method};
+use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 use crate::api::api_structs::{LoginResponse, Match, MatchIdMapping, Player};
-use crate::utils::progress_utils::progress_bar;
 
-use crate::env;
-
-fn client(headers: Option<HeaderMap>) -> Client {
-    let valid_headers = headers.unwrap_or(privileged_headers());
-
-    ClientBuilder::new()
-        .default_headers(valid_headers)
-        .build()
-        .expect("Valid client configuration")
+pub struct OtrApiClient {
+    client: Client,
+    token: String,
+    api_root: String,
 }
 
-fn privileged_headers() -> HeaderMap {
-    let env = env::get_env(); // Assuming get_env is defined and returns EnvironmentVariables
-    let mut headers = HeaderMap::new();
-    headers.insert("Content-Type", HeaderValue::from_static("application/json"));
+impl OtrApiClient {
+    /// Constructs API client based on provided token
+    pub async fn new(
+        priv_secret: &str,
+        api_root: &str,
+    ) -> Result<Self, Error> {
+        let client = ClientBuilder::new()
+            .build()?;
 
-    // Use `from_str` and handle the Result it returns
-    let auth_value = HeaderValue::from_str(&env.privileged_secret)
-        .expect("Authorization header should be valid.");
+        let token_response = Self::login(&client, priv_secret, api_root).await?;
 
-    headers.insert("Authorization", auth_value);
-
-    headers
-}
-
-fn authorized_headers(token: &str) -> HeaderMap {
-    let mut headers = HeaderMap::new();
-    headers.insert("Content-Type", HeaderValue::from_static("application/json"));
-
-    // Use `from_str` and handle the Result it returns
-    let auth_value = HeaderValue::from_str(token)
-        .expect("Authorization header should be valid.");
-
-    headers.insert("Authorization", auth_value);
-
-    headers
-}
-
-pub async fn login_async() -> Result<LoginResponse, Error> {
-    let client = client(None);
-
-    let env = env::get_env();
-    let response: LoginResponse = client
-        .post(format!("{}/login/system", env.api_root))
-        .send()
-        .await? // Propagate the error if .send() fails
-        .json()
-        .await?;
-
-    Ok(response) // Return Ok wrapping the response
-}
-
-pub async fn get_match_ids_async(limit: Option<i32>, token: &str) -> Result<Vec<i32>, Error> {
-    let size = limit.unwrap_or(0);
-
-    let client = client(Some(authorized_headers(token)));
-    let env = env::get_env();
-    let response: Vec<i32> = client
-        .get(format!("{}/matches/ids", env.api_root))
-        .send()
-        .await?
-        .json()
-        .await?;
-
-    if size == 0 {
-        return Ok(response);
+        Ok(Self {
+            client,
+            token: token_response.token,
+            api_root: api_root.to_owned()
+        })
     }
 
-    let take = response.into_iter().take(size as usize).collect();
-    Ok(take)
-}
+    /// Constructs API client based environment variables
+    /// see `env_example` in project directory
+    ///
+    /// # Note
+    /// Method logs in as system user so it's expecting
+    /// privileged token in environment variables 
+    pub async fn new_from_priv_env() -> Result<Self, Error> {
+        OtrApiClient::new(
+            &std::env::var("PRIVILEGED_SECRET").unwrap(),
+            &std::env::var("API_ROOT").unwrap(),
+        ).await
+    }
 
-pub async fn get_matches_async(match_ids: Vec<i32>, token: &str) -> Result<Vec<Match>, Error> {
-    let chunk_size = 250;
-    let pbar_size = (match_ids.len() / chunk_size) as u64;
-    let client = client(Some(authorized_headers(token)));
-    let env = env::get_env();
-    let mut match_data: Vec<Match> = Vec::new();
-
-    let bar = progress_bar(pbar_size);
-    bar.println("Fetching match data...");
-
-    // Group matches into 250 different lists, then form
-    // ret with all values. This is to reduce API strain.
-    for chunk in match_ids.chunks(chunk_size) {
-        let response: Vec<Match> = client
-            .post(format!("{}/matches/convert", env.api_root))
-            .json(&chunk)
+    /// Initial login request to fetch token
+    pub async fn login(
+        client: &Client, 
+        priv_secret: &str, 
+        api_root: &str
+    ) -> Result<LoginResponse, Error> {
+        let link = format!("{}/login/system", api_root);
+        
+        let response = client
+            .post(link)
+            .header(AUTHORIZATION, priv_secret)
+            .header(CONTENT_TYPE, "application/json")
             .send()
             .await?
             .json()
             .await?;
 
-        match_data.extend(response);
-        bar.inc(1);
+        Ok(response)
     }
 
-    bar.finish();
-    Ok(match_data)
+    /// Wrapper to make authorized requests without body
+    ///
+    /// See [OtrApiClient::make_request_with_body]
+    ///
+    /// # Examples
+    /// 1. Fetch some endpoint
+    /// ```
+    /// let api = OtrApiClient::new("MYSECRET", "example.com/api");
+    /// api.make_request(Method::GET, "/fetch_something");
+    /// ```
+    async fn make_request<T>(&self, method: Method, partial_url: &str) -> Result<T, Error> 
+    where 
+        T: DeserializeOwned, 
+    {
+        self.make_request_with_body(method, partial_url, None::<u8>).await
+    }
+    
+    /// Wrapper to make authorized requests with provided body
+    ///
+    /// # Url
+    /// URL constructed like this `{1}{2}`
+    /// 
+    /// Where
+    /// 1. API root. Provided when initializing [`OtrApiClient`]
+    /// 2. Partial URL that corresponds to endpoint
+    ///
+    /// # Body
+    /// Body should be serializable, see [serde::Serialize]
+    ///
+    /// # Note
+    /// 
+    /// `/` must present at the beginning of the
+    /// partial URL
+    ///
+    /// # Examples 
+    /// 1. Make request to some endpoint with `Vec<32>` as body
+    /// ```
+    /// let api = OtrApiClient::new("MYSECRET", "example.com/api");
+    /// let my_numbers: Vec<32> = vec![1, 2, 3, 4, 5];
+    /// api.make_request_with_body(Method::GET, "/fetch_something", Some(&my_numbers));
+    /// ```
+    async fn make_request_with_body<T, B>(&self, method: Method, partial_url: &str, body: Option<B>) -> Result<T, Error> 
+    where 
+        T: DeserializeOwned,
+        B: Serialize,
+    {
+        let request_link = format!("{}{}", self.api_root, partial_url);
+
+        let mut request = match method {
+            Method::GET => self.client.get(request_link),
+            Method::POST => self.client.post(request_link),
+            _ => unimplemented!()
+        };
+
+        if let Some(body) = body {
+            request = request.json(&body)
+        }
+
+        request
+            .header(AUTHORIZATION, &self.token)
+            .header(CONTENT_TYPE, "application/json")
+            .send()
+            .await?
+            .json()
+            .await
+    }
+    
+    /// Get ids of matches
+    pub async fn get_match_ids(&self, limit: Option<u32>) -> Result<Vec<u32>, Error> {
+        let limit = limit.unwrap_or(0);
+        let link = "/matches/ids";
+
+        let response = self.make_request(Method::GET, link).await?;
+
+        if limit == 0 {
+            return Ok(response)
+        }
+        
+        let limited_response = response.into_iter()
+            .take(limit as usize)
+            .collect();
+
+        Ok(limited_response)
+    }
+    
+    /// Get matches based on provided list of match id's
+    /// # Arguments
+    /// * `match_ids` - valid id's of matches
+    /// * `chunk_size` - amount of matches that is going to be fetched
+    /// in one request. Done to reduce strain on API side. Recommended
+    /// value is `250`
+    pub async fn get_matches(&self, match_ids: &[u32], chunk_size: usize) -> Result<Vec<Match>, Error> {
+        let link = "/matches/convert";
+
+        let mut data: Vec<Match> = Vec::new();
+
+        for chunk in match_ids.chunks(chunk_size) {
+            let response: Vec<Match> = self.make_request_with_body(
+                Method::POST,
+                link,
+                Some(chunk)
+            ).await?;
+
+            data.extend(response)
+        }
+
+        Ok(data)
+    }
+    
+    /// Get list of match id mappings
+    /// otr_match_id <-> osu_match_id
+    pub async fn get_match_id_mapping(&self) -> Result<Vec<MatchIdMapping>, Error> {
+        let link = "/matches/id-mapping";
+
+        self.make_request(Method::GET, link).await
+    }
+    
+    // Get list of players
+    pub async fn get_players(&self) -> Result<Vec<Player>, Error> {
+        let link = "/players/ranks/all";
+
+        self.make_request(Method::GET, link).await
+    }
+
 }
 
-pub async fn get_match_id_mapping_async(token: &str) -> Result<Vec<MatchIdMapping>, Error> {
-    let client = client(Some(authorized_headers(token)));
-    let env = env::get_env();
-    let response: Vec<MatchIdMapping> = client
-        .get(format!("{}/matches/id-mapping", env.api_root))
-        .send()
-        .await?
-        .json()
-        .await?;
+#[cfg(test)]
+mod api_client_tests {
+    use async_once_cell::OnceCell;
 
-    Ok(response)
-}
+    use crate::api::OtrApiClient;
 
-pub async fn get_players_async(token: &str) -> Result<Vec<Player>, Error> {
-    let client = client(Some(authorized_headers(token)));
-    let env = env::get_env();
-    let response: Vec<Player> = client
-        .get(format!("{}/players/ranks/all", env.api_root))
-        .send()
-        .await?
-        .json()
-        .await?;
+    static API_INSTANCE: OnceCell<OtrApiClient> = OnceCell::new();
 
-    Ok(response)
+    // Helper function that ensures OtrApi is not constructed
+    // each time individual tests run
+    async fn get_api() -> &'static OtrApiClient {
+
+        API_INSTANCE.get_or_init(async {
+            dotenv::dotenv().unwrap();
+            
+            OtrApiClient::new_from_priv_env()
+                .await
+                .expect("Failed to initialize OtrApi")
+
+        }).await
+    }
+
+    #[tokio::test]
+    async fn test_api_client_login() {
+        let _api = get_api().await;
+    }
+
+    #[tokio::test]
+    async fn test_api_client_get_match_ids() {
+        let api = get_api().await;
+
+        let result = api.get_match_ids(None)
+            .await
+            .unwrap();
+
+        assert!(result.len() > 0);
+
+        let result = api.get_match_ids(Some(10))
+            .await
+            .unwrap();
+
+        assert!(result.len() == 10);
+    }
+
+    #[tokio::test]
+    async fn test_api_client_get_players() {
+        let api = get_api().await;
+
+        let result = api.get_players()
+            .await
+            .unwrap();
+
+        assert!(result.len() > 0)
+    }
+
+    #[tokio::test]
+    async fn test_api_client_get_matches() {
+        let api = get_api().await;
+
+        let match_ids = api.get_match_ids(Some(10))
+            .await
+            .unwrap();
+
+        assert!(match_ids.len() == 10);
+
+        let result = api.get_matches(&match_ids, 250)
+            .await
+            .unwrap();
+
+        assert!(result.len() == match_ids.len())
+    }
+
+    #[tokio::test]
+    async fn test_api_get_match_id_mapping() {
+        let api = get_api().await;
+
+        let result = api.get_match_id_mapping()
+            .await
+            .unwrap();
+
+        assert!(result.len() > 0)
+    }
 }
