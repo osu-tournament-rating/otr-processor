@@ -20,7 +20,7 @@ pub fn create_model() -> PlackettLuce {
 
 // Rating generation
 
-pub fn create_initial_ratings(matches: Vec<Match>, players: Vec<Player>) -> Vec<PlayerRating> {
+pub fn create_initial_ratings(matches: &[Match], players: &[Player]) -> Vec<PlayerRating> {
     // The first step in the rating algorithm. Generate ratings from known ranks.
     let constants = RatingConstants::default();
 
@@ -33,18 +33,18 @@ pub fn create_initial_ratings(matches: Vec<Match>, players: Vec<Player>) -> Vec<
     let mut player_hashmap: HashMap<i32, Player> = HashMap::new();
 
     for player in players {
-        player_hashmap.entry(player.id).or_insert(player);
+        player_hashmap.entry(player.id).or_insert(player.clone());
     }
 
     for m in matches {
-        for game in m.games {
+        for game in &m.games {
             let mode = game.play_mode;
             let enum_mode = match mode.try_into() {
                 Ok(mode @ (Mode::Osu | Mode::Taiko | Mode::Catch | Mode::Mania)) => mode,
                 _ => panic!("Expected one of [0, 1, 2, 3] to convert to mode enum. Found {} instead.", mode),
             };
 
-            for score in game.match_scores {
+            for score in &game.match_scores {
                 // Check if the player_id and enum_mode combination is already in created_ratings
                 if stored_lookup_log.contains(&(score.player_id, enum_mode as i32)) {
                     // We've already initialized this player.

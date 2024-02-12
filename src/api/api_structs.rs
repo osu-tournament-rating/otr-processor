@@ -167,7 +167,7 @@ pub struct Beatmap {
     pub diff_name: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Player {
     pub id: i32,
