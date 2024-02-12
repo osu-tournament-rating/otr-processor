@@ -31,8 +31,12 @@ impl OtrApiClient {
     }
 
     /// Constructs API client based environment variables
-    /// see `env_example`
-    pub async fn new_from_env() -> Result<Self, Error> {
+    /// see `env_example` in project directory
+    ///
+    /// # Note
+    /// Method logs in as system user so it's expecting
+    /// privileged token in environment variables 
+    pub async fn new_from_priv_env() -> Result<Self, Error> {
         OtrApiClient::new(
             &std::env::var("PRIVILEGED_SECRET").unwrap(),
             &std::env::var("API_ROOT").unwrap(),
@@ -185,7 +189,7 @@ mod api_client_tests {
         API_INSTANCE.get_or_init(async {
             dotenv::dotenv().unwrap();
             
-            OtrApiClient::new_from_env()
+            OtrApiClient::new_from_priv_env()
                 .await
                 .expect("Failed to initialize OtrApi")
 
