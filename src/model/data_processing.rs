@@ -37,6 +37,7 @@ pub fn apply_mod_multipliers(matches: &mut Vec<Match>) {
 mod tests {
     use crate::api::api_structs::{Game, Match, MatchScore};
     use crate::model::data_processing::{apply_mod_multipliers, get_mod_multipliers};
+    use crate::model::structures::mode::Mode;
 
     #[test]
     fn multipliers_ez() {
@@ -64,7 +65,7 @@ mod tests {
 
         let game = Game {
             id: 0,
-            play_mode: 0,
+            play_mode: Mode::Osu,
             scoring_type: 0,
             team_type: 0,
             mods: 0,
@@ -79,7 +80,7 @@ mod tests {
             id: 123,
             match_id: 12345,
             name: Some("STT3: (Coffee) vs (The voices are back)".to_string()),
-            mode: 0,
+            mode: Mode::Osu,
             start_time: None,
             end_time: None,
             games: vec![game],
