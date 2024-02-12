@@ -31,7 +31,7 @@ impl OtrApiClient {
     }
 
     /// Constructs API client based environment variables
-    /// see `env_example` or TODO
+    /// see `env_example`
     pub async fn new_from_env() -> Result<Self, Error> {
         OtrApiClient::new(
             &std::env::var("PRIVILEGED_SECRET").unwrap(),
@@ -60,21 +60,37 @@ impl OtrApiClient {
     }
 
     /// Wrapper to make authorized requests without body
-    async fn make_request<T>(&self, method: Method, link: &str) -> Result<T, Error> 
+    ///
+    /// See [OtrApiClient::make_request_with_body]
+    async fn make_request<T>(&self, method: Method, partial_url: &str) -> Result<T, Error> 
     where 
-        T: DeserializeOwned, // Result type
+        T: DeserializeOwned, 
     {
-        self.make_request_with_body(method, link, None::<u8>).await
+        self.make_request_with_body(method, partial_url, None::<u8>).await
     }
-
     
     /// Wrapper to make authorized requests with provided body
-    async fn make_request_with_body<T, B>(&self, method: Method, link: &str, body: Option<B>) -> Result<T, Error> 
+    ///
+    /// # Url
+    /// URL constructed like this `{1}{2}`
+    /// 
+    /// Where
+    /// 1. API root. Provided when initializing [`OtrApiClient`]
+    /// 2. Partial URL that corresponds to endpoint
+    ///
+    /// # Body
+    /// Body should be serializable, see [serde::Serialize]
+    ///
+    /// # Note
+    /// 
+    /// `/` must present at the beginning of the
+    /// partial URL
+    async fn make_request_with_body<T, B>(&self, method: Method, partial_url: &str, body: Option<B>) -> Result<T, Error> 
     where 
-        T: DeserializeOwned, // Result type
+        T: DeserializeOwned,
         B: Serialize,
     {
-        let request_link = format!("{}{}", self.api_root, link);
+        let request_link = format!("{}{}", self.api_root, partial_url);
 
         let mut request = match method {
             Method::GET => self.client.get(request_link),
