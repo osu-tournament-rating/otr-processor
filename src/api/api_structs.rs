@@ -1,6 +1,8 @@
 use chrono::{DateTime, FixedOffset};
 use serde::{Deserialize, Serialize};
 
+use crate::model::structures::mode::Mode;
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LoginResponse {
@@ -106,7 +108,7 @@ pub struct Match {
     pub id: i32,
     pub match_id: i64,
     pub name: Option<String>,
-    pub mode: i32,
+    pub mode: Mode,
     pub start_time: Option<DateTime<FixedOffset>>,
     pub end_time: Option<DateTime<FixedOffset>>,
     pub games: Vec<Game>,
@@ -123,7 +125,7 @@ pub struct MatchIdMapping {
 #[serde(rename_all = "camelCase")]
 pub struct Game {
     pub id: i32,
-    pub play_mode: i32,
+    pub play_mode: Mode,
     pub scoring_type: i32,
     pub team_type: i32,
     pub mods: i32,

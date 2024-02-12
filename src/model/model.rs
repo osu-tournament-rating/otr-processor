@@ -25,7 +25,7 @@ pub fn create_initial_ratings(matches: &[Match], players: &[Player]) -> Vec<Play
     let constants = RatingConstants::default();
 
     // A fast lookup used for understanding who has default ratings created at this time.
-    let mut stored_lookup_log: HashSet<(i32, i32)> = HashSet::new();
+    let mut stored_lookup_log: HashSet<(i32, Mode)> = HashSet::new();
     let mut ratings: Vec<PlayerRating> = Vec::new();
     let bar = progress_bar(matches.len() as u64);
 
@@ -39,21 +39,17 @@ pub fn create_initial_ratings(matches: &[Match], players: &[Player]) -> Vec<Play
     for m in matches {
         for game in &m.games {
             let mode = game.play_mode;
-            let enum_mode = match mode.try_into() {
-                Ok(mode @ (Mode::Osu | Mode::Taiko | Mode::Catch | Mode::Mania)) => mode,
-                _ => panic!("Expected one of [0, 1, 2, 3] to convert to mode enum. Found {} instead.", mode),
-            };
 
             for score in &game.match_scores {
                 // Check if the player_id and enum_mode combination is already in created_ratings
-                if stored_lookup_log.contains(&(score.player_id, enum_mode as i32)) {
+                if stored_lookup_log.contains(&(score.player_id, mode)) {
                     // We've already initialized this player.
                     continue;
                 }
 
                 // Create ratings using the earliest known rank
                 let player = player_hashmap.get(&score.player_id).expect("Player should be present in the hashmap.");
-                let rank: Option<i32> = match enum_mode {
+                let rank: Option<i32> = match mode {
                     Mode::Osu => player.earliest_osu_global_rank.or(player.rank_standard),
                     Mode::Taiko => player.earliest_taiko_global_rank.or(player.rank_taiko),
                     Mode::Catch => player.earliest_catch_global_rank.or(player.rank_catch),
@@ -79,12 +75,12 @@ pub fn create_initial_ratings(matches: &[Match], players: &[Player]) -> Vec<Play
                 let rating = Rating::new(mu, sigma);
                 let player_rating = PlayerRating {
                     player_id: score.player_id,
-                    mode: enum_mode,
+                    mode,
                     rating
                 };
                 ratings.push(player_rating);
 
-                stored_lookup_log.insert((score.player_id, enum_mode as i32));
+                stored_lookup_log.insert((score.player_id, mode));
             }
         }
 

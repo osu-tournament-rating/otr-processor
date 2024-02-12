@@ -15,6 +15,7 @@ tokio = { version = "1.36.0", features = ["full"] }
 chrono = {  version = "0.4.33", features = ["serde"] }
 openskill = "0.0.1"
 statrs = "0.16.0"
+serde_repr = "0.1.18"
 
 [dev-dependencies]
 async-once-cell = "0.5.3"
