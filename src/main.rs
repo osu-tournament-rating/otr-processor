@@ -5,8 +5,7 @@ mod utils;
 
 use indicatif::ProgressBar;
 
-use crate::model::model::match_costs;
-use crate::model::structures::match_cost::MatchCost;
+use crate::model::{structures::match_cost::MatchCost, match_costs};
 
 #[tokio::main]
 async fn main() {
