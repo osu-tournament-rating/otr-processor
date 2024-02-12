@@ -18,9 +18,9 @@ impl DecayTracker {
         self.last_play_time.insert(player_id, time);
     }
 
-    /// Returns a Vec<RatingAdjustment> for each decay application for this user.
+    /// Returns a [`Vec<RatingAdjustment>`] for each decay application for this user.
     ///
-    /// Here's how this works:
+    /// # How this works
     /// - This gets called by the rating processor during some point in time, D
     /// - The user's last play time is T
     /// - Time D may be the first time the player has played in 1 day, or 5 years.
@@ -28,7 +28,7 @@ impl DecayTracker {
     /// - Divide delta by 7, as we apply decay once weekly.
     /// - For each week, apply decay.
     ///
-    /// Rules:
+    /// # Rules
     /// - User must be inactive for at least 4 months before decay begins.
     /// - Beginning after 4 months of inactivity, apply decay once weekly.
     ///
