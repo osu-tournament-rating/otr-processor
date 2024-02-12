@@ -89,6 +89,14 @@ impl OtrApiClient {
     /// 
     /// `/` must present at the beginning of the
     /// partial URL
+    ///
+    /// # Examples 
+    /// 1. Make request to some endpoint with `Vec<32>` as body
+    /// ```
+    /// let api = OtrApiClient::new("MYSECRET", "example.com/api");
+    /// let my_numbers: Vec<32> = vec![1, 2, 3, 4, 5];
+    /// api.make_request_with_body(Method::GET, "/fetch_something", Some(&my_numbers));
+    /// ```
     async fn make_request_with_body<T, B>(&self, method: Method, partial_url: &str, body: Option<B>) -> Result<T, Error> 
     where 
         T: DeserializeOwned,
