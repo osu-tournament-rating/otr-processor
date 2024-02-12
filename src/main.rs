@@ -12,14 +12,14 @@ use crate::model::structures::match_cost::MatchCost;
 async fn main() {
     dotenv::dotenv().unwrap();
 
-    let api = api::OtrApiClient::new_from_env().await
+    let api = api::OtrApiClient::new_from_priv_env().await
         .expect("Failed to intialize otr api");
     
     let match_ids = api.get_match_ids(Some(100))
         .await
         .expect("Match ids must be valid before proceeding");
 
-    let matches = api.get_matches(&match_ids)
+    let matches = api.get_matches(&match_ids, 250)
         .await
         .expect("Matches need to be loaded before continuing");
 
