@@ -11,7 +11,6 @@ use std::collections::{HashMap, HashSet};
 use openskill::model::plackett_luce::PlackettLuce;
 use openskill::rating::{default_gamma, Rating};
 use crate::api::api_structs::{Game, Match, MatchRatingStats, Player, RatingAdjustment};
-use crate::model::constants::RatingConstants;
 use crate::model::structures::match_cost::MatchCost;
 use crate::model::structures::mode::Mode;
 use crate::model::structures::player_rating::PlayerRating;
@@ -19,17 +18,17 @@ use crate::model::structures::rating_calculation_result::RatingCalculationResult
 use crate::utils::progress_utils::progress_bar;
 
 pub fn create_model() -> PlackettLuce {
-    let constants = RatingConstants::default();
-    PlackettLuce::new(constants.default_beta,
-                      constants.default_kappa,
-                      default_gamma)
+    PlackettLuce::new(
+        constants::BETA,
+        constants::KAPPA,
+        default_gamma
+    )
 }
 
 // Rating generation
 
 pub fn create_initial_ratings(matches: Vec<Match>, players: Vec<Player>) -> Vec<PlayerRating> {
     // The first step in the rating algorithm. Generate ratings from known ranks.
-    let constants = RatingConstants::default();
 
     // A fast lookup used for understanding who has default ratings created at this time.
     let mut stored_lookup_log: HashSet<(i32, Mode)> = HashSet::new();
@@ -70,12 +69,12 @@ pub fn create_initial_ratings(matches: Vec<Match>, players: Vec<Player>) -> Vec<
                         // Player has a valid identified rank (either the earliest known
                         // rank, or their current rank)
                         mu = mu_for_rank(rank);
-                        sigma = constants.default_sigma;
+                        sigma = constants::SIGMA;
                     },
                     None => {
                         // Player may be restricted / we cannot get hold of their rank info. Use default.
-                        mu = constants.default_mu;
-                        sigma = constants.default_sigma;
+                        mu = constants::MU;
+                        sigma = constants::SIGMA;
                     }
                 }
 
@@ -204,16 +203,14 @@ pub fn match_costs(games: &[Game]) -> Option<Vec<MatchCost>> {
 }
 
 pub fn mu_for_rank(rank: i32) -> f64 {
-    let constants = RatingConstants::default();
-    let multiplier = constants.multiplier as f64;
-    let val = multiplier * (45.0 - (3.2 * (rank as f64).ln()));
+    let val = constants::MULTIPLIER * (45.0 - (3.2 * (rank as f64).ln()));
 
-    if val < multiplier * 5.0 {
-        return multiplier * 5.0;
+    if val < constants::MULTIPLIER * 5.0 {
+        return constants::MULTIPLIER * 5.0;
     }
 
-    if val > multiplier * 30.0 {
-        return multiplier * 30.0;
+    if val > constants::MULTIPLIER * 30.0 {
+        return constants::MULTIPLIER * 30.0;
     }
 
     val

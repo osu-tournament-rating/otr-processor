@@ -1,32 +1,14 @@
-pub struct RatingConstants {
-    pub multiplier: i32,
-    pub default_mu: f64,
-    pub default_sigma: f64,
-    pub default_tau: f64,
-    pub default_beta: f64,
-    pub default_kappa: f64,
-    pub decay_minimum: f64,
-    pub decay_days: i64,
-    pub decay_rate: f64,
-    pub volatility_growth_rate: f64
-}
 
-impl Default for RatingConstants {
-    fn default() -> Self {
-        let multiplier = 45;
-        let sigma = (25.0 / 5.0) * multiplier as f64;
+pub static MULTIPLIER: f64 = 45.0;
+pub static SIGMA: f64 = (25.0 / 5.0) * MULTIPLIER;
+pub static MU: f64 = 15.0 * MULTIPLIER;
+pub static TAU: f64 = SIGMA / 100.0;
+pub static BETA: f64 = SIGMA / 2.0;
+pub static KAPPA: f64 = 0.0001;
+pub static DECAY_DAYS: u64 = 115;
+pub static DECAY_MINIMUM: f64 = 825.0;
+pub static DECAY_RATE: f64 = 0.06 * MULTIPLIER;
 
-        Self {
-            multiplier,
-            default_mu: 15.0 * multiplier as f64,
-            default_sigma: sigma,
-            default_tau: sigma / 100.0,
-            default_beta: sigma / 2.0,
-            default_kappa: 0.0001,
-            decay_minimum: 825.0,
-            decay_days: 115,
-            decay_rate: 0.06 * multiplier as f64,
-            volatility_growth_rate: 0.08 * (i32::pow(multiplier, 2) as f64),
-        }
-    }
+lazy_static! {
+    pub static ref VOLATILITY_GROWTH_RATE: f64 = 0.08 * (f64::powf(MULTIPLIER, 2.0));
 }

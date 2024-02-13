@@ -841,6 +841,7 @@ dependencies = [
  "clap",
  "dotenv",
  "indicatif",
+ "lazy_static",
  "openskill",
  "reqwest",
  "serde",

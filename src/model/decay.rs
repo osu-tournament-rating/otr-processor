@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use chrono::{DateTime, FixedOffset};
 use crate::api::api_structs::RatingAdjustment;
-use crate::model::constants::RatingConstants;
+use crate::model::constants;
 
 /// Tracks decay activity for players
 pub struct DecayTracker {
@@ -79,13 +79,10 @@ impl DecayTracker {
     /// - d: The current time (in this context, it is the time the match was played)
     /// - t: The last time the user played
     fn n_decay(d: DateTime<FixedOffset>, t: DateTime<FixedOffset>) -> i64 {
-        let constants = RatingConstants::default();
-        let decay_days = constants.decay_days;
-
         let duration = d.signed_duration_since(t);
         let duration_days = duration.num_days();
 
-        if duration_days < decay_days {
+        if (duration_days as u64) < constants::DECAY_DAYS {
             return 0;
         }
 
@@ -94,37 +91,31 @@ impl DecayTracker {
 }
 
 pub fn is_decay_possible(mu: f64) -> bool {
-    let constants = RatingConstants::default();
-
-    mu > constants.decay_minimum
+    mu > constants::DECAY_MINIMUM
 }
 
 pub fn decay_sigma(sigma: f64) -> f64 {
-    let constants = RatingConstants::default();
-    let new_sigma = (sigma.powi(2) + constants.volatility_growth_rate).sqrt();
+    let new_sigma = (sigma.powf(2.0) + *constants::VOLATILITY_GROWTH_RATE).sqrt();
 
-    new_sigma.min(constants.default_sigma)
+    new_sigma.min(constants::SIGMA)
 }
 
 pub fn decay_mu(mu: f64) -> f64 {
-    let constants = RatingConstants::default();
-    let new_mu = mu - constants.decay_rate;
+    let new_mu = mu - constants::DECAY_RATE;
 
-    new_mu.max(constants.decay_minimum)
+    new_mu.max(constants::DECAY_MINIMUM)
 }
 
 
 #[cfg(test)]
 mod tests {
     use std::ops::Add;
-    use chrono::{DateTime};
-    use crate::model::constants::RatingConstants;
-    use crate::model::decay::{decay_mu, decay_sigma, DecayTracker, is_decay_possible};
+    use chrono::DateTime;
+    use crate::model::{decay::{decay_mu, decay_sigma, DecayTracker, is_decay_possible}, constants};
 
     #[test]
     fn test_decay() {
         let id = 1;
-        let constants = RatingConstants::default();
         let mu = 1000.0;
         let sigma = 200.0;
 
@@ -165,19 +156,17 @@ mod tests {
 
     #[test]
     fn test_n_decay() {
-        let days = RatingConstants::default().decay_days;
-
         let t = DateTime::parse_from_rfc3339("2021-01-01T00:00:00+00:00").unwrap().fixed_offset();
-        let d = t.add(chrono::Duration::days(days));
+        let d = t.add(chrono::Duration::days(constants::DECAY_DAYS as i64));
 
         let n = DecayTracker::n_decay(d, t);
 
-        assert_eq!(n, days / 7);
+        assert_eq!(n, constants::DECAY_DAYS as i64 / 7);
     }
 
     #[test]
     fn test_n_decay_less_than_decay_days() {
-        let days = RatingConstants::default().decay_days - 1;
+        let days = (constants::DECAY_DAYS - 1) as i64;
 
         let t = DateTime::parse_from_rfc3339("2021-01-01T00:00:00+00:00").unwrap().fixed_offset();
         let d = t.add(chrono::Duration::days(days));
@@ -190,7 +179,7 @@ mod tests {
     #[test]
     fn test_decay_possible() {
         let mu = 500.0;
-        let decay_min = RatingConstants::default().decay_minimum;
+        let decay_min = constants::DECAY_MINIMUM;
 
         let decay_possible = mu > (decay_min);
 
@@ -201,41 +190,33 @@ mod tests {
 
     #[test]
     fn test_decay_sigma_standard() {
-        let constants = RatingConstants::default();
-
         let sigma = 200.1;
         let new_sigma = decay_sigma(sigma);
-        let expected = (sigma.powi(2) + constants.volatility_growth_rate).sqrt();
+        let expected = (sigma.powf(2.0) + *constants::VOLATILITY_GROWTH_RATE).sqrt();
 
         assert_eq!(new_sigma, expected);
     }
 
     #[test]
     fn test_decay_sigma_maximum_default() {
-        let constants = RatingConstants::default();
-
         let sigma = 999.0;
         let new_sigma = decay_sigma(sigma);
-        let expected = constants.default_sigma;
+        let expected = constants::SIGMA;
 
         assert_eq!(new_sigma, expected);
     }
 
     #[test]
     fn test_decay_mu_standard() {
-        let constants = RatingConstants::default();
-
         let mu = 1100.0;
         let new_mu = decay_mu(mu);
-        let expected = mu - constants.decay_rate;
+        let expected = mu - constants::DECAY_RATE;
 
         assert_eq!(new_mu, expected);
     }
 
     #[test]
     fn test_decay_mu_min_decay() {
-        let constants = RatingConstants::default();
-
         let mu = 825.0;
         let new_mu = decay_mu(mu);
         let expected = 825.0;
