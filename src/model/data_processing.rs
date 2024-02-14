@@ -38,6 +38,7 @@ mod tests {
     use crate::api::api_structs::{Game, Match, MatchScore};
     use crate::model::data_processing::{apply_mod_multipliers, get_mod_multipliers};
     use crate::model::structures::mode::Mode;
+    use crate::model::structures::team_type::TeamType;
 
     #[test]
     fn multipliers_ez() {
@@ -67,7 +68,7 @@ mod tests {
             id: 0,
             play_mode: Mode::Osu,
             scoring_type: 0,
-            team_type: 0,
+            team_type: TeamType::HeadToHead,
             mods: 0,
             game_id: 0,
             start_time: Default::default(),
