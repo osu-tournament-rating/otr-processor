@@ -38,3 +38,17 @@ jobs:
 
       - name: Check code formatting
         run: cargo fmt -- --check
+
+  test:
+    name: Test
+    runs-on: ubuntu-20.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Create .env
+        run: echo ${{ secrets.DEV_ENV }} > .env
+
+      - name: Test
+        run: cargo test
