@@ -16,10 +16,10 @@ impl TryFrom<i32> for Mode {
 
     fn try_from(v: i32) -> Result<Self, Self::Error> {
         match v {
-            x if x == Mode::Osu as i32 => Ok(Mode::Osu),
-            x if x == Mode::Taiko as i32 => Ok(Mode::Taiko),
-            x if x == Mode::Catch as i32 => Ok(Mode::Catch),
-            x if x == Mode::Mania as i32 => Ok(Mode::Mania),
+            0 => Ok(Mode::Osu),
+            1 => Ok(Mode::Taiko),
+            2 => Ok(Mode::Catch),
+            3 => Ok(Mode::Mania),
             _ => Err(()),
         }
     }
