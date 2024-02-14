@@ -68,8 +68,8 @@ mod tests {
         let game = Game {
             id: 0,
             play_mode: Mode::Osu,
-            scoring_type: ScoringType::Score,
-            team_type: TeamType::HeadToHead,
+            scoring_type: ScoringType::ScoreV2,
+            team_type: TeamType::TeamVs,
             mods: 0,
             game_id: 0,
             start_time: Default::default(),
