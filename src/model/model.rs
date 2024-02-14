@@ -3,7 +3,7 @@ use statrs::distribution::{ContinuousCDF, Normal};
 use std::collections::{HashMap, HashSet};
 use openskill::model::plackett_luce::PlackettLuce;
 use openskill::rating::{default_gamma, Rating};
-use crate::api::api_structs::{Game, Match, MatchRatingStats, Player, RatingAdjustment};
+use crate::api::api_structs::{Game, Match, MatchRatingStats, Player, PlayerMatchStats, RatingAdjustment};
 use crate::model::constants::RatingConstants;
 use crate::model::decay::{decay_mu, decay_sigma, DecayTracker, is_decay_possible};
 use crate::model::structures::match_cost::MatchCost;
@@ -98,7 +98,7 @@ pub fn calc_ratings(initial_ratings: Vec<PlayerRating>, matches: Vec<Match>, mod
     // Value = Associated PlayerRating (if available)
     let mut ratings_hash: HashMap<(i32, i32), PlayerRating> = HashMap::new();
     let rating_stats_hash: HashMap<i32, Vec<MatchRatingStats>> = HashMap::new();
-    let rating_adjustments_hash: HashMap<i32, Vec<RatingAdjustment>> = HashMap::new();
+    let mut rating_adjustments_hash: HashMap<i32, Vec<RatingAdjustment>> = HashMap::new();
 
     for r in initial_ratings {
         ratings_hash.insert((r.player_id, r.mode as i32), r);
@@ -121,6 +121,10 @@ pub fn calc_ratings(initial_ratings: Vec<PlayerRating>, matches: Vec<Match>, mod
         if curr_match.games.iter().any(|game| game.play_mode != curr_match.mode) {
             continue;
         }
+        // stats collection
+        let mut stats: HashMap<i32, MatchRatingStats> = HashMap::new();
+        // rating stats
+        let mut rating_stats: Vec<MatchRatingStats> = vec![];
         // get match costs of all players
         let match_costs = match_costs(&curr_match.games).unwrap();
         // games to rate
@@ -209,20 +213,67 @@ pub fn calc_ratings(initial_ratings: Vec<PlayerRating>, matches: Vec<Match>, mod
 
             let average_t_rating = if teammate_ratings.is_some() {
                 let len = teammate_ratings.unwrap().len();
-                teammate_ratings.unwrap().values().sum() / len
-            };
+                let ratings = teammate_ratings.unwrap().values().sum();
+                ratings / len
+            } else { None };
             let average_o_rating = if opponent_ratings.is_some() {
                 let len = opponent_ratings.unwrap().len();
-                opponent_ratings.unwrap().values().sum() / len
-            };
+                let ratings = opponent_ratings.unwrap().values().sum();
+                ratings / len
+            } else { None };
 
             decay_tracker.record_activity(rating_prior.player_id, start_time);
 
+            let adjustment = MatchRatingStats {
+                player_id: rating_prior.player_id,
+                match_id: curr_match.match_id as i32,
+                match_cost: match_cost.match_cost,
+                rating_before: curr_mu,
+                rating_after: 0.0,
+                rating_change: 0.0,
+                volatility_before: curr_sigma,
+                volatility_after: 0.0,
+                volatility_change: 0.0,
+                global_rank_before,
+                global_rank_after: 0,
+                global_rank_change: 0,
+                country_rank_before,
+                country_rank_after: 0,
+                country_rank_change: 0,
+                percentile_before,
+                percentile_after: 0.0,
+                percentile_change: 0.0,
+                average_teammate_rating: average_t_rating,
+                average_opponent_rating: average_o_rating,
+            }
 
-
-
+            stats.insert(rating_prior.player_id, adjustment)
         }
+        let new_rating = model.rate(to_rate.iter().map(|x| x.rating).collect(), match_costs.iter().map(|x| x.match_cost).collect());
 
+        for mc in match_costs {
+            let curr_id = mc.player_id;
+            let key = &(mc.player_id, curr_match.mode);
+            let mut new_rating = ratings_hash.get(&key).cloned().unwrap();
+
+            if new_rating.rating.mu < 100.0 {
+                new_rating.rating.mu = 100.0;
+            }
+
+            // get new global/country ranks and percentiles
+            stats.entry(curr_id).and_modify(|f| {
+                f.rating_after = new_rating.rating.mu;
+                f.volatility_after = new_rating.rating.sigma;
+                // f.country_rank_after = new_country_rank
+                // f.global_rank_after = new_global_rank
+                // f.percentile_after = new_percentile
+                f.rating_change = f.rating_after - f.rating_before;
+                f.volatility_change = f.volatility_after - f.volatility_before;
+                // f.global_rank_change = f.global_rank_after - f.global_rank_before;
+                // f.country_rank_change = f.country_rank_after - f.country_rank_before;
+                // f.percentile_change = f.percentile_after - f.percentile_before;
+            });
+        }
     }
 
     RatingCalculationResult {
