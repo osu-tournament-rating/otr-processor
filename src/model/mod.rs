@@ -8,13 +8,17 @@ mod recalc_helpers;
 use statrs::statistics::Statistics;
 use statrs::distribution::{ContinuousCDF, Normal};
 use std::collections::{HashMap, HashSet};
+use chrono::{DateTime, FixedOffset};
 use openskill::model::plackett_luce::PlackettLuce;
 use openskill::rating::{default_gamma, Rating};
 use crate::api::api_structs::{Game, Match, MatchRatingStats, Player, RatingAdjustment};
+use crate::model::CalculationErrors::MatchTimeNotFound;
+use crate::model::decay::{DecayTracker, is_decay_possible};
 use crate::model::structures::match_cost::MatchCost;
 use crate::model::structures::mode::Mode;
 use crate::model::structures::player_rating::PlayerRating;
 use crate::model::structures::rating_calculation_result::RatingCalculationResult;
+use crate::model::structures::team_type::TeamType;
 use crate::utils::progress_utils::progress_bar;
 
 pub fn create_model() -> PlackettLuce {
@@ -95,27 +99,227 @@ pub fn create_initial_ratings(matches: Vec<Match>, players: Vec<Player>) -> Vec<
 
     ratings
 }
-
 /// Calculates a vector of initial ratings based on match cost,
 /// returns the new ratings
 pub fn calc_ratings(initial_ratings: Vec<PlayerRating>, matches: Vec<Match>, model: PlackettLuce) -> RatingCalculationResult {
     // Key = (player_id, mode as i32)
     // Value = Associated PlayerRating (if available)
-    let mut ratings_hash: HashMap<(i32, i32), PlayerRating> = HashMap::new();
+    let mut ratings_hash: HashMap<(i32, Mode), PlayerRating> = HashMap::new();
+    // Key = match_id
+    // Value = Vec of MatchRatingStats per match
     let rating_stats_hash: HashMap<i32, Vec<MatchRatingStats>> = HashMap::new();
-    let rating_adjustments_hash: HashMap<i32, Vec<RatingAdjustment>> = HashMap::new();
-
+    // Key = player_id
+    // Value = Vec of RatingAdjustments per player
+    let mut rating_adjustments_hash: HashMap<i32, Vec<RatingAdjustment>> = HashMap::new();
+    // Insert every given player into initial ratings
     for r in initial_ratings {
-        ratings_hash.insert((r.player_id, r.mode as i32), r);
+        ratings_hash.insert((r.player_id, r.mode), r);
+    }
+    // Create a decay tracker to run decay adjustments
+    let mut decay_tracker = DecayTracker::new();
+    // Create a progress bar for match processing
+    let bar = progress_bar(matches.len() as u64);
+
+    for curr_match in matches {
+        // Skip any match where expected ruleset of games doesn't match the declared one
+        // TODO: Implement proper median
+        if curr_match.games.iter().any(|game| game.play_mode != curr_match.mode) {
+            continue;
+        }
+        // Obtain all player match costs
+        // Skip the match if there are no valid match costs
+        let match_costs = match match_costs(&curr_match.games) {
+            Some(mc) => mc,
+            None => continue;
+        }
+        // Start time of the match
+        // Skip the match if not defined
+        let start_time = match curr_match.start_time {
+            Some(t) => t,
+            None => continue,
+        }
+        // Collection of match ratings
+        // Key = player_id
+        // Value = MatchRatingStats
+        let mut stats: HashMap<i32, MatchRatingStats> = HashMap::new();
+
+        let mut to_rate = vec![];
+
+        for match_cost in match_costs {
+            // If user has no prior activity, store the first one
+            // TODO: DecayTracker needs to store modes
+            if let None = decay_tracker.get_activity(match_cost.player_id) {
+                decay_tracker.record_activity(match_cost.player_id, start_time);
+            }
+
+            // Get user's current rating
+            let mut rating_prior = match ratings_hash
+                .get_mut(&(match_cost.player_id, curr_match.mode)) {
+                None => panic!("No rating found?")
+                Some(rate) => rate,
+            }
+            // If decay is possible, apply it to rating_prior
+            if is_decay_possible(rating_prior.rating.mu) {
+                let adjustment = decay_tracker
+                    .decay(match_cost.player_id,
+                           rating_prior.rating.mu,
+                           rating_prior.rating.sigma,
+                           start_time);
+                match adjustment {
+                    Some(adj) => {
+                        rating_prior.rating.mu = adj[adj.len() - 1].rating_after;
+                        rating_prior.rating.sigma = adj[adj.len() - 1].volatility_after
+                    }
+                    None => ()
+                }
+            }
+            to_rate.push(rating_prior);
+
+            let prior_mu = rating_prior.rating.mu;
+            // TODO: Get country
+            let country = ();
+            // Updating rank for tracking
+            ratings_hash.entry((match_cost.player_id, curr_match.mode))
+                .and_modify(|f| f.rating.mu = prior_mu);
+            // TODO: stopped here for now (10:38 16.02.2024)
+            // REQ: get user's rankings from somewhere
+            let rating_stats_before = rating_stats_hash
+                .get(&rating_prior.player_id)
+                .unwrap();
+            let current_player_index = rating_stats_before
+                .iter().position(|x| x.player_id == rating_prior.player_id)
+                .unwrap();
+            let global_rank_before = rating_stats_before[current_player_index].global_rank_before;
+            let country_rank_before = rating_stats_before[current_player_index].country_rank_before;
+            let percentile_before = rating_stats_before[current_player_index].percentile_before;
+
+            // 1 is team-based, 0 is head-to-head
+            // TODO: CHANGE THIS MESS WTF
+            let ftf_count = curr_match.games.iter()
+                .filter(|x| x.team_type == TeamType::HeadToHead).count();
+            let team_count = curr_match.games.iter()
+                .filter(|x| x.team_type != TeamType::HeadToHead).count();
+            let team_based = team_count > ftf_count;
+
+            let mut teammate_ratings = None;
+            let mut opponent_ratings = None;
+
+            if team_based {
+                // TODO: needs to be a median across all games ideally
+                let curr_player_team = curr_match.games[0].match_scores
+                    .iter().find(|x| x.player_id == rating_prior.player_id)
+                    .unwrap().team;
+                let t_ids: Vec<_> = curr_match.games[0]
+                    .match_scores.iter().filter(|x| x.team == curr_player_team)
+                    .map(|x| x.player_id)
+                    .collect();
+                let o_ids: Vec<_>  = curr_match.games[0]
+                    .match_scores.iter().filter(|x| x.team != curr_player_team)
+                    .map(|x| x.player_id)
+                    .collect();
+
+                let mut teammate: HashMap<(i32, Mode), PlayerRating> = HashMap::new();
+                let mut opponent: HashMap<(i32, Mode), PlayerRating> = HashMap::new();
+
+                for id in t_ids {
+                    teammate.insert((id, curr_match.mode), *ratings_hash.get(&(id, curr_match.mode)));
+                }
+                for id in o_ids {
+                    opponent.insert((id, curr_match.mode), *ratings_hash.get(&(id, curr_match.mode)));
+                }
+                teammate_ratings = Some(teammate);
+                opponent_ratings = Some(opponent);
+            }
+
+            let average_t_rating = if teammate_ratings.is_some() {
+                let len = teammate_ratings.unwrap().len();
+                let ratings = teammate_ratings.unwrap().values().sum();
+                ratings / len
+            } else { None };
+            let average_o_rating = if opponent_ratings.is_some() {
+                let len = opponent_ratings.unwrap().len();
+                let ratings = opponent_ratings.unwrap().values().sum();
+                ratings / len
+            } else { None };
+
+            decay_tracker.record_activity(rating_prior.player_id, start_time);
+
+            let adjustment = MatchRatingStats {
+                player_id: rating_prior.player_id,
+                match_id: curr_match.match_id as i32,
+                match_cost: match_cost.match_cost,
+                rating_before: curr_mu,
+                rating_after: 0.0,
+                rating_change: 0.0,
+                volatility_before: curr_sigma,
+                volatility_after: 0.0,
+                volatility_change: 0.0,
+                global_rank_before,
+                global_rank_after: 0,
+                global_rank_change: 0,
+                country_rank_before,
+                country_rank_after: 0,
+                country_rank_change: 0,
+                percentile_before,
+                percentile_after: 0.0,
+                percentile_change: 0.0,
+                average_teammate_rating: average_t_rating,
+                average_opponent_rating: average_o_rating,
+            }
+
+            stats.insert(rating_prior.player_id, adjustment)
+        }
+        let new_rating = model.rate(to_rate.iter().map(|x| x.rating).collect(), match_costs.iter().map(|x| x.match_cost).collect());
+
+        for mc in match_costs {
+            let curr_id = mc.player_id;
+            let key = &(mc.player_id, curr_match.mode);
+            let mut new_rating = ratings_hash.get(&key).cloned().unwrap();
+
+            if new_rating.rating.mu < 100.0 {
+                new_rating.rating.mu = 100.0;
+            }
+
+            // get new global/country ranks and percentiles
+            stats.entry(curr_id).and_modify(|f| {
+                f.rating_after = new_rating.rating.mu;
+                f.volatility_after = new_rating.rating.sigma;
+                // f.country_rank_after = new_country_rank
+                // f.global_rank_after = new_global_rank
+                // f.percentile_after = new_percentile
+                f.rating_change = f.rating_after - f.rating_before;
+                f.volatility_change = f.volatility_after - f.volatility_before;
+                // f.global_rank_change = f.global_rank_after - f.global_rank_before;
+                // f.country_rank_change = f.country_rank_after - f.country_rank_before;
+                // f.percentile_change = f.percentile_after - f.percentile_before;
+            });
+        }
+        bar.inc(1);
     }
 
-    let base_ratings: Vec<PlayerRating> = ratings_hash.into_values().collect();
+    let bar = progress_bar(ratings_hash.len() as u64);
 
-    let rating_stats: Vec<Vec<MatchRatingStats>> = rating_stats_hash.into_values().collect();
-    let flattened_stats: Vec<MatchRatingStats> = rating_stats.into_iter().flatten().collect();
+    for ((player_id, gamemode), rating) in ratings_hash {
+        let curr_rating = rating;
 
-    let adjustments: Vec<Vec<RatingAdjustment>> = rating_adjustments_hash.into_values().collect();
-    let flattened_adjustments: Vec<RatingAdjustment> = adjustments.into_iter().flatten().collect();
+        let mu = curr_rating.rating.mu;
+        let sigma = curr_rating.rating.sigma;
+
+        if is_decay_possible(mu) {
+            let last_played = decay_tracker.get_activity(player_id);
+
+            let curr_time = std::time::Instant::now();
+
+            let decays = decay_tracker
+                .decay(player_id, mu, sigma, curr_time.into())
+                .unwrap();
+
+            // apply decays
+            // ratings_hash.entry((player_id, gamemode)).and_modify(|f| f.rating.mu);
+        }
+
+    }
+
 
     RatingCalculationResult {
         base_ratings,
