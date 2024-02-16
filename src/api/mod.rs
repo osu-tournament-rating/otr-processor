@@ -224,7 +224,7 @@ mod api_client_tests {
             .await
             .unwrap();
 
-        assert!(result.len() > 0);
+        assert!(!result.is_empty());
 
         let result = api.get_match_ids(Some(10))
             .await
@@ -241,7 +241,7 @@ mod api_client_tests {
             .await
             .unwrap();
 
-        assert!(result.len() > 0)
+        assert!(!result.is_empty())
     }
 
     #[tokio::test]
@@ -269,6 +269,6 @@ mod api_client_tests {
             .await
             .unwrap();
 
-        assert!(result.len() > 0)
+        assert!(!result.is_empty())
     }
 }
