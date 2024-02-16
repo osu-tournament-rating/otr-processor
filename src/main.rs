@@ -36,8 +36,6 @@ async fn main() {
     for m in matches {
         let mc = match_costs(&m.games);
 
-        bar.inc(1);
-
         match mc {
             Some(match_costs) => mcs.push(match_costs),
             None => continue
