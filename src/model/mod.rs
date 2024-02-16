@@ -9,6 +9,7 @@ use statrs::statistics::Statistics;
 use statrs::distribution::{ContinuousCDF, Normal};
 use std::collections::{HashMap, HashSet};
 use chrono::{DateTime, FixedOffset};
+use openskill::model::model::Model;
 use openskill::model::plackett_luce::PlackettLuce;
 use openskill::rating::{default_gamma, Rating};
 use crate::api::api_structs::{Game, Match, MatchRatingStats, Player, RatingAdjustment};
@@ -101,16 +102,24 @@ pub fn create_initial_ratings(matches: Vec<Match>, players: Vec<Player>) -> Vec<
 }
 /// Calculates a vector of initial ratings based on match cost,
 /// returns the new ratings
-pub fn calc_ratings(initial_ratings: Vec<PlayerRating>, matches: Vec<Match>, model: PlackettLuce) -> RatingCalculationResult {
+pub fn calc_ratings(initial_ratings: Vec<PlayerRating>,
+                    matches: Vec<Match>,
+
+                    model: PlackettLuce) -> RatingCalculationResult {
     // Key = (player_id, mode as i32)
     // Value = Associated PlayerRating (if available)
     let mut ratings_hash: HashMap<(i32, Mode), PlayerRating> = HashMap::new();
     // Key = match_id
     // Value = Vec of MatchRatingStats per match
-    let rating_stats_hash: HashMap<i32, Vec<MatchRatingStats>> = HashMap::new();
+    let mut rating_stats_hash: HashMap<i32, Vec<MatchRatingStats>> = HashMap::new();
     // Key = player_id
     // Value = Vec of RatingAdjustments per player
     let mut rating_adjustments_hash: HashMap<i32, Vec<RatingAdjustment>> = HashMap::new();
+
+    // Vector of match ratings to return
+    let mut rating_stats: Vec<MatchRatingStats> = Vec::new();
+
+
     // Insert every given player into initial ratings
     for r in initial_ratings {
         ratings_hash.insert((r.player_id, r.mode), r);
@@ -130,14 +139,14 @@ pub fn calc_ratings(initial_ratings: Vec<PlayerRating>, matches: Vec<Match>, mod
         // Skip the match if there are no valid match costs
         let match_costs = match match_costs(&curr_match.games) {
             Some(mc) => mc,
-            None => continue;
-        }
+            None => continue,
+        };
         // Start time of the match
         // Skip the match if not defined
         let start_time = match curr_match.start_time {
             Some(t) => t,
             None => continue,
-        }
+        };
         // Collection of match ratings
         // Key = player_id
         // Value = MatchRatingStats
@@ -155,9 +164,9 @@ pub fn calc_ratings(initial_ratings: Vec<PlayerRating>, matches: Vec<Match>, mod
             // Get user's current rating
             let mut rating_prior = match ratings_hash
                 .get_mut(&(match_cost.player_id, curr_match.mode)) {
-                None => panic!("No rating found?")
+                None => panic!("No rating found?"),
                 Some(rate) => rate,
-            }
+            };
             // If decay is possible, apply it to rating_prior
             if is_decay_possible(rating_prior.rating.mu) {
                 let adjustment = decay_tracker
@@ -168,7 +177,8 @@ pub fn calc_ratings(initial_ratings: Vec<PlayerRating>, matches: Vec<Match>, mod
                 match adjustment {
                     Some(adj) => {
                         rating_prior.rating.mu = adj[adj.len() - 1].rating_after;
-                        rating_prior.rating.sigma = adj[adj.len() - 1].volatility_after
+                        rating_prior.rating.sigma = adj[adj.len() - 1].volatility_after;
+
                     }
                     None => ()
                 }
@@ -181,34 +191,42 @@ pub fn calc_ratings(initial_ratings: Vec<PlayerRating>, matches: Vec<Match>, mod
             // Updating rank for tracking
             ratings_hash.entry((match_cost.player_id, curr_match.mode))
                 .and_modify(|f| f.rating.mu = prior_mu);
-            // TODO: stopped here for now (10:38 16.02.2024)
             // REQ: get user's rankings from somewhere
+
             let rating_stats_before = rating_stats_hash
                 .get(&rating_prior.player_id)
                 .unwrap();
             let current_player_index = rating_stats_before
                 .iter().position(|x| x.player_id == rating_prior.player_id)
                 .unwrap();
-            let global_rank_before = rating_stats_before[current_player_index].global_rank_before;
-            let country_rank_before = rating_stats_before[current_player_index].country_rank_before;
-            let percentile_before = rating_stats_before[current_player_index].percentile_before;
+            // let global_rank_before = rating_stats_before[current_player_index].global_rank_before;
+            // let country_rank_before = rating_stats_before[current_player_index].country_rank_before;
+            // let percentile_before = rating_stats_before[current_player_index].percentile_before;
 
-            // 1 is team-based, 0 is head-to-head
-            // TODO: CHANGE THIS MESS WTF
-            let ftf_count = curr_match.games.iter()
-                .filter(|x| x.team_type == TeamType::HeadToHead).count();
-            let team_count = curr_match.games.iter()
-                .filter(|x| x.team_type != TeamType::HeadToHead).count();
-            let team_based = team_count > ftf_count;
+            // Count all games with H2H vs non-H2H team types
+            let mut team_based_count = 0;
+            let mut single_count = 0;
 
-            let mut teammate_ratings = None;
-            let mut opponent_ratings = None;
+            for game in curr_match.games {
+                if game.team_type == TeamType::HeadToHead {
+                    single_count += 1;
+                } else {
+                    team_based_count += 1;
+                }
+            }
+            let team_based = team_based_count > single_count;
+
+            let mut teammate_ratings: Option<Vec<_>> = None;
+            let mut opponent_ratings: Option<Vec<_>> = None;
 
             if team_based {
+                // Get user's team ID
                 // TODO: needs to be a median across all games ideally
                 let curr_player_team = curr_match.games[0].match_scores
                     .iter().find(|x| x.player_id == rating_prior.player_id)
                     .unwrap().team;
+
+                // Get IDs of all users in player's team and the opposite team
                 let t_ids: Vec<_> = curr_match.games[0]
                     .match_scores.iter().filter(|x| x.team == curr_player_team)
                     .map(|x| x.player_id)
@@ -217,20 +235,19 @@ pub fn calc_ratings(initial_ratings: Vec<PlayerRating>, matches: Vec<Match>, mod
                     .match_scores.iter().filter(|x| x.team != curr_player_team)
                     .map(|x| x.player_id)
                     .collect();
-
-                let mut teammate: HashMap<(i32, Mode), PlayerRating> = HashMap::new();
-                let mut opponent: HashMap<(i32, Mode), PlayerRating> = HashMap::new();
-
-                for id in t_ids {
-                    teammate.insert((id, curr_match.mode), *ratings_hash.get(&(id, curr_match.mode)));
-                }
-                for id in o_ids {
-                    opponent.insert((id, curr_match.mode), *ratings_hash.get(&(id, curr_match.mode)));
-                }
+                // Get teammate and opponent ratings
+                let teammate: Vec<(i32, Mode, PlayerRating)> = t_ids
+                    .iter()
+                    .map(|x| (x, curr_match.mode, *ratings_hash.get(&(*x, curr_match.mode))))
+                    .collect();
+                let opponent: Vec<(i32, Mode, PlayerRating)> = o_ids
+                    .iter()
+                    .map(|x| (x, curr_match.mode, *ratings_hash.get(&(*x, curr_match.mode))))
+                    .collect();
                 teammate_ratings = Some(teammate);
                 opponent_ratings = Some(opponent);
             }
-
+            // Get average ratings of both teams
             let average_t_rating = if teammate_ratings.is_some() {
                 let len = teammate_ratings.unwrap().len();
                 let ratings = teammate_ratings.unwrap().values().sum();
@@ -241,17 +258,18 @@ pub fn calc_ratings(initial_ratings: Vec<PlayerRating>, matches: Vec<Match>, mod
                 let ratings = opponent_ratings.unwrap().values().sum();
                 ratings / len
             } else { None };
-
+            // Record currently processed match
+            // Uses start_time as end_time can be null (issue on osu-web side)
             decay_tracker.record_activity(rating_prior.player_id, start_time);
 
             let adjustment = MatchRatingStats {
                 player_id: rating_prior.player_id,
                 match_id: curr_match.match_id as i32,
                 match_cost: match_cost.match_cost,
-                rating_before: curr_mu,
+                rating_before: rating_prior.rating.mu,
                 rating_after: 0.0,
                 rating_change: 0.0,
-                volatility_before: curr_sigma,
+                volatility_before: rating_prior.rating.sigma,
                 volatility_after: 0.0,
                 volatility_change: 0.0,
                 global_rank_before,
@@ -265,11 +283,14 @@ pub fn calc_ratings(initial_ratings: Vec<PlayerRating>, matches: Vec<Match>, mod
                 percentile_change: 0.0,
                 average_teammate_rating: average_t_rating,
                 average_opponent_rating: average_o_rating,
-            }
+            };
 
             stats.insert(rating_prior.player_id, adjustment)
         }
-        let new_rating = model.rate(to_rate.iter().map(|x| x.rating).collect(), match_costs.iter().map(|x| x.match_cost).collect());
+
+        let new_rating = model
+            .rate(to_rate.iter().map(|x| x.rating).collect(),
+                  match_costs.iter().map(|x| x.match_cost).collect());
 
         for mc in match_costs {
             let curr_id = mc.player_id;
@@ -294,6 +315,7 @@ pub fn calc_ratings(initial_ratings: Vec<PlayerRating>, matches: Vec<Match>, mod
                 // f.percentile_change = f.percentile_after - f.percentile_before;
             });
         }
+        rating_stats.extend(stats.values());
         bar.inc(1);
     }
 
@@ -306,24 +328,29 @@ pub fn calc_ratings(initial_ratings: Vec<PlayerRating>, matches: Vec<Match>, mod
         let sigma = curr_rating.rating.sigma;
 
         if is_decay_possible(mu) {
+            // Get latest activity
             let last_played = decay_tracker.get_activity(player_id);
+            // As all matches prior are processed, we can use current time to apply decay
 
             let curr_time = std::time::Instant::now();
-
             let decays = decay_tracker
                 .decay(player_id, mu, sigma, curr_time.into())
                 .unwrap();
 
             // apply decays
-            // ratings_hash.entry((player_id, gamemode)).and_modify(|f| f.rating.mu);
+            ratings_hash
+                .entry((player_id, gamemode))
+                .and_modify(|f| {
+                    f.rating.mu = decays.last().unwrap().volatility_after;
+                    f.rating.sigma = decays.last().unwrap().volatility_after
+                });
         }
-
     }
 
 
     RatingCalculationResult {
         base_ratings,
-        rating_stats: flattened_stats,
+        rating_stats,
         adjustments: flattened_adjustments
     }
 }
