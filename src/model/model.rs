@@ -97,23 +97,19 @@ pub fn calc_ratings(initial_ratings: Vec<PlayerRating>, matches: Vec<Match>, mod
     // Key = (player_id, mode as i32)
     // Value = Associated PlayerRating (if available)
     let mut ratings_hash: HashMap<(i32, i32), PlayerRating> = HashMap::new();
+    // Key = match_id
+    // Value = Vec of MatchRatingStats per match
     let rating_stats_hash: HashMap<i32, Vec<MatchRatingStats>> = HashMap::new();
+    // Key = player_id
+    // Value = Vec of RatingAdjustments per player
     let mut rating_adjustments_hash: HashMap<i32, Vec<RatingAdjustment>> = HashMap::new();
-
+    // Insert every given player into initial ratings
     for r in initial_ratings {
         ratings_hash.insert((r.player_id, r.mode as i32), r);
     }
-
-    let base_ratings: Vec<PlayerRating> = ratings_hash.into_values().collect();
-
-    let rating_stats: Vec<Vec<MatchRatingStats>> = rating_stats_hash.into_values().collect();
-    let flattened_stats: Vec<MatchRatingStats> = rating_stats.into_iter().flatten().collect();
-
-    let adjustments: Vec<Vec<RatingAdjustment>> = rating_adjustments_hash.into_values().collect();
-    let flattened_adjustments: Vec<RatingAdjustment> = adjustments.into_iter().flatten().collect();
-
+    // Create a decay tracker to run decay adjustments
     let mut decay_tracker = DecayTracker::new();
-    // Create a progress bar as some way to measure progress
+    // Create a progress bar for match processing
     let bar = progress_bar(matches.len() as u64);
 
     for curr_match in matches {
@@ -274,7 +270,32 @@ pub fn calc_ratings(initial_ratings: Vec<PlayerRating>, matches: Vec<Match>, mod
                 // f.percentile_change = f.percentile_after - f.percentile_before;
             });
         }
+    bar.inc(1);
     }
+
+    let bar = progress_bar(ratings_hash.len() as u64);
+
+    for ((player_id, gamemode), rating) in ratings_hash {
+        let curr_rating = rating;
+
+        let mu = curr_rating.rating.mu;
+        let sigma = curr_rating.rating.sigma;
+
+        if is_decay_possible(mu) {
+            let last_played = decay_tracker.get_activity(player_id);
+
+            let curr_time = std::time::Instant::now();
+
+            let decays = decay_tracker
+                .decay(player_id, mu, sigma, curr_time.into())
+                .unwrap();
+
+            // apply decays
+            // ratings_hash.entry((player_id, gamemode)).and_modify(|f| f.rating.mu);
+        }
+
+    }
+
 
     RatingCalculationResult {
         base_ratings,

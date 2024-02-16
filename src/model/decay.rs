@@ -18,6 +18,10 @@ impl DecayTracker {
         self.last_play_time.insert(player_id, time);
     }
 
+    pub fn get_activity(&mut self, player_id: i32) -> Option<&DateTime<FixedOffset>> {
+        self.last_play_time.get(&player_id)
+    }
+
     /// Returns a [`Vec<RatingAdjustment>`] for each decay application for this user.
     ///
     /// # How this works
