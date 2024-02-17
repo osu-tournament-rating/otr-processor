@@ -210,8 +210,8 @@ pub fn mu_for_rank(rank: i32) -> f64 {
         return constants::MULTIPLIER * constants::RATING_FLOOR;
     }
 
-    if val > constants::MULTIPLIER * constants::RATING_CIELING {
-        return constants::MULTIPLIER * constants::RATING_CIELING;
+    if val > constants::MULTIPLIER * constants::RATING_CEILING {
+        return constants::MULTIPLIER * constants::RATING_CEILING;
     }
 
     val
