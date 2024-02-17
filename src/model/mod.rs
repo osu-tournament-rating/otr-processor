@@ -203,15 +203,15 @@ pub fn match_costs(games: &[Game]) -> Option<Vec<MatchCost>> {
 }
 
 pub fn mu_for_rank(rank: i32) -> f64 {
-    let val = constants::MULTIPLIER * (constants::RATING_INTERCEPT -
-        (constants::RATING_SLOPE * (rank as f64).ln()));
+    let val = constants::MULTIPLIER * (constants::OSU_RATING_INTERCEPT -
+        (constants::OSU_RATING_SLOPE * (rank as f64).ln()));
 
-    if val < constants::MULTIPLIER * constants::RATING_FLOOR {
-        return constants::MULTIPLIER * constants::RATING_FLOOR;
+    if val < constants::MULTIPLIER * constants::OSU_RATING_FLOOR {
+        return constants::MULTIPLIER * constants::OSU_RATING_FLOOR;
     }
 
-    if val > constants::MULTIPLIER * constants::RATING_CEILING {
-        return constants::MULTIPLIER * constants::RATING_CEILING;
+    if val > constants::MULTIPLIER * constants::OSU_RATING_CEILING {
+        return constants::MULTIPLIER * constants::OSU_RATING_CEILING;
     }
 
     val
