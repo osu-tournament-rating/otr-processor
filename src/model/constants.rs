@@ -10,7 +10,7 @@ pub static DECAY_MINIMUM: f64 = MULTIPLIER * 18.0;
 pub static DECAY_RATE: f64 = 0.06 * MULTIPLIER;
 // Initial rating constants
 pub static RATING_FLOOR: f64 = 5.0;
-pub static RATING_CIELING: f64 = 30.0;
+pub static RATING_CEILING: f64 = 30.0;
 pub static RATING_INTERCEPT: f64 = 45.0;
 pub static RATING_SLOPE: f64 = 3.2;
 
