@@ -12,7 +12,7 @@ use crate::model::structures::player_rating::PlayerRating;
 use crate::model::structures::rating_calculation_result::RatingCalculationResult;
 use crate::model::structures::team_type::TeamType;
 use crate::utils::progress_utils::progress_bar;
-use chrono::{DateTime, FixedOffset, Utc};
+use chrono::Utc;
 use openskill::model::model::Model;
 use openskill::model::plackett_luce::PlackettLuce;
 use openskill::rating::{default_gamma, Rating};
@@ -249,35 +249,46 @@ pub fn calc_ratings(
                     .map(|x| x.player_id)
                     .collect();
                 // Get teammate and opponent ratings
-                let teammate: Vec<(i32, Mode, PlayerRating)> = t_ids
-                    .iter()
-                    .map(|x| {
-                        (
-                            x,
-                            curr_match.mode,
-                            ratings_hash.get(&(*x, curr_match.mode)).unwrap(),
-                        )
-                    })
-                    .collect();
-                let opponent: Vec<(i32, Mode, PlayerRating)> = o_ids
-                    .iter()
-                    .map(|x| {
-                        (
-                            x,
-                            curr_match.mode,
-                            ratings_hash.get(&(*x, curr_match.mode)).unwrap(),
-                        )
-                    })
-                    .collect();
+
+                let mut teammate: Vec<f64> = Vec::new();
+                let mut opponent: Vec<f64> = Vec::new();
+
+                for id in t_ids {
+                    let teammate_id = id;
+                    let mode = curr_match.mode;
+                    let rating = match ratings_hash.get(&(teammate_id, mode)) {
+                        Some(r) => r.rating.mu,
+                        None => todo!("This player is not in the hashmap"),
+                    };
+                    teammate.push(rating)
+                }
+                for id in o_ids {
+                    let opponent_id = id;
+                    let mode = curr_match.mode;
+                    let rating = match ratings_hash.get(&(opponent_id, mode)) {
+                        Some(r) => r.rating.mu,
+                        None => todo!("This player is not in the hashmap"),
+                    };
+                    opponent.push(rating)
+                }
+
                 teammate_ratings = Some(teammate);
                 opponent_ratings = Some(opponent);
             }
             // Get average ratings of both teams
-            let average_teammate_rating = if let Some(t) = teammate_ratings {
-                t.iter().sum() / t.len()
+            let average_t_rating = if teammate_ratings.is_some() {
+                let len = teammate_ratings.unwrap().len();
+                let ratings = teammate_ratings.unwrap().iter().sum();
+                ratings / len
+            } else {
+                None
             };
-            let average_opponent_rating = if let Some(o) = opponent_ratings {
-                o.iter().sum() / o.len()
+            let average_o_rating = if opponent_ratings.is_some() {
+                let len = opponent_ratings.unwrap().len();
+                let ratings = opponent_ratings.unwrap().iter().sum();
+                ratings / len
+            } else {
+                None
             };
             // Record currently processed match
             // Uses start_time as end_time can be null (issue on osu-web side)
@@ -373,7 +384,7 @@ pub fn calc_ratings(
     }
 
     RatingCalculationResult {
-        base_ratings,
+        base_ratings: ratings_hash.values().collect(),
         rating_stats,
         adjustments,
     }
