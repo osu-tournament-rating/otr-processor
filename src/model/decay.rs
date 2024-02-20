@@ -112,6 +112,7 @@ mod tests {
     use std::ops::Add;
     use chrono::DateTime;
     use crate::model::{decay::{decay_mu, decay_sigma, DecayTracker, is_decay_possible}, constants};
+    use crate::model::constants::MULTIPLIER;
 
     #[test]
     fn test_decay() {
@@ -217,9 +218,9 @@ mod tests {
 
     #[test]
     fn test_decay_mu_min_decay() {
-        let mu = 825.0;
+        let mu = MULTIPLIER * 18.0;
         let new_mu = decay_mu(mu);
-        let expected = 825.0;
+        let expected = MULTIPLIER * 18.0;
 
         assert_eq!(new_mu, expected);
     }
