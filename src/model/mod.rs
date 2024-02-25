@@ -351,7 +351,7 @@ pub fn calc_ratings(
         for mc in match_costs {
             let curr_id = mc.player_id;
             let key = (mc.player_id, curr_match.mode);
-            let mut new_rating = ratings_hash.get(&key).cloned().unwrap();
+            let mut new_rating = ratings_hash.get_mut(&key).unwrap();
 
             if new_rating.rating.mu < 100.0 {
                 new_rating.rating.mu = 100.0;
