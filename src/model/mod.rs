@@ -323,7 +323,7 @@ pub fn calc_ratings(
         let ratings = to_rate.iter().map(|x| x.rating);
         let new_rating = model.rate(
             vec!(to_rate.iter().map(|x| x.rating.clone()).collect()),
-            match_costs.iter().map(|x| (x.match_cost * 1000) as usize).collect(),
+            match_costs.iter().map(|x| (x.match_cost * 1000.0) as usize).collect(),
         );
 
         for mc in match_costs {
@@ -362,8 +362,6 @@ pub fn calc_ratings(
         let sigma = curr_rating.rating.sigma;
 
         if is_decay_possible(mu) {
-            // Get latest activity
-            let last_played = decay_tracker.get_activity(player_id, gamemode);
             // As all matches prior are processed, we can use current time to apply decay
 
             let curr_time = Utc::now();
@@ -376,11 +374,13 @@ pub fn calc_ratings(
                 None => None,
             };
 
-            // apply decays
-            ratings_hash.entry((player_id, gamemode)).and_modify(|f| {
-                f.rating.mu = decays.last().unwrap().rating_after;
-                f.rating.sigma = decays.last().unwrap().volatility_after;
-            });
+            // If decays exist, apply them
+            if let Some(d) = decays {
+                ratings_hash.entry((player_id, gamemode)).and_modify(|f| {
+                    f.rating.mu = d[d.len() - 1].rating_after;
+                    f.rating.sigma = d[d.len() - 1].volatility_after;
+                });
+            }
         }
     }
 
