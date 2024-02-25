@@ -9,7 +9,7 @@ pub struct LoginResponse {
     pub token: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RatingAdjustment {
     pub player_id: i32,

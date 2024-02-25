@@ -4,7 +4,7 @@ mod decay;
 mod recalc_helpers;
 pub mod structures;
 
-use crate::api::api_structs::{BaseStatsPost, Game, Match, MatchRatingStats, Player, RatingAdjustment};
+use crate::api::api_structs::{Game, Match, MatchRatingStats, Player, RatingAdjustment};
 use crate::model::decay::{is_decay_possible, DecayTracker};
 use crate::model::structures::match_cost::MatchCost;
 use crate::model::structures::mode::Mode;
@@ -156,14 +156,14 @@ pub fn calc_ratings(
 
         let mut to_rate = vec![];
 
-        for match_cost in match_costs {
+        for match_cost in &match_costs {
             // If user has no prior activity, store the first one
             if let None = decay_tracker.get_activity(match_cost.player_id, curr_match.mode) {
                 decay_tracker.record_activity(match_cost.player_id, curr_match.mode, start_time);
             }
 
             // Get user's current rating
-            let mut rating_prior =
+            let rating_prior =
                 match ratings_hash.get_mut(&(match_cost.player_id, curr_match.mode)) {
                     None => panic!("No rating found?"),
                     Some(rate) => rate,
@@ -213,7 +213,7 @@ pub fn calc_ratings(
             let mut team_based_count = 0;
             let mut single_count = 0;
 
-            for game in curr_match.games {
+            for game in &curr_match.games {
                 if game.team_type == TeamType::HeadToHead {
                     single_count += 1;
                 } else {
@@ -248,8 +248,8 @@ pub fn calc_ratings(
                     .filter(|x| x.team != curr_player_team)
                     .map(|x| x.player_id)
                     .collect();
-                // Get teammate and opponent ratings
 
+                // Get teammate and opponent ratings
                 let mut teammate: Vec<f64> = Vec::new();
                 let mut opponent: Vec<f64> = Vec::new();
 
@@ -276,17 +276,17 @@ pub fn calc_ratings(
                 opponent_ratings = Some(opponent);
             }
             // Get average ratings of both teams
-            let average_t_rating = if teammate_ratings.is_some() {
-                let len = teammate_ratings.unwrap().len();
-                let ratings = teammate_ratings.unwrap().iter().sum();
-                ratings / len
+            let average_t_rating = if let Some(t_rating) = teammate_ratings {
+                let len = t_rating.len() as f64;
+                let ratings: f64 = t_rating.into_iter().sum();
+                Some(ratings / len)
             } else {
                 None
             };
-            let average_o_rating = if opponent_ratings.is_some() {
-                let len = opponent_ratings.unwrap().len();
-                let ratings = opponent_ratings.unwrap().iter().sum();
-                ratings / len
+            let average_o_rating = if let Some(o_rating) = opponent_ratings {
+                let len = o_rating.len() as f64;
+                let ratings: f64 = o_rating.into_iter().sum();
+                Some(ratings / len)
             } else {
                 None
             };
@@ -329,7 +329,7 @@ pub fn calc_ratings(
         // so we need to consider every player as a one-man team
         let teams: Vec<Vec<Rating>> = to_rate
             .iter()
-            .map(|player| vec![player.rating])
+            .map(|player| vec![player.rating.clone()])
             .collect();
         // Match costs are floats, but since we only need their order,
         // mapping them this way with precision loss should be fine
@@ -351,7 +351,7 @@ pub fn calc_ratings(
         for mc in match_costs {
             let curr_id = mc.player_id;
             let key = (mc.player_id, curr_match.mode);
-            let mut new_rating = ratings_hash.get_mut(&key).unwrap();
+            let new_rating = ratings_hash.get_mut(&key).unwrap();
 
             if new_rating.rating.mu < 100.0 {
                 new_rating.rating.mu = 100.0;
@@ -389,7 +389,8 @@ pub fn calc_ratings(
             let decays = match decay_tracker
                 .decay(player_id, gamemode, mu, sigma, curr_time.into()) {
                 Some(adj) => {
-                    rating_adjustments_hash.entry(player_id).and_modify(|a| a.extend(adj.iter()));
+                    rating_adjustments_hash.entry(player_id)
+                        .and_modify(|a| a.extend(adj.clone().into_iter()));
                     Some(adj)
                 },
                 None => None,
@@ -407,7 +408,7 @@ pub fn calc_ratings(
     }
 
     RatingCalculationResult {
-        base_ratings: ratings_hash.values().collect(),
+        base_ratings: ratings_hash.into_values().collect(),
         rating_stats,
         adjustments,
     }
