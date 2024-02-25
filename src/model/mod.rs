@@ -158,7 +158,6 @@ pub fn calc_ratings(
 
         for match_cost in match_costs {
             // If user has no prior activity, store the first one
-            // TODO: DecayTracker needs to store modes
             if let None = decay_tracker.get_activity(match_cost.player_id, curr_match.mode) {
                 decay_tracker.record_activity(match_cost.player_id, curr_match.mode, start_time);
             }
@@ -472,14 +471,15 @@ pub fn match_costs(games: &[Game]) -> Option<Vec<MatchCost>> {
 }
 
 pub fn mu_for_rank(rank: i32) -> f64 {
-    let val = constants::MULTIPLIER * (45.0 - (3.2 * (rank as f64).ln()));
+    let val = constants::MULTIPLIER * (constants::OSU_RATING_INTERCEPT -
+        (constants::OSU_RATING_SLOPE * (rank as f64).ln()));
 
-    if val < constants::MULTIPLIER * 5.0 {
-        return constants::MULTIPLIER * 5.0;
+    if val < constants::MULTIPLIER * constants::OSU_RATING_FLOOR {
+        return constants::MULTIPLIER * constants::OSU_RATING_FLOOR;
     }
 
-    if val > constants::MULTIPLIER * 30.0 {
-        return constants::MULTIPLIER * 30.0;
+    if val > constants::MULTIPLIER * constants::OSU_RATING_CEILING {
+        return constants::MULTIPLIER * constants::OSU_RATING_CEILING;
     }
 
     val
