@@ -139,7 +139,7 @@ pub fn calc_ratings(
         }
         // Obtain all player match costs
         // Skip the match if there are no valid match costs
-        let match_costs = match match_costs(&curr_match.games) {
+        let mut match_costs = match match_costs(&curr_match.games) {
             Some(mc) => mc,
             None => continue,
         };
@@ -319,12 +319,34 @@ pub fn calc_ratings(
 
             stats.insert(rating_prior.player_id, adjustment);
         }
-        // FIXME: Match costs are NOT i32 and aren't close to normal ranks?
-        let ratings = to_rate.iter().map(|x| x.rating);
-        let new_rating = model.rate(
-            vec!(to_rate.iter().map(|x| x.rating.clone()).collect()),
-            match_costs.iter().map(|x| (x.match_cost * 1000.0) as usize).collect(),
-        );
+        // Sort rated players and their matchcosts by player IDs for correct mappings
+        to_rate.sort_by(|x, y| x.player_id.cmp(&y.player_id));
+        match_costs.sort_by(|x,y| x.player_id.cmp(&y.player_id));
+
+        // Variable names are used according to the function signature for easier referencing
+
+        // Model ratings require a vector of teams to be passed, but matches are considered as FFA
+        // so we need to consider every player as a one-man team
+        let teams: Vec<Vec<Rating>> = to_rate
+            .iter()
+            .map(|player| vec![player.rating])
+            .collect();
+        // Match costs are floats, but since we only need their order,
+        // mapping them this way with precision loss should be fine
+        let ranks: Vec<usize> = match_costs
+            .iter()
+            .map(|mc| (mc.match_cost * 1000.0) as usize)
+            .collect();
+        let model_rating = model.rate(teams, ranks);
+        // Apply resulting ratings to the players
+        let flattened_ratings: Vec<Rating> = model_rating
+            .into_iter()
+            .flatten()
+            .collect();
+        for (idx, player) in to_rate.iter().enumerate() {
+            player.rating = flattened_ratings[idx].clone();
+        }
+        
 
         for mc in match_costs {
             let curr_id = mc.player_id;
