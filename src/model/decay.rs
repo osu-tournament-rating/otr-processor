@@ -1,25 +1,26 @@
-use std::collections::HashMap;
-use chrono::{DateTime, FixedOffset};
 use crate::api::api_structs::RatingAdjustment;
 use crate::model::constants;
+use chrono::{DateTime, FixedOffset};
+use std::collections::HashMap;
+use crate::model::structures::mode::Mode;
 
 /// Tracks decay activity for players
 pub struct DecayTracker {
-    last_play_time: HashMap<i32, DateTime<FixedOffset>>
+    last_play_time: HashMap<(i32, Mode), DateTime<FixedOffset>>,
 }
 
 impl DecayTracker {
     pub fn new() -> DecayTracker {
         DecayTracker {
-            last_play_time: HashMap::new()
+            last_play_time: HashMap::new(),
         }
     }
-    pub fn record_activity(&mut self, player_id: i32, time: DateTime<FixedOffset>) {
-        self.last_play_time.insert(player_id, time);
+    pub fn record_activity(&mut self, player_id: i32, mode: Mode, time: DateTime<FixedOffset>) {
+        self.last_play_time.insert((player_id, mode), time);
     }
 
-    pub fn get_activity(&mut self, player_id: i32) -> Option<&DateTime<FixedOffset>> {
-        self.last_play_time.get(&player_id)
+    pub fn get_activity(&mut self, player_id: i32, mode: Mode) -> Option<&DateTime<FixedOffset>> {
+        self.last_play_time.get(&(player_id, mode))
     }
 
     /// Returns a [`Vec<RatingAdjustment>`] for each decay application for this user.
@@ -37,8 +38,15 @@ impl DecayTracker {
     /// - Beginning after 4 months of inactivity, apply decay once weekly.
     ///
     /// If the user does not need to decay, return None.
-    pub fn decay(&self, player_id: i32, mu: f64, sigma: f64, d: DateTime<FixedOffset>) -> Option<Vec<RatingAdjustment>> {
-        let last_play_time = self.last_play_time.get(&player_id).unwrap();
+    pub fn decay(
+        &self,
+        player_id: i32,
+        mode: Mode,
+        mu: f64,
+        sigma: f64,
+        d: DateTime<FixedOffset>,
+    ) -> Option<Vec<RatingAdjustment>> {
+        let last_play_time = self.last_play_time.get(&(player_id, mode)).unwrap();
         let decay_weeks = Self::n_decay(d, *last_play_time);
 
         if decay_weeks < 1 {
@@ -57,7 +65,7 @@ impl DecayTracker {
 
             let adjustment = RatingAdjustment {
                 player_id,
-                mode: 0,
+                mode,
                 rating_adjustment_amount: new_mu - mu,
                 volatility_adjustment_amount: new_sigma - sigma,
                 rating_before: mu,
@@ -65,7 +73,7 @@ impl DecayTracker {
                 volatility_before: sigma,
                 volatility_after: new_sigma,
                 rating_adjustment_type: 0,
-                timestamp: now
+                timestamp: now,
             };
 
             adjustments.push(adjustment);
@@ -110,16 +118,20 @@ pub fn decay_mu(mu: f64) -> f64 {
     new_mu.max(constants::DECAY_MINIMUM)
 }
 
-
 #[cfg(test)]
 mod tests {
-    use std::ops::Add;
+    use crate::model::{
+        constants,
+        decay::{decay_mu, decay_sigma, is_decay_possible, DecayTracker},
+    };
     use chrono::DateTime;
-    use crate::model::{decay::{decay_mu, decay_sigma, DecayTracker, is_decay_possible}, constants};
+    use std::ops::Add;
+    use crate::model::structures::mode::Mode;
 
     #[test]
     fn test_decay() {
         let id = 1;
+        let mode = Mode::Osu;
         let mu = 1000.0;
         let sigma = 200.0;
 
@@ -129,9 +141,13 @@ mod tests {
         let mut tracker = DecayTracker::new();
 
         // Set time for one match and record activity
-        let t = DateTime::parse_from_rfc3339("2021-01-01T00:00:00+00:00").unwrap().fixed_offset();
+        let t = DateTime::parse_from_rfc3339("2021-01-01T00:00:00+00:00")
+            .unwrap()
+            .fixed_offset();
         // Jump ahead 4 months. Should be (4 months in weeks) decay applications
-        let d = DateTime::parse_from_rfc3339("2021-05-01T00:00:00+00:00").unwrap().fixed_offset();
+        let d = DateTime::parse_from_rfc3339("2021-05-01T00:00:00+00:00")
+            .unwrap()
+            .fixed_offset();
 
         let n_decay = DecayTracker::n_decay(d, t);
 
@@ -140,9 +156,9 @@ mod tests {
             expected_sigma = decay_sigma(expected_sigma);
         }
 
-        tracker.record_activity(id, t);
+        tracker.record_activity(id, mode, t);
 
-        let adjustments = tracker.decay(id, mu, sigma, d).unwrap();
+        let adjustments = tracker.decay(id, mode, mu, sigma, d).unwrap();
 
         assert_eq!(adjustments.len() as i64, n_decay);
 
@@ -160,7 +176,9 @@ mod tests {
 
     #[test]
     fn test_n_decay() {
-        let t = DateTime::parse_from_rfc3339("2021-01-01T00:00:00+00:00").unwrap().fixed_offset();
+        let t = DateTime::parse_from_rfc3339("2021-01-01T00:00:00+00:00")
+            .unwrap()
+            .fixed_offset();
         let d = t.add(chrono::Duration::days(constants::DECAY_DAYS as i64));
 
         let n = DecayTracker::n_decay(d, t);
@@ -172,7 +190,9 @@ mod tests {
     fn test_n_decay_less_than_decay_days() {
         let days = (constants::DECAY_DAYS - 1) as i64;
 
-        let t = DateTime::parse_from_rfc3339("2021-01-01T00:00:00+00:00").unwrap().fixed_offset();
+        let t = DateTime::parse_from_rfc3339("2021-01-01T00:00:00+00:00")
+            .unwrap()
+            .fixed_offset();
         let d = t.add(chrono::Duration::days(days));
 
         let n = DecayTracker::n_decay(d, t);

@@ -1,19 +1,19 @@
 use chrono::{DateTime, FixedOffset};
 use serde::{Deserialize, Serialize};
 
-use crate::model::structures::{mode::Mode, team_type::TeamType, scoring_type::ScoringType};
+use crate::model::structures::{mode::Mode, scoring_type::ScoringType, team_type::TeamType};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LoginResponse {
-    pub token: String
+    pub token: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RatingAdjustment {
     pub player_id: i32,
-    pub mode: i32,
+    pub mode: Mode,
     pub rating_adjustment_amount: f64,
     pub volatility_adjustment_amount: f64,
     pub rating_before: f64,
@@ -118,7 +118,7 @@ pub struct Match {
 #[serde(rename_all = "camelCase")]
 pub struct MatchIdMapping {
     pub id: i32,
-    pub osu_match_id: i64
+    pub osu_match_id: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -189,4 +189,3 @@ pub struct Player {
     pub username: Option<String>,
     pub country: Option<String>,
 }
-
