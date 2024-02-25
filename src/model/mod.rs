@@ -163,10 +163,10 @@ pub fn calc_ratings(
             }
 
             // Get user's current rating
-            let rating_prior =
+            let mut rating_prior =
                 match ratings_hash.get_mut(&(match_cost.player_id, curr_match.mode)) {
                     None => panic!("No rating found?"),
-                    Some(rate) => rate,
+                    Some(rate) => rate.clone(),
                 };
             // If decay is possible, apply it to rating_prior
             if is_decay_possible(rating_prior.rating.mu) {
@@ -189,7 +189,7 @@ pub fn calc_ratings(
                     None => (),
                 }
             }
-            to_rate.push(rating_prior);
+            to_rate.push(rating_prior.clone());
 
             let prior_mu = rating_prior.rating.mu;
             // TODO: Get country
@@ -349,7 +349,7 @@ pub fn calc_ratings(
             .into_iter()
             .flatten()
             .collect();
-        for (idx, player) in to_rate.iter().enumerate() {
+        for (idx, player) in to_rate.iter_mut().enumerate() {
             player.rating = flattened_ratings[idx].clone();
         }
         
@@ -383,7 +383,7 @@ pub fn calc_ratings(
 
     let bar = progress_bar(ratings_hash.len() as u64);
 
-    for ((player_id, gamemode), rating) in ratings_hash {
+    for ((player_id, gamemode), rating) in &mut ratings_hash {
         let curr_rating = rating;
 
         let mu = curr_rating.rating.mu;
@@ -393,9 +393,9 @@ pub fn calc_ratings(
             // As all matches prior are processed, we can use current time to apply decay
             let curr_time = Utc::now();
             let decays = match decay_tracker
-                .decay(player_id, gamemode, mu, sigma, curr_time.into()) {
+                .decay(*player_id, *gamemode, mu, sigma, curr_time.into()) {
                 Some(adj) => {
-                    rating_adjustments_hash.entry(player_id)
+                    rating_adjustments_hash.entry(*player_id)
                         .and_modify(|a| a.extend(adj.clone().into_iter()));
                     Some(adj)
                 },
@@ -404,17 +404,21 @@ pub fn calc_ratings(
 
             // If decays exist, apply them
             if let Some(d) = decays {
-                ratings_hash.entry((player_id, gamemode)).and_modify(|f| {
-                    f.rating.mu = d[d.len() - 1].rating_after;
-                    f.rating.sigma = d[d.len() - 1].volatility_after;
-                });
+                curr_rating.rating.mu = d[d.len() - 1].rating_after;
+                curr_rating.rating.sigma = d[d.len() - 1].volatility_after;
             }
         }
         bar.inc(1);
     }
 
+    let mut base_ratings: Vec<PlayerRating> = vec![];
+
+    for (k, v) in ratings_hash {
+        base_ratings.push(v.clone());
+    }
+
     RatingCalculationResult {
-        base_ratings: ratings_hash.into_values().collect(),
+        base_ratings,
         rating_stats,
         adjustments,
     }
