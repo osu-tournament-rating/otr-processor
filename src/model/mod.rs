@@ -363,7 +363,6 @@ pub fn calc_ratings(
 
         if is_decay_possible(mu) {
             // As all matches prior are processed, we can use current time to apply decay
-
             let curr_time = Utc::now();
             let decays = match decay_tracker
                 .decay(player_id, gamemode, mu, sigma, curr_time.into()) {
@@ -382,6 +381,7 @@ pub fn calc_ratings(
                 });
             }
         }
+        bar.inc(1);
     }
 
     RatingCalculationResult {
