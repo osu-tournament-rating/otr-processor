@@ -4,7 +4,7 @@ mod decay;
 mod recalc_helpers;
 pub mod structures;
 
-use crate::api::api_structs::{Game, Match, MatchRatingStats, Player, RatingAdjustment};
+use crate::api::api_structs::{BaseStatsPost, Game, Match, MatchRatingStats, Player, RatingAdjustment};
 use crate::model::decay::{is_decay_possible, DecayTracker};
 use crate::model::structures::match_cost::MatchCost;
 use crate::model::structures::mode::Mode;
@@ -159,8 +159,8 @@ pub fn calc_ratings(
         for match_cost in match_costs {
             // If user has no prior activity, store the first one
             // TODO: DecayTracker needs to store modes
-            if let None = decay_tracker.get_activity(match_cost.player_id) {
-                decay_tracker.record_activity(match_cost.player_id, start_time);
+            if let None = decay_tracker.get_activity(match_cost.player_id, curr_match.mode) {
+                decay_tracker.record_activity(match_cost.player_id, curr_match.mode, start_time);
             }
 
             // Get user's current rating
@@ -173,6 +173,7 @@ pub fn calc_ratings(
             if is_decay_possible(rating_prior.rating.mu) {
                 let adjustment = decay_tracker.decay(
                     match_cost.player_id,
+                    curr_match.mode,
                     rating_prior.rating.mu,
                     rating_prior.rating.sigma,
                     start_time,
@@ -292,7 +293,7 @@ pub fn calc_ratings(
             };
             // Record currently processed match
             // Uses start_time as end_time can be null (issue on osu-web side)
-            decay_tracker.record_activity(rating_prior.player_id, start_time);
+            decay_tracker.record_activity(rating_prior.player_id, curr_match.mode, start_time);
 
             let adjustment = MatchRatingStats {
                 player_id: rating_prior.player_id,
@@ -320,9 +321,10 @@ pub fn calc_ratings(
             stats.insert(rating_prior.player_id, adjustment);
         }
         // FIXME: Match costs are NOT i32 and aren't close to normal ranks?
+        let ratings = to_rate.iter().map(|x| x.rating);
         let new_rating = model.rate(
-            to_rate.iter().map(|x| x.rating).collect(),
-            match_costs.iter().map(|x| x.match_cost).collect(),
+            vec!(to_rate.iter().map(|x| x.rating.clone()).collect()),
+            match_costs.iter().map(|x| (x.match_cost * 1000) as usize).collect(),
         );
 
         for mc in match_costs {
@@ -362,17 +364,17 @@ pub fn calc_ratings(
 
         if is_decay_possible(mu) {
             // Get latest activity
-            let last_played = decay_tracker.get_activity(player_id);
+            let last_played = decay_tracker.get_activity(player_id, gamemode);
             // As all matches prior are processed, we can use current time to apply decay
 
             let curr_time = Utc::now();
             let decays = match decay_tracker
-                .decay(player_id, mu, sigma, curr_time.into()) {
+                .decay(player_id, gamemode, mu, sigma, curr_time.into()) {
                 Some(adj) => {
                     rating_adjustments_hash.entry(player_id).and_modify(|a| a.extend(adj.iter()));
-                    adj
+                    Some(adj)
                 },
-                None => {}
+                None => None,
             };
 
             // apply decays
