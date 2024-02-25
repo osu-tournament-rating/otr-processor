@@ -4,7 +4,7 @@ mod decay;
 mod recalc_helpers;
 pub mod structures;
 
-use crate::api::api_structs::{Game, Match, MatchRatingStats, Player, RatingAdjustment};
+use crate::api::api_structs::{Game, Match, MatchRatingStats, MatchScore, Player, RatingAdjustment};
 use crate::model::decay::{is_decay_possible, DecayTracker};
 use crate::model::structures::match_cost::MatchCost;
 use crate::model::structures::mode::Mode;
@@ -236,24 +236,30 @@ pub fn calc_ratings(
                     .team;
 
                 // Get IDs of all users in player's team and the opposite team
-                let t_ids: Vec<_> = curr_match.games[0]
-                    .match_scores
+                let (mut teammate_list, mut opponent_list):
+                    (Vec<MatchScore>, Vec<MatchScore>) = curr_match
+                    .games
                     .iter()
-                    .filter(|x| x.team == curr_player_team)
-                    .map(|x| x.player_id)
-                    .collect();
-                let o_ids: Vec<_> = curr_match.games[0]
-                    .match_scores
+                    .map(|f| f.match_scores.clone())
+                    .flatten()
+                    .partition(|score| score.team == curr_player_team);
+                let mut teammate_list: Vec<i32> = teammate_list
                     .iter()
-                    .filter(|x| x.team != curr_player_team)
-                    .map(|x| x.player_id)
+                    .map(|player| player.player_id)
                     .collect();
-
+                let mut opponent_list: Vec<i32> = opponent_list
+                    .iter()
+                    .map(|player| player.player_id)
+                    .collect();
+                teammate_list.sort();
+                teammate_list.dedup();
+                teammate_list.sort();
+                opponent_list.dedup();
                 // Get teammate and opponent ratings
                 let mut teammate: Vec<f64> = Vec::new();
                 let mut opponent: Vec<f64> = Vec::new();
 
-                for id in t_ids {
+                for id in teammate_list {
                     let teammate_id = id;
                     let mode = curr_match.mode;
                     let rating = match ratings_hash.get(&(teammate_id, mode)) {
@@ -262,7 +268,7 @@ pub fn calc_ratings(
                     };
                     teammate.push(rating)
                 }
-                for id in o_ids {
+                for id in opponent_list {
                     let opponent_id = id;
                     let mode = curr_match.mode;
                     let rating = match ratings_hash.get(&(opponent_id, mode)) {

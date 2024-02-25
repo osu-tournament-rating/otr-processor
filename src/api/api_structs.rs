@@ -136,7 +136,7 @@ pub struct Game {
     pub match_scores: Vec<MatchScore>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MatchScore {
     pub player_id: i32,
