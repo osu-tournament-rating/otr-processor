@@ -283,20 +283,8 @@ pub fn calc_ratings(
                 opponent_ratings = Some(opponent);
             }
             // Get average ratings of both teams
-            let average_t_rating = if let Some(t_rating) = teammate_ratings {
-                let len = t_rating.len() as f64;
-                let ratings: f64 = t_rating.into_iter().sum();
-                Some(ratings / len)
-            } else {
-                None
-            };
-            let average_o_rating = if let Some(o_rating) = opponent_ratings {
-                let len = o_rating.len() as f64;
-                let ratings: f64 = o_rating.into_iter().sum();
-                Some(ratings / len)
-            } else {
-                None
-            };
+            let average_t_rating = average_rating(teammate_ratings);
+            let average_o_rating = average_rating(opponent_ratings);
             // Record currently processed match
             // Uses start_time as end_time can be null (issue on osu-web side)
             decay_tracker.record_activity(rating_prior.player_id, curr_match.mode, start_time);
@@ -423,6 +411,17 @@ pub fn calc_ratings(
         rating_stats,
         adjustments,
     }
+}
+
+fn average_rating(ratings: Option<Vec<f64>>) -> Option<f64> {
+    let avg_rating = if let Some(rating) = ratings {
+        let len = rating.len() as f64;
+        let s_ratings: f64 = rating.into_iter().sum();
+        Some(s_ratings / len)
+    } else {
+        None
+    };
+    avg_rating
 }
 
 // Utility
