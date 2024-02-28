@@ -228,8 +228,6 @@ pub fn calc_ratings(
             if team_based {
                 // Get user's team ID
                 // TODO: needs to be a median across all games ideally-
-                // Pitfall: If someone plays in a warmup and nothing else,
-
                 let curr_player_team = curr_match.games[0]
                     .match_scores
                     .iter()
