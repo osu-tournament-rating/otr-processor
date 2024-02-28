@@ -8,7 +8,7 @@ mod utils;
 
 use indicatif::ProgressBar;
 
-use crate::model::{structures::match_cost::MatchCost, match_costs};
+use crate::model::{structures::match_cost::MatchCost, match_costs, calc_ratings, create_model};
 
 #[tokio::main]
 async fn main() {
@@ -25,10 +25,13 @@ async fn main() {
         .await
         .expect("Matches need to be loaded before continuing");
 
-    //let players = api.get_players().await.expect("Ranks must be identified");
+    let players = api.get_players().await.expect("Ranks must be identified");
 
     // Model
-    //let ratings = model::model::create_initial_ratings(matches, players);
+    let ratings = model::create_initial_ratings(&matches, &players);
+    let calc_result = calc_ratings(&ratings, &matches, &create_model());
+
+    println!("{:?}", calc_result);
 
     let bar = ProgressBar::new(matches.len() as u64);
 

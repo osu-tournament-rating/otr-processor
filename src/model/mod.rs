@@ -26,7 +26,7 @@ pub fn create_model() -> PlackettLuce {
 
 // Rating generation
 
-pub fn create_initial_ratings(matches: Vec<Match>, players: Vec<Player>) -> Vec<PlayerRating> {
+pub fn create_initial_ratings(matches: &Vec<Match>, players: &Vec<Player>) -> Vec<PlayerRating> {
     // The first step in the rating algorithm. Generate ratings from known ranks.
 
     // A fast lookup used for understanding who has default ratings created at this time.
@@ -38,14 +38,14 @@ pub fn create_initial_ratings(matches: Vec<Match>, players: Vec<Player>) -> Vec<
     let mut player_hashmap: HashMap<i32, Player> = HashMap::new();
 
     for player in players {
-        player_hashmap.entry(player.id).or_insert(player);
+        player_hashmap.entry(player.id).or_insert(player.clone());
     }
 
     for m in matches {
-        for game in m.games {
+        for game in &m.games {
             let mode = game.play_mode;
 
-            for score in game.match_scores {
+            for score in &game.match_scores {
                 // Check if the player_id and enum_mode combination is already in created_ratings
                 if stored_lookup_log.contains(&(score.player_id, mode)) {
                     // We've already initialized this player.
@@ -99,9 +99,9 @@ pub fn create_initial_ratings(matches: Vec<Match>, players: Vec<Player>) -> Vec<
 /// Calculates a vector of initial ratings based on match cost,
 /// returns the new ratings
 pub fn calc_ratings(
-    initial_ratings: Vec<PlayerRating>,
-    matches: Vec<Match>,
-    model: PlackettLuce,
+    initial_ratings: &Vec<PlayerRating>,
+    matches: &Vec<Match>,
+    model: &PlackettLuce,
 ) -> RatingCalculationResult {
     // Key = (player_id, mode as i32)
     // Value = Associated PlayerRating (if available)
@@ -120,7 +120,7 @@ pub fn calc_ratings(
 
     // Insert every given player into initial ratings
     for r in initial_ratings {
-        ratings_hash.insert((r.player_id, r.mode), r);
+        ratings_hash.insert((r.player_id, r.mode), r.clone());
     }
     // Create a decay tracker to run decay adjustments
     let mut decay_tracker = DecayTracker::new();
@@ -200,11 +200,11 @@ pub fn calc_ratings(
                 .and_modify(|f| f.rating.mu = prior_mu);
             // REQ: get user's rankings from somewhere
 
-            let rating_stats_before = rating_stats_hash.get(&rating_prior.player_id).unwrap();
-            let current_player_index = rating_stats_before
-                .iter()
-                .position(|x| x.player_id == rating_prior.player_id)
-                .unwrap();
+            // let rating_stats_before = rating_stats_hash.get(&rating_prior.player_id).unwrap();
+            // let current_player_index = rating_stats_before
+            //     .iter()
+            //     .position(|x| x.player_id == rating_prior.player_id)
+            //     .unwrap();
             // let global_rank_before = rating_stats_before[current_player_index].global_rank_before;
             // let country_rank_before = rating_stats_before[current_player_index].country_rank_before;
             // let percentile_before = rating_stats_before[current_player_index].percentile_before;
@@ -227,7 +227,10 @@ pub fn calc_ratings(
 
             if team_based {
                 // Get user's team ID
-                // TODO: needs to be a median across all games ideally
+                // TODO: needs to be a median across all games ideally-
+                // Pitfall: If someone plays in a warmup and nothing else,
+                // and is on the wrong team in the warmup, they may be
+                // falsely marked as the wrong team.
                 let curr_player_team = curr_match.games[0]
                     .match_scores
                     .iter()

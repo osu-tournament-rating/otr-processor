@@ -252,13 +252,13 @@ mod api_client_tests {
             .await
             .unwrap();
 
-        assert!(match_ids.len() == 10);
+        assert_eq!(match_ids.len(), 10);
 
         let result = api.get_matches(&match_ids, 250)
             .await
             .unwrap();
 
-        assert!(result.len() == match_ids.len())
+        assert_eq!(result.len(), match_ids.len())
     }
 
     #[tokio::test]
