@@ -593,81 +593,93 @@ mod tests {
                 - MatchScore (Player 1, Team 2, Score 525001)
          */
         let mut matches = Vec::new();
-        matches.push(&Match {
+
+        let start_time = DateTime::parse_from_rfc3339("2021-01-01T00:00:00+00:00")
+            .unwrap();
+        let end_time = Some(start_time); // Assuming end_time is the same as start_time for demonstration
+
+        let beatmap = Beatmap {
+            artist: "Test".to_string(),
+            beatmap_id: 0,
+            bpm: Some(220.0),
+            mapper_id: 0,
+            mapper_name: "efaf".to_string(),
+            sr: 6.0,
+            cs: 4.0,
+            ar: 9.0,
+            hp: 7.0,
+            od: 9.0,
+            drain_time: 160.0,
+            length: 165.0,
+            title: "Testing".to_string(),
+            diff_name: Some("Testing".to_string()),
+        };
+
+        let mut match_scores = Vec::new();
+        match_scores.push(MatchScore {
+            player_id: 0,
+            team: 1, // Blue
+            score: 525000,
+            enabled_mods: None,
+            misses: 0,
+            accuracy_standard: 100.0,
+            accuracy_taiko: 0.0,
+            accuracy_catch: 0.0,
+            accuracy_mania: 0.0,
+        });
+        match_scores.push(MatchScore {
+            player_id: 1,
+            team: 2, // Red
+            score: 525001, // +1 score from blue. Should be the winner.
+            enabled_mods: None,
+            misses: 0,
+            accuracy_standard: 100.0,
+            accuracy_taiko: 0.0,
+            accuracy_catch: 0.0,
+            accuracy_mania: 0.0,
+        });
+
+        let game = Game {
+            id: 0,
+            game_id: 0,
+            play_mode: Mode::Osu,
+            scoring_type: ScoringType::ScoreV2,
+            team_type: TeamType::TeamVs,
+            start_time,
+            end_time,
+            beatmap: Some(beatmap),
+            match_scores,
+            mods: 0,
+        };
+
+        let mut games = Vec::new();
+        games.push(game);
+
+        let match_instance = Match {
             id: 0,
             match_id: 0,
-            name: Some("TEST: (One) vs (One)".parse().unwrap()),
+            name: Some("TEST: (One) vs (One)".to_string()),
             mode: Mode::Osu,
-            start_time: Some(DateTime::parse_from_rfc3339("2021-01-01T00:00:00+00:00")
-                .unwrap()
-                .fixed_offset()),
+            start_time: Some(start_time),
             end_time: None,
-            games: Vec::new().push(Game {
-                id: 0,
-                game_id: 0,
-                play_mode: Mode::Osu,
-                scoring_type: ScoringType::ScoreV2,
-                team_type: TeamType::TeamVs,
-                start_time: DateTime::parse_from_rfc3339("2021-01-01T00:00:00+00:00")
-                    .unwrap()
-                    .fixed_offset(),
-                end_time: Some(DateTime::parse_from_rfc3339("2021-01-01T00:00:00+00:00")
-                    .unwrap()
-                    .fixed_offset()),
-                beatmap: Some(Beatmap {
-                    artist: "Test".to_string(),
-                    beatmap_id: 0,
-                    bpm: Some(220.0),
-                    mapper_id: 0,
-                    mapper_name: "efaf".to_string(),
-                    sr: 6.0,
-                    cs: 4.0,
-                    ar: 9.0,
-                    hp: 7.0,
-                    od: 9.0,
-                    drain_time: 160.0,
-                    length: 165.0,
-                    title: "Testing".to_string(),
-                    diff_name: Some("Testing".parse().unwrap()),
-                }),
-                match_scores: Vec::new().push(MatchScore {
-                    player_id: 0,
-                    team: 1, // Blue
-                    score: 525000,
-                    enabled_mods: None,
-                    misses: 0,
-                    accuracy_standard: 100.0,
-                    accuracy_taiko: 0.0,
-                    accuracy_catch: 0.0,
-                    accuracy_mania: 0.0,
-                }).push(MatchScore {
-                    player_id: 1,
-                    team: 2, // Red
-                    score: 525001, // +1 score from blue. Should be the winner.
-                    enabled_mods: None,
-                    misses: 0,
-                    accuracy_standard: 100.0,
-                    accuracy_taiko: 0.0,
-                    accuracy_catch: 0.0,
-                    accuracy_mania: 0.0,
-                }),
-                mods: 0
-            }),
-        });
+            games,
+        };
+
+        matches.push(match_instance);
 
         let model = super::create_model();
         let expected_outcome = model.rate(
+            vec![vec![Rating {
+                mu: 1500.0,
+                sigma: 200.0,
+            }],
             vec![Rating {
                 mu: 1500.0,
                 sigma: 200.0,
-            },
-            Rating {
-                mu: 1500.0,
-                sigma: 200.0,
-            }], vec![1, 0]);
+            }]], vec![1, 0]);
 
-        let player_0_expected_outcome = expected_outcome[1[0]];
-        let player_1_expected_outcome = expected_outcome[0[0]];
+        let player_0_expected_outcome = &expected_outcome[1][0];
+        let player_1_expected_outcome = &expected_outcome[0][0];
 
         let result = calc_ratings(&initial_ratings, &matches, &model);
         let player_0 = result.rating_stats.iter().find(|x| x.player_id == 0).unwrap();
@@ -677,10 +689,13 @@ mod tests {
         assert_eq!(result.rating_stats.len(), 2);
         assert_eq!(result.adjustments.len(), 0);
 
-        assert_eq!(player_0.average_teammate_rating, 1500.0);
-        assert_eq!(player_1.average_teammate_rating, 1500.0);
+        assert_eq!(player_0.average_teammate_rating, Some(1500.0));
+        assert_eq!(player_1.average_teammate_rating, Some(1500.0));
 
-        assert_eq!(player_0_expected_outcome, player_0.rating_after);
-        assert_eq!(player_1_expected_outcome, player_1.rating_after);
+        assert_eq!(player_0_expected_outcome.mu, player_0.rating_after);
+        assert_eq!(player_0_expected_outcome.sigma, player_0.volatility_after);
+
+        assert_eq!(player_1_expected_outcome.mu, player_1.rating_after);
+        assert_eq!(player_1_expected_outcome.sigma, player_1.volatility_after);
     }
 }
