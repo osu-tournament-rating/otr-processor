@@ -228,12 +228,13 @@ pub fn calc_ratings(
             if team_based {
                 // Get user's team ID
                 // TODO: needs to be a median across all games ideally-
-                let curr_player_team = curr_match.games[0]
-                    .match_scores
-                    .iter()
-                    .find(|x| x.player_id == rating_prior.player_id)
-                    .unwrap()
-                    .team;
+                // let curr_player_team = curr_match.games[0]
+                //     .match_scores
+                //     .iter()
+                //     .find(|x| x.player_id == rating_prior.player_id)
+                //     .unwrap()
+                //     .team;
+                let curr_player_team = 0;
 
                 // Get IDs of all users in player's team and the opposite team
                 let (mut teammate_list, mut opponent_list):
@@ -257,30 +258,14 @@ pub fn calc_ratings(
                 opponent_list.sort();
                 opponent_list.dedup();
                 // Get teammate and opponent ratings
-                let mut teammate: Vec<f64> = Vec::new();
-                let mut opponent: Vec<f64> = Vec::new();
+                let mut teammates: Vec<f64> = Vec::new();
+                let mut opponents: Vec<f64> = Vec::new();
 
-                for id in teammate_list {
-                    let teammate_id = id;
-                    let mode = curr_match.mode;
-                    let rating = match ratings_hash.get(&(teammate_id, mode)) {
-                        Some(r) => r.rating.mu,
-                        None => todo!("This player is not in the hashmap"),
-                    };
-                    teammate.push(rating)
-                }
-                for id in opponent_list {
-                    let opponent_id = id;
-                    let mode = curr_match.mode;
-                    let rating = match ratings_hash.get(&(opponent_id, mode)) {
-                        Some(r) => r.rating.mu,
-                        None => todo!("This player is not in the hashmap"),
-                    };
-                    opponent.push(rating)
-                }
+                push_team_rating(&mut ratings_hash, curr_match, teammate_list, &mut teammates);
+                push_team_rating(&mut ratings_hash, curr_match, opponent_list, &mut opponents);
 
-                teammate_ratings = Some(teammate);
-                opponent_ratings = Some(opponent);
+                teammate_ratings = Some(teammates);
+                opponent_ratings = Some(opponents);
             }
             // Get average ratings of both teams
             let average_t_rating = average_rating(teammate_ratings);
@@ -410,6 +395,18 @@ pub fn calc_ratings(
         base_ratings,
         rating_stats,
         adjustments,
+    }
+}
+
+fn push_team_rating(ratings_hash: &mut HashMap<(i32, Mode), PlayerRating>, curr_match: &Match, teammate_list: Vec<i32>, teammate: &mut Vec<f64>) {
+    for id in teammate_list {
+        let teammate_id = id;
+        let mode = curr_match.mode;
+        let rating = match ratings_hash.get(&(teammate_id, mode)) {
+            Some(r) => r.rating.mu,
+            None => todo!("This player is not in the hashmap"),
+        };
+        teammate.push(rating)
     }
 }
 
