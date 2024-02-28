@@ -229,8 +229,7 @@ pub fn calc_ratings(
                 // Get user's team ID
                 // TODO: needs to be a median across all games ideally-
                 // Pitfall: If someone plays in a warmup and nothing else,
-                // and is on the wrong team in the warmup, they may be
-                // falsely marked as the wrong team.
+
                 let curr_player_team = curr_match.games[0]
                     .match_scores
                     .iter()
@@ -254,9 +253,10 @@ pub fn calc_ratings(
                     .iter()
                     .map(|player| player.player_id)
                     .collect();
+
                 teammate_list.sort();
                 teammate_list.dedup();
-                teammate_list.sort();
+                opponent_list.sort();
                 opponent_list.dedup();
                 // Get teammate and opponent ratings
                 let mut teammate: Vec<f64> = Vec::new();
