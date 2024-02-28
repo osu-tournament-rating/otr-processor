@@ -689,8 +689,8 @@ mod tests {
         assert_eq!(result.rating_stats.len(), 2);
         assert_eq!(result.adjustments.len(), 0);
 
-        assert_eq!(player_0.average_teammate_rating, Some(1500.0));
-        assert_eq!(player_1.average_teammate_rating, Some(1500.0));
+        assert_eq!(player_0.average_teammate_rating, None);
+        assert_eq!(player_1.average_teammate_rating, None);
 
         assert_eq!(player_0_expected_outcome.mu, player_0.rating_after);
         assert_eq!(player_0_expected_outcome.sigma, player_0.volatility_after);
