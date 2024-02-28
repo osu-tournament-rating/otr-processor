@@ -244,10 +244,12 @@ pub fn calc_ratings(
                     .map(|f| f.match_scores.clone())
                     .flatten()
                     .partition(|score| score.team == curr_player_team);
+
                 let mut teammate_list: Vec<i32> = teammate_list
                     .iter()
                     .map(|player| player.player_id)
                     .collect();
+
                 let mut opponent_list: Vec<i32> = opponent_list
                     .iter()
                     .map(|player| player.player_id)
@@ -517,7 +519,15 @@ pub fn mu_for_rank(rank: i32) -> f64 {
 
 #[cfg(test)]
 mod tests {
-    use crate::model::mu_for_rank;
+    use chrono::{DateTime};
+    use openskill::model::model::Model;
+    use openskill::rating::Rating;
+    use crate::api::api_structs::{Beatmap, Game, Match, MatchScore};
+    use crate::model::{calc_ratings, mu_for_rank};
+    use crate::model::structures::mode::Mode;
+    use crate::model::structures::player_rating::PlayerRating;
+    use crate::model::structures::scoring_type::ScoringType;
+    use crate::model::structures::team_type::TeamType;
 
     #[test]
     fn mu_for_rank_returns_correct_min() {
@@ -557,5 +567,120 @@ mod tests {
         let value = mu_for_rank(rank);
 
         assert!((expected - value).abs() < 0.000001);
+    }
+
+    #[test]
+    fn test_calc_ratings() {
+        let mut initial_ratings = Vec::new();
+
+        // Create 2 players with default ratings
+        for i in 0..2 {
+            initial_ratings.push(PlayerRating {
+                player_id: i,
+                mode: Mode::Osu,
+                rating: Rating {
+                    mu: 1500.0,
+                    sigma: 200.0,
+                }
+            })
+        }
+
+        /*
+        Create a match with the following structure:
+        - Match
+            - Game
+                - MatchScore (Player 0, Team 1, Score 525000)
+                - MatchScore (Player 1, Team 2, Score 525001)
+         */
+        let mut matches = Vec::new();
+        matches.push(&Match {
+            id: 0,
+            match_id: 0,
+            name: Some("TEST: (One) vs (One)".parse().unwrap()),
+            mode: Mode::Osu,
+            start_time: Some(DateTime::parse_from_rfc3339("2021-01-01T00:00:00+00:00")
+                .unwrap()
+                .fixed_offset()),
+            end_time: None,
+            games: Vec::new().push(Game {
+                id: 0,
+                game_id: 0,
+                play_mode: Mode::Osu,
+                scoring_type: ScoringType::ScoreV2,
+                team_type: TeamType::TeamVs,
+                start_time: DateTime::parse_from_rfc3339("2021-01-01T00:00:00+00:00")
+                    .unwrap()
+                    .fixed_offset(),
+                end_time: Some(DateTime::parse_from_rfc3339("2021-01-01T00:00:00+00:00")
+                    .unwrap()
+                    .fixed_offset()),
+                beatmap: Some(Beatmap {
+                    artist: "Test".to_string(),
+                    beatmap_id: 0,
+                    bpm: Some(220.0),
+                    mapper_id: 0,
+                    mapper_name: "efaf".to_string(),
+                    sr: 6.0,
+                    cs: 4.0,
+                    ar: 9.0,
+                    hp: 7.0,
+                    od: 9.0,
+                    drain_time: 160.0,
+                    length: 165.0,
+                    title: "Testing".to_string(),
+                    diff_name: Some("Testing".parse().unwrap()),
+                }),
+                match_scores: Vec::new().push(MatchScore {
+                    player_id: 0,
+                    team: 1, // Blue
+                    score: 525000,
+                    enabled_mods: None,
+                    misses: 0,
+                    accuracy_standard: 100.0,
+                    accuracy_taiko: 0.0,
+                    accuracy_catch: 0.0,
+                    accuracy_mania: 0.0,
+                }).push(MatchScore {
+                    player_id: 1,
+                    team: 2, // Red
+                    score: 525001, // +1 score from blue. Should be the winner.
+                    enabled_mods: None,
+                    misses: 0,
+                    accuracy_standard: 100.0,
+                    accuracy_taiko: 0.0,
+                    accuracy_catch: 0.0,
+                    accuracy_mania: 0.0,
+                }),
+                mods: 0
+            }),
+        });
+
+        let model = super::create_model();
+        let expected_outcome = model.rate(
+            vec![Rating {
+                mu: 1500.0,
+                sigma: 200.0,
+            },
+            Rating {
+                mu: 1500.0,
+                sigma: 200.0,
+            }], vec![1, 0]);
+
+        let player_0_expected_outcome = expected_outcome[1[0]];
+        let player_1_expected_outcome = expected_outcome[0[0]];
+
+        let result = calc_ratings(&initial_ratings, &matches, &model);
+        let player_0 = result.rating_stats.iter().find(|x| x.player_id == 0).unwrap();
+        let player_1 = result.rating_stats.iter().find(|x| x.player_id == 1).unwrap();
+
+        assert_eq!(result.base_ratings.len(), 2);
+        assert_eq!(result.rating_stats.len(), 2);
+        assert_eq!(result.adjustments.len(), 0);
+
+        assert_eq!(player_0.average_teammate_rating, 1500.0);
+        assert_eq!(player_1.average_teammate_rating, 1500.0);
+
+        assert_eq!(player_0_expected_outcome, player_0.rating_after);
+        assert_eq!(player_1_expected_outcome, player_1.rating_after);
     }
 }
