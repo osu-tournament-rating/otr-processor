@@ -667,6 +667,9 @@ mod tests {
 
         matches.push(match_instance);
 
+        let winner_id = 1;
+        let loser_id = 0;
+
         let model = super::create_model();
         let expected_outcome = model.rate(
             vec![vec![Rating {
@@ -676,10 +679,10 @@ mod tests {
             vec![Rating {
                 mu: 1500.0,
                 sigma: 200.0,
-            }]], vec![1, 0]);
+            }]], vec![winner_id, loser_id]);
 
-        let player_0_expected_outcome = &expected_outcome[1][0];
-        let player_1_expected_outcome = &expected_outcome[0][0];
+        let player_0_expected_outcome = &expected_outcome[loser_id][0];
+        let player_1_expected_outcome = &expected_outcome[winner_id][0];
 
         let result = calc_ratings(&initial_ratings, &matches, &model);
         let player_0 = result.rating_stats.iter().find(|x| x.player_id == 0).unwrap();
@@ -688,6 +691,11 @@ mod tests {
         assert_eq!(result.base_ratings.len(), 2);
         assert_eq!(result.rating_stats.len(), 2);
         assert_eq!(result.adjustments.len(), 0);
+
+        // TODO: Test can be extended to accomodate other stats etc.
+
+        // Ensure match cost of winner is > loser
+        assert!(player_1.match_cost > player_0.match_cost);
 
         assert_eq!(player_0.average_teammate_rating, None);
         assert_eq!(player_1.average_teammate_rating, None);
