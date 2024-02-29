@@ -259,6 +259,7 @@ pub fn calc_ratings(
                 teammate_list.dedup();
                 opponent_list.sort();
                 opponent_list.dedup();
+
                 // Get teammate and opponent ratings
                 let mut teammates: Vec<f64> = Vec::new();
                 let mut opponents: Vec<f64> = Vec::new();
@@ -266,8 +267,13 @@ pub fn calc_ratings(
                 push_team_rating(&mut ratings_hash, curr_match, teammate_list, &mut teammates);
                 push_team_rating(&mut ratings_hash, curr_match, opponent_list, &mut opponents);
 
-                teammate_ratings = Some(teammates);
-                opponent_ratings = Some(opponents);
+                if teammates.len() > 0 {
+                    teammate_ratings = Some(teammates);
+                }
+
+                if opponents.len() > 0 {
+                    opponent_ratings = Some(opponents);
+                }
             }
             // Get average ratings of both teams
             let average_t_rating = average_rating(teammate_ratings);
