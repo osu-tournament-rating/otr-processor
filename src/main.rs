@@ -27,8 +27,11 @@ async fn main() {
 
     let players = api.get_players().await.expect("Ranks must be identified");
 
+
     // Model
     let ratings = model::create_initial_ratings(&matches, &players);
+
+    todo!("Fetch country mapping from API & load into calc_ratings");
     let calc_result = calc_ratings(&ratings, &matches, &create_model());
 
     println!("{:?}", calc_result);

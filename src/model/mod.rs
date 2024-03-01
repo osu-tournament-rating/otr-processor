@@ -100,6 +100,7 @@ pub fn create_initial_ratings(matches: &Vec<Match>, players: &Vec<Player>) -> Ve
 /// returns the new ratings
 pub fn calc_ratings(
     initial_ratings: &Vec<PlayerRating>,
+    country_mapping: &HashMap<i32, String>,
     matches: &Vec<Match>,
     model: &PlackettLuce,
 ) -> RatingCalculationResult {
@@ -525,6 +526,7 @@ pub fn mu_for_rank(rank: i32) -> f64 {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use chrono::{DateTime};
     use openskill::model::model::Model;
     use openskill::rating::Rating;
@@ -578,6 +580,11 @@ mod tests {
     #[test]
     fn test_calc_ratings() {
         let mut initial_ratings = Vec::new();
+        let mut country_mapping = HashMap::new();
+
+        // Set both players to be from the same country to check country rankings
+        country_mapping.insert(0, "US".to_string());
+        country_mapping.insert(1, "US".to_string());
 
         // Create 2 players with default ratings
         for i in 0..2 {
@@ -585,7 +592,12 @@ mod tests {
                 player_id: i,
                 mode: Mode::Osu,
                 rating: Rating {
-                    mu: 1500.0,
+                    // We subtract 1.0 here because
+                    // global / country ranks etc. need to be known ahead of time.
+                    // Player 0 has a higher starting rating than player 1,
+                    // but player 1 wins. Thus, we simulate an upset and
+                    // associated stat changes
+                    mu: 1500.0 - i as f64,
                     sigma: 200.0,
                 }
             })
@@ -687,12 +699,12 @@ mod tests {
                 sigma: 200.0,
             }]], vec![winner_id, loser_id]);
 
-        let player_0_expected_outcome = &expected_outcome[loser_id][0];
-        let player_1_expected_outcome = &expected_outcome[winner_id][0];
+        let loser_expected_outcome = &expected_outcome[loser_id][0];
+        let winner_expected_outcome = &expected_outcome[winner_id][0];
 
-        let result = calc_ratings(&initial_ratings, &matches, &model);
-        let player_0 = result.rating_stats.iter().find(|x| x.player_id == 0).unwrap();
-        let player_1 = result.rating_stats.iter().find(|x| x.player_id == 1).unwrap();
+        let result = calc_ratings(&initial_ratings, &country_mapping, &matches, &model);
+        let loser_stats = result.rating_stats.iter().find(|x| x.player_id == loser_id).unwrap();
+        let winner_stats = result.rating_stats.iter().find(|x| x.player_id == winner_id).unwrap();
 
         assert_eq!(result.base_ratings.len(), 2);
         assert_eq!(result.rating_stats.len(), 2);
@@ -701,15 +713,71 @@ mod tests {
         // TODO: Test can be extended to accomodate other stats etc.
 
         // Ensure match cost of winner is > loser
-        assert!(player_1.match_cost > player_0.match_cost);
+        assert!(winner_stats.match_cost > loser_stats.match_cost);
 
-        assert_eq!(player_0.average_teammate_rating, None);
-        assert_eq!(player_1.average_teammate_rating, None);
+        // Average teammate ratings (None because 1v1)
+        assert_eq!(loser_stats.average_teammate_rating, None);
+        assert_eq!(winner_stats.average_teammate_rating, None);
 
-        assert_eq!(player_0_expected_outcome.mu, player_0.rating_after);
-        assert_eq!(player_0_expected_outcome.sigma, player_0.volatility_after);
+        // Expected mu = actual mu
+        assert_eq!(loser_expected_outcome.mu, loser_stats.rating_after);
+        assert_eq!(loser_expected_outcome.sigma, loser_stats.volatility_after);
 
-        assert_eq!(player_1_expected_outcome.mu, player_1.rating_after);
-        assert_eq!(player_1_expected_outcome.sigma, player_1.volatility_after);
+        // Expected sigma = actual sigma
+        assert_eq!(winner_expected_outcome.mu, winner_stats.rating_after);
+        assert_eq!(winner_expected_outcome.sigma, winner_stats.volatility_after);
+
+        // mu before
+        assert_eq!(loser_stats.rating_before, 1500.0);
+        assert_eq!(winner_stats.rating_before, 1499.0);
+
+        // sigma before
+        assert_eq!(loser_stats.volatility_before, 200.0);
+        assert_eq!(winner_stats.volatility_before, 200.0);
+
+        // mu change
+        assert_eq!(loser_stats.rating_change, loser_stats.rating_after - loser_stats.rating_before);
+        assert_eq!(winner_stats.rating_change, winner_stats.rating_after - winner_stats.rating_before);
+
+        // sigma change
+        assert_eq!(loser_stats.volatility_change, loser_stats.volatility_after - loser_stats.volatility_before);
+        assert_eq!(winner_stats.volatility_change, winner_stats.volatility_after - winner_stats.volatility_before);
+
+        // global rank before -- remember, we are simulating an upset,
+        // so the loser should have a higher initial rank than the winner.
+        assert_eq!(loser_stats.global_rank_before, 1);
+        assert_eq!(winner_stats.global_rank_before, 2);
+
+        // global rank after
+        // Player 1 ended up winning, so they should be rank 1 now.
+        assert_eq!(loser_stats.global_rank_after, 2);
+        assert_eq!(winner_stats.global_rank_after, 1);
+
+        // global rank change
+        assert_eq!(loser_stats.global_rank_change, loser_stats.global_rank_after - loser_stats.global_rank_before);
+        assert_eq!(winner_stats.global_rank_change, winner_stats.global_rank_after - winner_stats.global_rank_before);
+
+        // country rank before
+        assert_eq!(loser_stats.country_rank_before, 1);
+        assert_eq!(winner_stats.country_rank_before, 2);
+
+        // country rank after
+        // Player 1 ended up winning, so they should be rank 1 now.
+        assert_eq!(loser_stats.country_rank_after, 2);
+        assert_eq!(winner_stats.country_rank_after, 1);
+
+        // country rank change
+        assert_eq!(loser_stats.country_rank_change, loser_stats.country_rank_after - loser_stats.country_rank_before);
+        assert_eq!(winner_stats.country_rank_change, winner_stats.country_rank_after - winner_stats.country_rank_before);
+
+        // Percentile before
+        // Worst in the collection (before match takes place)
+        assert_eq!(winner_stats.percentile_before, 0.0);
+        // Best in the collection
+        assert_eq!(loser_stats.percentile_before, 1.0);
+
+        // Percentile after (upset, so reverse the percentiles)
+        assert_eq!(loser_stats.percentile_after, 0.0);
+        assert_eq!(winner_stats.percentile_before, 1.0);
     }
 }
