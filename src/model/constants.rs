@@ -14,7 +14,6 @@ pub static OSU_RATING_CEILING: f64 = 30.0;
 pub static OSU_RATING_INTERCEPT: f64 = 45.0;
 pub static OSU_RATING_SLOPE: f64 = 3.2;
 
-
 // Computed constants
 lazy_static! {
     pub static ref VOLATILITY_GROWTH_RATE: f64 = 0.08 * (f64::powf(MULTIPLIER, 2.0));

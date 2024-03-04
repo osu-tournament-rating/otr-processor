@@ -1,5 +1,7 @@
-use crate::api::api_structs::{MatchRatingStats, RatingAdjustment};
-use crate::model::structures::player_rating::PlayerRating;
+use crate::{
+    api::api_structs::{MatchRatingStats, RatingAdjustment},
+    model::structures::player_rating::PlayerRating
+};
 
 pub struct RatingCalculationResult {
     pub base_ratings: Vec<PlayerRating>,
