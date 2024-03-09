@@ -14,7 +14,7 @@ use crate::model::{match_costs, structures::match_cost::MatchCost};
 async fn main() {
     dotenv::dotenv().unwrap();
 
-    let api = api::OtrApiClient::new_from_priv_env()
+    let api = api::OtrApiClient::new_from_env()
         .await
         .expect("Failed to intialize otr api");
 

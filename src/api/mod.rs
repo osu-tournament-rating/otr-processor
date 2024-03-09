@@ -15,10 +15,10 @@ pub struct OtrApiClient {
 
 impl OtrApiClient {
     /// Constructs API client based on provided token
-    pub async fn new(priv_secret: &str, api_root: &str) -> Result<Self, Error> {
+    pub async fn new(api_root: &str, client_id: &str, secret_key: &str) -> Result<Self, Error> {
         let client = ClientBuilder::new().build()?;
 
-        let token_response = Self::login(&client, priv_secret, api_root).await?;
+        let token_response = Self::login(&client, api_root, client_id, secret_key).await?;
 
         Ok(Self {
             client,
@@ -32,27 +32,36 @@ impl OtrApiClient {
     ///
     /// # Note
     /// Method logs in as system user so it's expecting
-    /// privileged token in environment variables
-    pub async fn new_from_priv_env() -> Result<Self, Error> {
+    /// client id and secret in environment variables
+    pub async fn new_from_env() -> Result<Self, Error> {
         OtrApiClient::new(
-            &std::env::var("PRIVILEGED_SECRET").unwrap(),
-            &std::env::var("API_ROOT").unwrap()
+            &std::env::var("API_ROOT").unwrap(),
+            &std::env::var("CLIENT_ID").unwrap(),
+            &std::env::var("SECRET_KEY").unwrap(),
         )
         .await
     }
 
     /// Initial login request to fetch token
-    pub async fn login(client: &Client, priv_secret: &str, api_root: &str) -> Result<LoginResponse, Error> {
-        let link = format!("{}/login/system", api_root);
-
-        let response = client
+    pub async fn login(client: &Client, api_root: &str, client_id: &str, secret_key: &str) -> Result<LoginResponse, Error> {
+        let link = format!(
+            "{}/v1/oauth/token?clientId={}&clientSecret={}", 
+            api_root,
+            client_id,
+            secret_key
+        );
+        
+        let mut response: LoginResponse = client
             .post(link)
-            .header(AUTHORIZATION, priv_secret)
             .header(CONTENT_TYPE, "application/json")
             .send()
             .await?
             .json()
             .await?;
+        
+        // Putting `Bearer` just to save allocations
+        // on every request made
+        response.token.insert_str(0, "Bearer ");
 
         Ok(response)
     }
@@ -127,7 +136,7 @@ impl OtrApiClient {
     /// Get ids of matches
     pub async fn get_match_ids(&self, limit: Option<u32>) -> Result<Vec<u32>, Error> {
         let limit = limit.unwrap_or(0);
-        let link = "/matches/ids";
+        let link = "/v1/matches/ids";
 
         let response = self.make_request(Method::GET, link).await?;
 
@@ -147,7 +156,7 @@ impl OtrApiClient {
     /// in one request. Done to reduce strain on API side. Recommended
     /// value is `250`
     pub async fn get_matches(&self, match_ids: &[u32], chunk_size: usize) -> Result<Vec<Match>, Error> {
-        let link = "/matches/convert";
+        let link = "/v1/matches/convert";
 
         let mut data: Vec<Match> = Vec::new();
 
@@ -163,14 +172,14 @@ impl OtrApiClient {
     /// Get list of match id mappings
     /// otr_match_id <-> osu_match_id
     pub async fn get_match_id_mapping(&self) -> Result<Vec<MatchIdMapping>, Error> {
-        let link = "/matches/id-mapping";
+        let link = "/v1/matches/id-mapping";
 
         self.make_request(Method::GET, link).await
     }
 
     // Get list of players
     pub async fn get_players(&self) -> Result<Vec<Player>, Error> {
-        let link = "/players/ranks/all";
+        let link = "/v1/players/ranks/all";
 
         self.make_request(Method::GET, link).await
     }
@@ -191,7 +200,7 @@ mod api_client_tests {
             .get_or_init(async {
                 dotenv::dotenv().unwrap();
 
-                OtrApiClient::new_from_priv_env()
+                OtrApiClient::new_from_env()
                     .await
                     .expect("Failed to initialize OtrApi")
             })
