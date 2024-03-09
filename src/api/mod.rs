@@ -15,10 +15,10 @@ pub struct OtrApiClient {
 
 impl OtrApiClient {
     /// Constructs API client based on provided token
-    pub async fn new(api_root: &str, client_id: &str, secret_key: &str) -> Result<Self, Error> {
+    pub async fn new(api_root: &str, client_id: &str, client_secret: &str) -> Result<Self, Error> {
         let client = ClientBuilder::new().build()?;
 
-        let token_response = Self::login(&client, api_root, client_id, secret_key).await?;
+        let token_response = Self::login(&client, api_root, client_id, client_secret).await?;
 
         Ok(Self {
             client,
@@ -37,18 +37,18 @@ impl OtrApiClient {
         OtrApiClient::new(
             &std::env::var("API_ROOT").unwrap(),
             &std::env::var("CLIENT_ID").unwrap(),
-            &std::env::var("SECRET_KEY").unwrap(),
+            &std::env::var("CLIENT_SECRET").unwrap(),
         )
         .await
     }
 
     /// Initial login request to fetch token
-    pub async fn login(client: &Client, api_root: &str, client_id: &str, secret_key: &str) -> Result<LoginResponse, Error> {
+    pub async fn login(client: &Client, api_root: &str, client_id: &str, client_secret: &str) -> Result<LoginResponse, Error> {
         let link = format!(
             "{}/v1/oauth/token?clientId={}&clientSecret={}", 
             api_root,
             client_id,
-            secret_key
+            client_secret
         );
         
         let mut response: LoginResponse = client
