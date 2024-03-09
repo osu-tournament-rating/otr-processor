@@ -37,20 +37,23 @@ impl OtrApiClient {
         OtrApiClient::new(
             &std::env::var("API_ROOT").unwrap(),
             &std::env::var("CLIENT_ID").unwrap(),
-            &std::env::var("CLIENT_SECRET").unwrap(),
+            &std::env::var("CLIENT_SECRET").unwrap()
         )
         .await
     }
 
     /// Initial login request to fetch token
-    pub async fn login(client: &Client, api_root: &str, client_id: &str, client_secret: &str) -> Result<LoginResponse, Error> {
+    pub async fn login(
+        client: &Client,
+        api_root: &str,
+        client_id: &str,
+        client_secret: &str
+    ) -> Result<LoginResponse, Error> {
         let link = format!(
-            "{}/v1/oauth/token?clientId={}&clientSecret={}", 
-            api_root,
-            client_id,
-            client_secret
+            "{}/v1/oauth/token?clientId={}&clientSecret={}",
+            api_root, client_id, client_secret
         );
-        
+
         let mut response: LoginResponse = client
             .post(link)
             .header(CONTENT_TYPE, "application/json")
@@ -58,7 +61,7 @@ impl OtrApiClient {
             .await?
             .json()
             .await?;
-        
+
         // Putting `Bearer` just to save allocations
         // on every request made
         response.token.insert_str(0, "Bearer ");
@@ -196,13 +199,13 @@ mod api_client_tests {
     // Helper function that ensures OtrApi is not constructed
     // each time individual tests run
     async fn get_api() -> &'static OtrApiClient {
-        API_INSTANCE.get_or_init(async {
-            dotenv::dotenv().unwrap();
+        API_INSTANCE
+            .get_or_init(async {
+                dotenv::dotenv().unwrap();
 
-            OtrApiClient::new_from_env()
-                .await
-                .expect("Failed to initialize OtrApi")
-        }).await
+                OtrApiClient::new_from_env().await.expect("Failed to initialize OtrApi")
+            })
+            .await
     }
 
     #[tokio::test]
