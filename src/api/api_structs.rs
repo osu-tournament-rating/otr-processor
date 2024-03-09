@@ -5,7 +5,7 @@ use crate::model::structures::{mode::Mode, scoring_type::ScoringType, team_type:
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct LoginResponse {
+pub struct OAuthResponse {
     #[serde(rename = "accessToken")]
     pub token: String,
 

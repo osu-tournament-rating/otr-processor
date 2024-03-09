@@ -1,6 +1,6 @@
 pub mod api_structs;
 
-use crate::api::api_structs::{LoginResponse, Match, MatchIdMapping, Player};
+use crate::api::api_structs::{Match, MatchIdMapping, OAuthResponse, Player};
 use reqwest::{
     header::{AUTHORIZATION, CONTENT_TYPE},
     Client, ClientBuilder, Error, Method
@@ -48,13 +48,13 @@ impl OtrApiClient {
         api_root: &str,
         client_id: &str,
         client_secret: &str
-    ) -> Result<LoginResponse, Error> {
+    ) -> Result<OAuthResponse, Error> {
         let link = format!(
             "{}/v1/oauth/token?clientId={}&clientSecret={}",
             api_root, client_id, client_secret
         );
 
-        let mut response: LoginResponse = client
+        let mut response: OAuthResponse = client
             .post(link)
             .header(CONTENT_TYPE, "application/json")
             .send()
