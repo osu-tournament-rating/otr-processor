@@ -8,27 +8,30 @@ mod utils;
 
 use indicatif::ProgressBar;
 
-use crate::model::{structures::match_cost::MatchCost, match_costs};
+use crate::model::{match_costs, structures::match_cost::MatchCost};
 
 #[tokio::main]
 async fn main() {
     dotenv::dotenv().unwrap();
 
-    let api = api::OtrApiClient::new_from_priv_env().await
+    let api = api::OtrApiClient::new_from_priv_env()
+        .await
         .expect("Failed to intialize otr api");
-    
-    let match_ids = api.get_match_ids(Some(100))
+
+    let match_ids = api
+        .get_match_ids(Some(100))
         .await
         .expect("Match ids must be valid before proceeding");
 
-    let matches = api.get_matches(&match_ids, 250)
+    let matches = api
+        .get_matches(&match_ids, 250)
         .await
         .expect("Matches need to be loaded before continuing");
 
-    //let players = api.get_players().await.expect("Ranks must be identified");
+    // let players = api.get_players().await.expect("Ranks must be identified");
 
     // Model
-    //let ratings = model::model::create_initial_ratings(matches, players);
+    // let ratings = model::model::create_initial_ratings(matches, players);
 
     let bar = ProgressBar::new(matches.len() as u64);
 
@@ -46,5 +49,5 @@ async fn main() {
 
     bar.finish();
 
-    //println!("{:?}", mcs)
+    // println!("{:?}", mcs)
 }

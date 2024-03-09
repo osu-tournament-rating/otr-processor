@@ -1,7 +1,6 @@
-use std::collections::HashMap;
+use crate::{api::api_structs::RatingAdjustment, model::constants};
 use chrono::{DateTime, FixedOffset};
-use crate::api::api_structs::RatingAdjustment;
-use crate::model::constants;
+use std::collections::HashMap;
 
 /// Tracks decay activity for players
 pub struct DecayTracker {
@@ -33,7 +32,13 @@ impl DecayTracker {
     /// - Beginning after 4 months of inactivity, apply decay once weekly.
     ///
     /// If the user does not need to decay, return None.
-    pub fn decay(&self, player_id: i32, mu: f64, sigma: f64, d: DateTime<FixedOffset>) -> Option<Vec<RatingAdjustment>> {
+    pub fn decay(
+        &self,
+        player_id: i32,
+        mu: f64,
+        sigma: f64,
+        d: DateTime<FixedOffset>
+    ) -> Option<Vec<RatingAdjustment>> {
         let last_play_time = self.last_play_time.get(&player_id).unwrap();
         let decay_weeks = Self::n_decay(d, *last_play_time);
 
@@ -106,13 +111,15 @@ pub fn decay_mu(mu: f64) -> f64 {
     new_mu.max(constants::DECAY_MINIMUM)
 }
 
-
 #[cfg(test)]
 mod tests {
-    use std::ops::Add;
+    use crate::model::{
+        constants,
+        constants::MULTIPLIER,
+        decay::{decay_mu, decay_sigma, is_decay_possible, DecayTracker}
+    };
     use chrono::DateTime;
-    use crate::model::{decay::{decay_mu, decay_sigma, DecayTracker, is_decay_possible}, constants};
-    use crate::model::constants::MULTIPLIER;
+    use std::ops::Add;
 
     #[test]
     fn test_decay() {
@@ -126,9 +133,13 @@ mod tests {
         let mut tracker = DecayTracker::new();
 
         // Set time for one match and record activity
-        let t = DateTime::parse_from_rfc3339("2021-01-01T00:00:00+00:00").unwrap().fixed_offset();
+        let t = DateTime::parse_from_rfc3339("2021-01-01T00:00:00+00:00")
+            .unwrap()
+            .fixed_offset();
         // Jump ahead 4 months. Should be (4 months in weeks) decay applications
-        let d = DateTime::parse_from_rfc3339("2021-05-01T00:00:00+00:00").unwrap().fixed_offset();
+        let d = DateTime::parse_from_rfc3339("2021-05-01T00:00:00+00:00")
+            .unwrap()
+            .fixed_offset();
 
         let n_decay = DecayTracker::n_decay(d, t);
 
@@ -157,7 +168,9 @@ mod tests {
 
     #[test]
     fn test_n_decay() {
-        let t = DateTime::parse_from_rfc3339("2021-01-01T00:00:00+00:00").unwrap().fixed_offset();
+        let t = DateTime::parse_from_rfc3339("2021-01-01T00:00:00+00:00")
+            .unwrap()
+            .fixed_offset();
         let d = t.add(chrono::Duration::days(constants::DECAY_DAYS as i64));
 
         let n = DecayTracker::n_decay(d, t);
@@ -169,7 +182,9 @@ mod tests {
     fn test_n_decay_less_than_decay_days() {
         let days = (constants::DECAY_DAYS - 1) as i64;
 
-        let t = DateTime::parse_from_rfc3339("2021-01-01T00:00:00+00:00").unwrap().fixed_offset();
+        let t = DateTime::parse_from_rfc3339("2021-01-01T00:00:00+00:00")
+            .unwrap()
+            .fixed_offset();
         let d = t.add(chrono::Duration::days(days));
 
         let n = DecayTracker::n_decay(d, t);

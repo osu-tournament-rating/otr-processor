@@ -1,28 +1,29 @@
 mod constants;
 mod data_processing;
 mod decay;
-pub mod structures;
 mod recalc_helpers;
+pub mod structures;
 
-
-use statrs::statistics::Statistics;
-use statrs::distribution::{ContinuousCDF, Normal};
+use crate::{
+    api::api_structs::{Game, Match, MatchRatingStats, Player, RatingAdjustment},
+    model::structures::{
+        match_cost::MatchCost, mode::Mode, player_rating::PlayerRating,
+        rating_calculation_result::RatingCalculationResult
+    },
+    utils::progress_utils::progress_bar
+};
+use openskill::{
+    model::plackett_luce::PlackettLuce,
+    rating::{default_gamma, Rating}
+};
+use statrs::{
+    distribution::{ContinuousCDF, Normal},
+    statistics::Statistics
+};
 use std::collections::{HashMap, HashSet};
-use openskill::model::plackett_luce::PlackettLuce;
-use openskill::rating::{default_gamma, Rating};
-use crate::api::api_structs::{Game, Match, MatchRatingStats, Player, RatingAdjustment};
-use crate::model::structures::match_cost::MatchCost;
-use crate::model::structures::mode::Mode;
-use crate::model::structures::player_rating::PlayerRating;
-use crate::model::structures::rating_calculation_result::RatingCalculationResult;
-use crate::utils::progress_utils::progress_bar;
 
 pub fn create_model() -> PlackettLuce {
-    PlackettLuce::new(
-        constants::BETA,
-        constants::KAPPA,
-        default_gamma
-    )
+    PlackettLuce::new(constants::BETA, constants::KAPPA, default_gamma)
 }
 
 // Rating generation
@@ -54,7 +55,9 @@ pub fn create_initial_ratings(matches: Vec<Match>, players: Vec<Player>) -> Vec<
                 }
 
                 // Create ratings using the earliest known rank
-                let player = player_hashmap.get(&score.player_id).expect("Player should be present in the hashmap.");
+                let player = player_hashmap
+                    .get(&score.player_id)
+                    .expect("Player should be present in the hashmap.");
                 let rank: Option<i32> = match mode {
                     Mode::Osu => player.earliest_osu_global_rank.or(player.rank_standard),
                     Mode::Taiko => player.earliest_taiko_global_rank.or(player.rank_taiko),
@@ -70,7 +73,7 @@ pub fn create_initial_ratings(matches: Vec<Match>, players: Vec<Player>) -> Vec<
                         // rank, or their current rank)
                         mu = mu_for_rank(rank);
                         sigma = constants::SIGMA;
-                    },
+                    }
                     None => {
                         // Player may be restricted / we cannot get hold of their rank info. Use default.
                         mu = constants::MU;
@@ -98,7 +101,11 @@ pub fn create_initial_ratings(matches: Vec<Match>, players: Vec<Player>) -> Vec<
 
 /// Calculates a vector of initial ratings based on match cost,
 /// returns the new ratings
-pub fn calc_ratings(initial_ratings: Vec<PlayerRating>, matches: Vec<Match>, model: PlackettLuce) -> RatingCalculationResult {
+pub fn calc_ratings(
+    initial_ratings: Vec<PlayerRating>,
+    matches: Vec<Match>,
+    model: PlackettLuce
+) -> RatingCalculationResult {
     // Key = (player_id, mode as i32)
     // Value = Associated PlayerRating (if available)
     let mut ratings_hash: HashMap<(i32, i32), PlayerRating> = HashMap::new();
@@ -158,7 +165,7 @@ pub fn match_costs(games: &[Game]) -> Option<Vec<MatchCost>> {
 
         for score in match_scores {
             let player_id = score.player_id;
-            
+
             games_played.entry(player_id).or_insert(0);
             normalized_scores.entry(player_id).or_insert(0.0);
 
@@ -187,8 +194,9 @@ pub fn match_costs(games: &[Game]) -> Option<Vec<MatchCost>> {
         let result = if n_played == 1 {
             (norm_score + base_score) * (1.0 / n_played as f64) * (1.0 + lobby_bonus)
         } else {
-            (norm_score + base_score) * (1.0 / n_played as f64) *
-                (1.0 + (lobby_bonus * ((n_played - 1) as f64) / (n as f64 / 1.0)).sqrt())
+            (norm_score + base_score)
+                * (1.0 / n_played as f64)
+                * (1.0 + (lobby_bonus * ((n_played - 1) as f64) / (n as f64 / 1.0)).sqrt())
         };
 
         let mc = MatchCost {
@@ -203,8 +211,8 @@ pub fn match_costs(games: &[Game]) -> Option<Vec<MatchCost>> {
 }
 
 pub fn mu_for_rank(rank: i32) -> f64 {
-    let val = constants::MULTIPLIER * (constants::OSU_RATING_INTERCEPT -
-        (constants::OSU_RATING_SLOPE * (rank as f64).ln()));
+    let val =
+        constants::MULTIPLIER * (constants::OSU_RATING_INTERCEPT - (constants::OSU_RATING_SLOPE * (rank as f64).ln()));
 
     if val < constants::MULTIPLIER * constants::OSU_RATING_FLOOR {
         return constants::MULTIPLIER * constants::OSU_RATING_FLOOR;
