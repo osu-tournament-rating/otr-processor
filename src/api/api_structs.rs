@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use chrono::{DateTime, FixedOffset};
 use serde::{Deserialize, Serialize};
 
@@ -13,7 +11,8 @@ pub struct LoginResponse {
 
     #[serde(rename="refreshToken")]
     pub refresh_token: String,
-
+    
+    /// Expire time in seconds
     #[serde(rename="accessExpiration")]
     pub expire_in: u32,
 }

@@ -196,15 +196,13 @@ mod api_client_tests {
     // Helper function that ensures OtrApi is not constructed
     // each time individual tests run
     async fn get_api() -> &'static OtrApiClient {
-        API_INSTANCE
-            .get_or_init(async {
-                dotenv::dotenv().unwrap();
+        API_INSTANCE.get_or_init(async {
+            dotenv::dotenv().unwrap();
 
-                OtrApiClient::new_from_env()
-                    .await
-                    .expect("Failed to initialize OtrApi")
-            })
-            .await
+            OtrApiClient::new_from_env()
+                .await
+                .expect("Failed to initialize OtrApi")
+        }).await
     }
 
     #[tokio::test]
