@@ -20,6 +20,8 @@ lazy_static = "1.4.0"
 
 [dev-dependencies]
 async-once-cell = "0.5.3"
+httpmock = "0.7.0"
+serde_json = "1.0.114"
 
 [lints.rust]
 dead_code = "allow"

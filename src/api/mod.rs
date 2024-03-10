@@ -10,7 +10,7 @@ use reqwest::{
 use serde::{de::DeserializeOwned, Serialize};
 use tokio::sync::{
     oneshot::{Receiver, Sender},
-    Mutex
+    RwLock
 };
 
 /// A loop that automatically refreshes token
@@ -19,14 +19,14 @@ pub async fn refresh_token_loop(api: Arc<OtrApiBody>) {
         // The first iteration assumes that token it's already valid
         // and doesn't need to be refreshed
         // so it's sleeps until expire time comes
-        let lock = api.token.lock().await;
+        let lock = api.token.read().await;
         let expire_in = lock.expire_in;
         drop(lock);
 
         // Refreshes in (3600 - 300) secs just in case
         tokio::time::sleep(Duration::from_secs(expire_in - 300)).await;
 
-        let mut lock = api.token.lock().await;
+        let mut lock = api.token.write().await;
 
         // Another loop to ensure token is actually updates
         // (without any errors)
@@ -87,9 +87,9 @@ pub struct OtrApiBody {
     client: Client,
     api_root: String,
 
-    /// Wrapped in Mutex because we need
+    /// Wrapped in RwLock because we need
     /// a shared mutable access
-    token: Mutex<OtrToken>
+    token: RwLock<OtrToken>
 }
 
 pub struct OtrApiClient {
@@ -144,7 +144,7 @@ impl OtrApiClient {
         let body = Arc::new(OtrApiBody {
             client,
             api_root: api_root.to_owned(),
-            token: Mutex::new(token)
+            token: RwLock::new(token)
         });
 
         let (refresh_tx, rx) = tokio::sync::oneshot::channel::<()>();
@@ -258,7 +258,7 @@ impl OtrApiClient {
             request = request.json(&body)
         }
 
-        let lock = &self.body.token.lock().await;
+        let lock = &self.body.token.read().await;
 
         request
             .header(AUTHORIZATION, &lock.token)
@@ -323,6 +323,8 @@ impl OtrApiClient {
 
 #[cfg(test)]
 mod api_client_tests {
+    use httpmock::prelude::*;
+    use serde_json::{json, Value};
     use std::time::Duration;
 
     use async_once_cell::OnceCell;
@@ -333,7 +335,7 @@ mod api_client_tests {
 
     macro_rules! manually_refresh_token {
         ($api:expr) => {{
-            let mut lock = $api.body.token.lock().await;
+            let mut lock = $api.body.token.write().await;
             lock.refresh_token(&$api.body.api_root, &$api.body.client)
                 .await
                 .unwrap();
@@ -410,7 +412,7 @@ mod api_client_tests {
     async fn test_refresh_token() {
         let api = get_api().await;
 
-        let lock = api.body.token.lock().await;
+        let lock = api.body.token.read().await;
         let initial_token = lock.token.clone();
         drop(lock);
 
@@ -425,5 +427,87 @@ mod api_client_tests {
         assert!(initial_token != first_token);
         assert!(first_token != second_token);
         assert!(second_token != third_token);
+    }
+
+    #[tokio::test]
+    async fn test_login_mocked() {
+        let server = MockServer::start();
+
+        let login = server.mock(|when, then| {
+            when.path("/v1/oauth/token");
+            then.status(200)
+                .json_body(json!({ "accessToken": "123", "refreshToken": "321", "accessExpiration": 1111 }));
+        });
+
+        let api = OtrApiClient::new(&format!("http://127.0.0.1:{}", server.port()), "123", "321")
+            .await
+            .expect("Failed to initialize OtrApi");
+
+        login.assert();
+
+        let lock = api.body.token.read().await;
+
+        assert_eq!(lock.token, "Bearer 123");
+        assert_eq!(lock.refresh_token, "321");
+        assert_eq!(lock.expire_in, 1111);
+    }
+
+    #[tokio::test]
+    async fn test_login_refresh_worker() {
+        let server = MockServer::start();
+
+        let login = server.mock(|when, then| {
+            when.path("/v1/oauth/token");
+            then.status(200)
+                .json_body(json!({ "accessToken": "old_token", "refreshToken": "123", "accessExpiration": 302 }));
+        });
+
+        let api = OtrApiClient::new(&format!("http://127.0.0.1:{}", server.port()), "123", "321")
+            .await
+            .expect("Failed to initialize OtrApi");
+
+        login.assert();
+
+        let refresh = server.mock(|when, then| {
+            when.path("/v1/oauth/refresh").query_param_exists("refreshToken");
+            then.status(200)
+                .json_body(json!({ "accessToken": "new_token", "refreshToken": "another", "accessExpiration": 1000 }));
+        });
+
+        tokio::time::sleep(Duration::from_secs(3)).await;
+
+        refresh.assert();
+
+        let lock = api.body.token.read().await;
+        assert_eq!(lock.token, "Bearer new_token");
+        assert_eq!(lock.refresh_token, "another");
+        assert_eq!(lock.expire_in, 1000);
+    }
+
+    #[tokio::test]
+    async fn test_login_refresh_worker_hits() {
+        let server = MockServer::start();
+
+        let login = server.mock(|when, then| {
+            when.path("/v1/oauth/token");
+            then.status(200)
+                .json_body(json!({ "accessToken": "old_token", "refreshToken": "123", "accessExpiration": 300 }));
+        });
+
+        let api = OtrApiClient::new(&format!("http://127.0.0.1:{}", server.port()), "123", "321")
+            .await
+            .expect("Failed to initialize OtrApi");
+
+        login.assert();
+
+        let refresh = server.mock(|when, then| {
+            when.path("/v1/oauth/refresh").query_param_exists("refreshToken");
+            then.status(200)
+                .json_body(json!({ "accessToken": "new_token", "refreshToken": "another", "accessExpiration": 301 }));
+        });
+
+        tokio::time::sleep(Duration::from_secs(3)).await;
+
+        refresh.assert_hits(3);
     }
 }
