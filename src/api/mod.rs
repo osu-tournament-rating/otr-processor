@@ -1,16 +1,131 @@
 pub mod api_structs;
 
+use std::{sync::Arc, time::Duration};
+
 use crate::api::api_structs::{Match, MatchIdMapping, OAuthResponse, Player};
 use reqwest::{
     header::{AUTHORIZATION, CONTENT_TYPE},
     Client, ClientBuilder, Error, Method
 };
 use serde::{de::DeserializeOwned, Serialize};
+use tokio::sync::{
+    oneshot::{Receiver, Sender},
+    Mutex
+};
+
+/// A loop that automatically refreshes token
+pub async fn refresh_token_loop(api: Arc<OtrApiBody>) {
+    loop {
+        // The first iteration assumes that token it's already valid
+        // and doesn't need to be refreshed
+        // so it's sleeps until expire time comes
+        let lock = api.token.lock().await;
+        let expire_in = lock.expire_in;
+        drop(lock);
+
+        // Refreshes in (3600 - 300) secs just in case
+        tokio::time::sleep(Duration::from_secs(expire_in - 300)).await;
+
+        let mut lock = api.token.lock().await;
+
+        // Another loop to ensure token is actually updates
+        // (without any errors)
+        // If error anyway happened then it's going to retry
+        // until successed
+        loop {
+            let res = lock.refresh_token(&api.api_root, &api.client).await;
+
+            match res {
+                Ok(_) => break,
+                Err(e) => {
+                    println!("{:?}", e);
+                }
+            }
+        }
+
+        drop(lock)
+    }
+}
+
+pub async fn refresh_token_worker(api: Arc<OtrApiBody>, receiver: Receiver<()>) {
+    tokio::select! {
+        _ = refresh_token_loop(api) => {}
+        _ = receiver => {}
+    }
+}
+
+pub struct OtrToken {
+    pub token: String,
+    pub refresh_token: String,
+    pub expire_in: u64
+}
+
+impl OtrToken {
+    /// Function that refresh token when called
+    pub async fn refresh_token(&mut self, api_root: &str, client: &Client) -> Result<(), Error> {
+        let link = format!("{}/v1/oauth/refresh?refreshToken={}", api_root, self.refresh_token);
+
+        let mut response: OAuthResponse = client
+            .post(link)
+            .header(CONTENT_TYPE, "application/json")
+            .send()
+            .await?
+            .json()
+            .await?;
+
+        response.token.insert_str(0, "Bearer ");
+
+        self.token = response.token;
+        self.refresh_token = response.refresh_token;
+        self.expire_in = response.expire_in;
+
+        Ok(())
+    }
+}
+
+pub struct OtrApiBody {
+    client: Client,
+    api_root: String,
+
+    /// Wrapped in Mutex because we need
+    /// a shared mutable access
+    token: Mutex<OtrToken>
+}
 
 pub struct OtrApiClient {
-    client: Client,
-    token: String,
-    api_root: String
+    /// Wrapped in [`Arc`] because everything located in [`OtrApiBody`]
+    /// need to be accessed in diffrent threads (shared reference)
+    body: Arc<OtrApiBody>,
+
+    /// Channel that's get sended on Drop to shutdown refresh token worker
+    /// Why it's wrapped in `[Option]`? Because oneshot sender
+    /// consumes itself on send.
+    ///
+    /// Detailed explanation:
+    /// In Drop trait implementation we having a mutable reference
+    /// on our struct (where sender is located), so when `send()`
+    /// happens it consumes itself, but we still having that mutable
+    /// reference and because of this we getting a compile error
+    /// variabled getting moved.
+    /// Workaround is pretty simple:
+    /// Wrap [`Sender`] inside Option, so we can use [`std::mem::take`]
+    /// to replace our sender with default value (in our case in None)
+    /// and peacefully let sender consume itself :)
+    refresh_tx: Option<Sender<()>>
+}
+
+impl Drop for OtrApiClient {
+    fn drop(&mut self) {
+        if let Some(tx) = std::mem::take(&mut self.refresh_tx) {
+            // Dropping error because either `Ok` or `Err` indicates
+            // that worker and loop is stoped
+            // Ok - means channel is read and loop is stopped
+            // Err - means Receiver was somehow dropped beforehand
+            // which means that worker is not running under any
+            // circumstances
+            let _ = tx.send(());
+        }
+    }
 }
 
 impl OtrApiClient {
@@ -20,10 +135,26 @@ impl OtrApiClient {
 
         let token_response = Self::login(&client, api_root, client_id, client_secret).await?;
 
-        Ok(Self {
-            client,
+        let token = OtrToken {
             token: token_response.token,
-            api_root: api_root.to_owned()
+            refresh_token: token_response.refresh_token,
+            expire_in: token_response.expire_in
+        };
+
+        let body = Arc::new(OtrApiBody {
+            client,
+            api_root: api_root.to_owned(),
+            token: Mutex::new(token)
+        });
+
+        let (refresh_tx, rx) = tokio::sync::oneshot::channel::<()>();
+
+        // Spawn a refresh token worker
+        tokio::spawn(refresh_token_worker(body.clone(), rx));
+
+        Ok(Self {
+            refresh_tx: Some(refresh_tx),
+            body
         })
     }
 
@@ -115,11 +246,11 @@ impl OtrApiClient {
         T: DeserializeOwned,
         B: Serialize
     {
-        let request_link = format!("{}{}", self.api_root, partial_url);
+        let request_link = format!("{}{}", self.body.api_root, partial_url);
 
         let mut request = match method {
-            Method::GET => self.client.get(request_link),
-            Method::POST => self.client.post(request_link),
+            Method::GET => self.body.client.get(request_link),
+            Method::POST => self.body.client.post(request_link),
             _ => unimplemented!()
         };
 
@@ -127,8 +258,10 @@ impl OtrApiClient {
             request = request.json(&body)
         }
 
+        let lock = &self.body.token.lock().await;
+
         request
-            .header(AUTHORIZATION, &self.token)
+            .header(AUTHORIZATION, &lock.token)
             .header(CONTENT_TYPE, "application/json")
             .send()
             .await?
@@ -190,11 +323,26 @@ impl OtrApiClient {
 
 #[cfg(test)]
 mod api_client_tests {
+    use std::time::Duration;
+
     use async_once_cell::OnceCell;
 
     use crate::api::OtrApiClient;
 
     static API_INSTANCE: OnceCell<OtrApiClient> = OnceCell::new();
+
+    macro_rules! manually_refresh_token {
+        ($api:expr) => {{
+            let mut lock = $api.body.token.lock().await;
+            lock.refresh_token(&$api.body.api_root, &$api.body.client)
+                .await
+                .unwrap();
+            let token = lock.token.clone();
+            drop(lock);
+
+            token
+        }};
+    }
 
     // Helper function that ensures OtrApi is not constructed
     // each time individual tests run
@@ -255,5 +403,27 @@ mod api_client_tests {
         let result = api.get_match_id_mapping().await.unwrap();
 
         assert!(!result.is_empty())
+    }
+
+    // Manually refresh token three times
+    #[tokio::test]
+    async fn test_refresh_token() {
+        let api = get_api().await;
+
+        let lock = api.body.token.lock().await;
+        let initial_token = lock.token.clone();
+        drop(lock);
+
+        // Sleeps added here to avoid getting same token
+        // because it runs too fast (maybe it's a bug?)
+        let first_token = manually_refresh_token!(api);
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        let second_token = manually_refresh_token!(api);
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        let third_token = manually_refresh_token!(api);
+
+        assert!(initial_token != first_token);
+        assert!(first_token != second_token);
+        assert!(second_token != third_token);
     }
 }
