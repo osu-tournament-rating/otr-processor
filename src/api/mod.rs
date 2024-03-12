@@ -22,8 +22,7 @@ pub async fn refresh_token_loop(api: Arc<OtrApiBody>) {
         let expire_in = lock.expire_in;
         drop(lock);
 
-        // Refreshes in (3600 - 300) secs just in case
-        tokio::time::sleep(Duration::from_secs(expire_in - 300)).await;
+        tokio::time::sleep(Duration::from_secs(expire_in)).await;
 
         let mut lock = api.token.write().await;
 
@@ -455,7 +454,7 @@ mod api_client_tests {
         let login = server.mock(|when, then| {
             when.path("/v1/oauth/token");
             then.status(200)
-                .json_body(json!({ "accessToken": "old_token", "refreshToken": "123", "accessExpiration": 302 }));
+                .json_body(json!({ "accessToken": "old_token", "refreshToken": "123", "accessExpiration": 2 }));
         });
 
         let api = OtrApiClient::new(&format!("http://127.0.0.1:{}", server.port()), "123", "321")
@@ -487,7 +486,7 @@ mod api_client_tests {
         let login = server.mock(|when, then| {
             when.path("/v1/oauth/token");
             then.status(200)
-                .json_body(json!({ "accessToken": "old_token", "refreshToken": "123", "accessExpiration": 300 }));
+                .json_body(json!({ "accessToken": "old_token", "refreshToken": "123", "accessExpiration": 0 }));
         });
 
         let api = OtrApiClient::new(&format!("http://127.0.0.1:{}", server.port()), "123", "321")
@@ -499,7 +498,7 @@ mod api_client_tests {
         let refresh = server.mock(|when, then| {
             when.path("/v1/oauth/refresh").query_param_exists("refreshToken");
             then.status(200)
-                .json_body(json!({ "accessToken": "new_token", "refreshToken": "another", "accessExpiration": 301 }));
+                .json_body(json!({ "accessToken": "new_token", "refreshToken": "another", "accessExpiration": 1 }));
         });
 
         tokio::time::sleep(Duration::from_secs(3)).await;
