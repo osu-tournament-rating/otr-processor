@@ -16,9 +16,8 @@ use tokio::sync::{
 /// A loop that automatically refreshes token
 pub async fn refresh_token_loop(api: Arc<OtrApiBody>) {
     loop {
-        // The first iteration assumes that token it's already valid
-        // and doesn't need to be refreshed
-        // so it's sleeps until expire time comes
+        // The first iteration assumes that the refresh token
+        //  is already valid, so it sleeps until the expiration time
         let lock = api.token.read().await;
         let expire_in = lock.expire_in;
         drop(lock);
@@ -28,10 +27,8 @@ pub async fn refresh_token_loop(api: Arc<OtrApiBody>) {
 
         let mut lock = api.token.write().await;
 
-        // Another loop to ensure token is actually updates
-        // (without any errors)
-        // If error anyway happened then it's going to retry
-        // until successed
+        // Another loop to ensure token is updated correctly.
+        // Loops continuously if errors occur.
         loop {
             let res = lock.refresh_token(&api.api_root, &api.client).await;
 
@@ -61,7 +58,7 @@ pub struct OtrToken {
 }
 
 impl OtrToken {
-    /// Function that refresh token when called
+    /// Refreshes access token when called
     pub async fn refresh_token(&mut self, api_root: &str, client: &Client) -> Result<(), Error> {
         let link = format!("{}/v1/oauth/refresh?refreshToken={}", api_root, self.refresh_token);
 
@@ -94,23 +91,23 @@ pub struct OtrApiBody {
 
 pub struct OtrApiClient {
     /// Wrapped in [`Arc`] because everything located in [`OtrApiBody`]
-    /// need to be accessed in diffrent threads (shared reference)
+    /// needs to be accessed in different threads (shared reference)
     body: Arc<OtrApiBody>,
 
-    /// Channel that's get sended on Drop to shutdown refresh token worker
-    /// Why it's wrapped in `[Option]`? Because oneshot sender
-    /// consumes itself on send.
+    /// Channel that gets sent on `Drop` to shut down the refresh token worker.
+    /// Why is it wrapped in an `[Option]`? Because the oneshot sender
+    /// consumes itself upon sending.
     ///
     /// Detailed explanation:
-    /// In Drop trait implementation we having a mutable reference
-    /// on our struct (where sender is located), so when `send()`
-    /// happens it consumes itself, but we still having that mutable
-    /// reference and because of this we getting a compile error
-    /// variabled getting moved.
-    /// Workaround is pretty simple:
-    /// Wrap [`Sender`] inside Option, so we can use [`std::mem::take`]
-    /// to replace our sender with default value (in our case in None)
-    /// and peacefully let sender consume itself :)
+    /// In the `Drop` trait implementation, we have a mutable reference
+    /// to our struct (where the sender is located). So, when `send()`
+    /// occurs, it consumes itself, but we still hold that mutable
+    /// reference, and because of this, we encounter a compile error
+    /// indicating the variable has been moved.
+    /// The workaround is pretty simple:
+    ///	Wrap the [`Sender`] inside an `Option`, so we can use [`std::mem::take`]
+    ///	to replace our sender with a default value (in our case, `None`)
+    ///	and allow the sender to consume itself peacefully.
     refresh_tx: Option<Sender<()>>
 }
 
@@ -118,11 +115,10 @@ impl Drop for OtrApiClient {
     fn drop(&mut self) {
         if let Some(tx) = std::mem::take(&mut self.refresh_tx) {
             // Dropping error because either `Ok` or `Err` indicates
-            // that worker and loop is stoped
-            // Ok - means channel is read and loop is stopped
-            // Err - means Receiver was somehow dropped beforehand
-            // which means that worker is not running under any
-            // circumstances
+            // that the worker and loop are stopped.
+            // Ok - means the channel is read and the loop is stopped.
+            // Err - means the receiver was somehow dropped beforehand,
+            // which means that the worker is not running under any circumstances.
             let _ = tx.send(());
         }
     }
