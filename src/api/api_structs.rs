@@ -5,8 +5,16 @@ use crate::model::structures::{mode::Mode, scoring_type::ScoringType, team_type:
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct LoginResponse {
-    pub token: String
+pub struct OAuthResponse {
+    #[serde(rename = "accessToken")]
+    pub token: String,
+
+    #[serde(rename = "refreshToken")]
+    pub refresh_token: String,
+
+    /// Expire time in seconds
+    #[serde(rename = "accessExpiration")]
+    pub expire_in: u32
 }
 
 #[derive(Debug, Serialize, Deserialize)]
