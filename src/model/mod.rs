@@ -277,6 +277,10 @@ pub fn calc_ratings(
             // Uses start_time as end_time can be null (issue on osu-web side)
             decay_tracker.record_activity(rating_prior.player_id, curr_match.mode, start_time);
 
+            let global_rank_before = get_global_rank(&rating_prior.rating.mu, &rating_prior.player_id, &initial_ratings);
+            let country_rank_before = get_country_rank(&rating_prior.rating.mu, &rating_prior.player_id, &country_mapping, &initial_ratings);
+            let percentile_before = get_percentile(global_rank_before, initial_ratings.len() as i32);
+
             let adjustment = MatchRatingStats {
                 player_id: rating_prior.player_id,
                 match_id: curr_match.match_id as i32,
@@ -287,13 +291,13 @@ pub fn calc_ratings(
                 volatility_before: rating_prior.rating.sigma,
                 volatility_after: 0.0,
                 volatility_change: 0.0,
-                global_rank_before: 0,
+                global_rank_before,
                 global_rank_after: 0,
                 global_rank_change: 0,
-                country_rank_before: 0,
+                country_rank_before,
                 country_rank_after: 0,
                 country_rank_change: 0,
-                percentile_before: 0.0,
+                percentile_before,
                 percentile_after: 0.0,
                 percentile_change: 0.0,
                 average_teammate_rating: average_t_rating,
@@ -345,18 +349,23 @@ pub fn calc_ratings(
                 new_rating.rating.mu = 100.0;
             }
 
+
+            let global_rank_after = get_global_rank(&new_rating.rating.mu, &new_rating.player_id, &initial_ratings);
+            let country_rank_after = get_country_rank(&new_rating.rating.mu, &new_rating.player_id, &country_mapping, &initial_ratings);
+            let percentile_after = get_percentile(global_rank_after, initial_ratings.len() as i32);
+
             // get new global/country ranks and percentiles
             stats.entry(curr_id).and_modify(|f| {
                 f.rating_after = new_rating.rating.mu;
                 f.volatility_after = new_rating.rating.sigma;
-                // f.country_rank_after = new_country_rank
-                // f.global_rank_after = new_global_rank
-                // f.percentile_after = new_percentile
+                f.country_rank_after = country_rank_after;
+                f.global_rank_after = global_rank_after;
+                f.percentile_after = percentile_after;
                 f.rating_change = f.rating_after - f.rating_before;
                 f.volatility_change = f.volatility_after - f.volatility_before;
-                // f.global_rank_change = f.global_rank_after - f.global_rank_before;
-                // f.country_rank_change = f.country_rank_after - f.country_rank_before;
-                // f.percentile_change = f.percentile_after - f.percentile_before;
+                f.global_rank_change = f.global_rank_after - f.global_rank_before;
+                f.country_rank_change = f.country_rank_after - f.country_rank_before;
+                f.percentile_change = f.percentile_after - f.percentile_before;
             });
         }
         rating_stats.extend(stats.into_values());
@@ -404,6 +413,42 @@ pub fn calc_ratings(
         rating_stats,
         adjustments,
     }
+}
+fn get_percentile(rank: i32, player_count: i32) -> f64 {
+    let res = (rank / player_count) as f64;
+    // println!("percentile: {:?}", res);
+    res
+}
+
+fn get_country_rank(mu: &f64, player_id: &i32, country_mapping: &&HashMap<i32, String>, existing_ratings: &&Vec<PlayerRating>) -> i32 {
+    let mut ratings: Vec<f64> = existing_ratings
+        .clone()
+        .iter()
+        .filter(|r| r.player_id != *player_id
+            && country_mapping.get(player_id) == country_mapping.get(&r.player_id))
+        .map(|r| r.rating.mu).collect();
+    ratings.push(*mu);
+    ratings.sort_by(|x, y| x.partial_cmp(y).unwrap());
+    ratings.reverse();
+    for (rank, mu_iter) in ratings.iter().enumerate() {
+        if mu == mu_iter {
+            return (rank + 1) as i32
+        }
+    }
+    return 0;
+}
+
+fn get_global_rank(mu: &f64, player_id: &i32, existing_ratings: &&Vec<PlayerRating>) -> i32 {
+    let mut ratings: Vec<f64> = existing_ratings.clone().iter().filter(|r| r.player_id != *player_id).map(|r| r.rating.mu).collect();
+    ratings.push(*mu);
+    ratings.sort_by(|x, y| x.partial_cmp(y).unwrap());
+    ratings.reverse();
+    for (rank, mu_iter) in ratings.iter().enumerate() {
+        if mu == mu_iter {
+            return (rank + 1) as i32
+        }
+    }
+    return 0;
 }
 
 fn push_team_rating(ratings_hash: &mut HashMap<(i32, Mode), PlayerRating>, curr_match: &Match, teammate_list: Vec<i32>, teammate: &mut Vec<f64>) {
@@ -773,12 +818,12 @@ mod tests {
 
         // Percentile before
         // Worst in the collection (before match takes place)
-        assert_eq!(winner_stats.percentile_before, 0.0);
+        assert_eq!(winner_stats.percentile_before, 1.0, "Winner's percentile before is {}, should be {}", winner_stats.percentile_before, 1.0);
         // Best in the collection
-        assert_eq!(loser_stats.percentile_before, 1.0);
+        assert_eq!(loser_stats.percentile_before, 0.0, "Loser's percentile before is {}, should be {}", loser_stats.percentile_before, 0.0);
 
         // Percentile after (upset, so reverse the percentiles)
-        assert_eq!(loser_stats.percentile_after, 0.0);
-        assert_eq!(winner_stats.percentile_before, 1.0);
+        assert_eq!(winner_stats.percentile_after, 0.0, "Winner's percentile after is {:?}, should be {:?}", winner_stats.percentile_after, 0.0);
+        assert_eq!(loser_stats.percentile_after, 1.0, "Loser's percentile after is {:?}, should be {:?}", loser_stats.percentile_after, 1.0);
     }
 }
