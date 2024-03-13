@@ -668,7 +668,7 @@ mod tests {
             game_id: 0,
             play_mode: Mode::Osu,
             scoring_type: ScoringType::ScoreV2,
-            team_type: TeamType::TeamVs,
+            team_type: TeamType::HeadToHead,
             start_time,
             end_time,
             beatmap: Some(beatmap),
