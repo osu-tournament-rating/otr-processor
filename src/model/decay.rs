@@ -1,15 +1,18 @@
-use std::collections::HashMap;
+use crate::{
+    api::api_structs::RatingAdjustment,
+    model::{constants, structures::mode::Mode}
+};
 use chrono::{DateTime, FixedOffset};
-use crate::{api::api_structs::RatingAdjustment, model::{constants, structures::mode::Mode}};
+use std::collections::HashMap;
 /// Tracks decay activity for players
 pub struct DecayTracker {
-    last_play_time: HashMap<(i32, Mode), DateTime<FixedOffset>>,
+    last_play_time: HashMap<(i32, Mode), DateTime<FixedOffset>>
 }
 
 impl DecayTracker {
     pub fn new() -> DecayTracker {
         DecayTracker {
-            last_play_time: HashMap::new(),
+            last_play_time: HashMap::new()
         }
     }
     pub fn record_activity(&mut self, player_id: i32, mode: Mode, time: DateTime<FixedOffset>) {
@@ -41,7 +44,7 @@ impl DecayTracker {
         mode: Mode,
         mu: f64,
         sigma: f64,
-        d: DateTime<FixedOffset>,
+        d: DateTime<FixedOffset>
     ) -> Option<Vec<RatingAdjustment>> {
         let last_play_time = self.last_play_time.get(&(player_id, mode)).unwrap();
         let decay_weeks = Self::n_decay(d, *last_play_time);
@@ -70,7 +73,7 @@ impl DecayTracker {
                 volatility_before: sigma,
                 volatility_after: new_sigma,
                 rating_adjustment_type: 0,
-                timestamp: now,
+                timestamp: now
             };
 
             adjustments.push(adjustment);
@@ -117,10 +120,14 @@ pub fn decay_mu(mu: f64) -> f64 {
 
 #[cfg(test)]
 mod tests {
-    use std::ops::Add;
+    use crate::model::{
+        constants,
+        constants::MULTIPLIER,
+        decay::{decay_mu, decay_sigma, is_decay_possible, DecayTracker},
+        structures::mode::Mode
+    };
     use chrono::DateTime;
-    use crate::model::{decay::{decay_mu, decay_sigma, DecayTracker, is_decay_possible}, constants, structures::mode::Mode};
-    use crate::model::constants::MULTIPLIER;
+    use std::ops::Add;
 
     #[test]
     fn test_decay() {

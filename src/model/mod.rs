@@ -4,29 +4,30 @@ mod decay;
 mod recalc_helpers;
 pub mod structures;
 
-
-use statrs::statistics::Statistics;
-use statrs::distribution::{ContinuousCDF, Normal};
-use std::collections::{HashMap, HashSet};
+use crate::{
+    api::api_structs::{Game, Match, MatchRatingStats, MatchScore, Player, RatingAdjustment},
+    model::{
+        decay::{is_decay_possible, DecayTracker},
+        structures::{
+            match_cost::MatchCost, mode::Mode, player_rating::PlayerRating,
+            rating_calculation_result::RatingCalculationResult, team_type::TeamType
+        }
+    },
+    utils::progress_utils::progress_bar
+};
 use chrono::Utc;
-use openskill::model::model::Model;
-use openskill::model::plackett_luce::PlackettLuce;
-use openskill::rating::{default_gamma, Rating};
-use crate::api::api_structs::{Game, Match, MatchRatingStats, MatchScore, Player, RatingAdjustment};
-use crate::model::decay::{DecayTracker, is_decay_possible};
-use crate::model::structures::match_cost::MatchCost;
-use crate::model::structures::mode::Mode;
-use crate::model::structures::player_rating::PlayerRating;
-use crate::model::structures::rating_calculation_result::RatingCalculationResult;
-use crate::model::structures::team_type::TeamType;
-use crate::utils::progress_utils::progress_bar;
+use openskill::{
+    model::{model::Model, plackett_luce::PlackettLuce},
+    rating::{default_gamma, Rating}
+};
+use statrs::{
+    distribution::{ContinuousCDF, Normal},
+    statistics::Statistics
+};
+use std::collections::{HashMap, HashSet};
 
 pub fn create_model() -> PlackettLuce {
-    PlackettLuce::new(
-        constants::BETA,
-        constants::KAPPA,
-        default_gamma
-    )
+    PlackettLuce::new(constants::BETA, constants::KAPPA, default_gamma)
 }
 
 // Rating generation
@@ -65,7 +66,7 @@ pub fn create_initial_ratings(matches: &Vec<Match>, players: &Vec<Player>) -> Ve
                     Mode::Osu => player.earliest_osu_global_rank.or(player.rank_standard),
                     Mode::Taiko => player.earliest_taiko_global_rank.or(player.rank_taiko),
                     Mode::Catch => player.earliest_catch_global_rank.or(player.rank_catch),
-                    Mode::Mania => player.earliest_mania_global_rank.or(player.rank_mania),
+                    Mode::Mania => player.earliest_mania_global_rank.or(player.rank_mania)
                 };
 
                 let mu;
@@ -88,7 +89,7 @@ pub fn create_initial_ratings(matches: &Vec<Match>, players: &Vec<Player>) -> Ve
                 let player_rating = PlayerRating {
                     player_id: score.player_id,
                     mode,
-                    rating,
+                    rating
                 };
                 ratings.push(player_rating);
 
@@ -107,7 +108,7 @@ pub fn calc_ratings(
     initial_ratings: &Vec<PlayerRating>,
     country_mapping: &HashMap<i32, String>,
     matches: &Vec<Match>,
-    model: &PlackettLuce,
+    model: &PlackettLuce
 ) -> RatingCalculationResult {
     // Key = (player_id, mode as i32)
     // Value = Associated PlayerRating (if available)
@@ -135,24 +136,20 @@ pub fn calc_ratings(
 
     for curr_match in matches {
         // Skip any match where expected ruleset of games doesn't match the declared one
-        if curr_match
-            .games
-            .iter()
-            .any(|game| game.play_mode != curr_match.mode)
-        {
+        if curr_match.games.iter().any(|game| game.play_mode != curr_match.mode) {
             continue;
         }
         // Obtain all player match costs
         // Skip the match if there are no valid match costs
         let mut match_costs = match match_costs(&curr_match.games) {
             Some(mc) => mc,
-            None => continue,
+            None => continue
         };
         // Start time of the match
         // Skip the match if not defined
         let start_time = match curr_match.start_time {
             Some(t) => t,
-            None => continue,
+            None => continue
         };
         // Collection of match ratings
         // Key = player_id
@@ -168,11 +165,10 @@ pub fn calc_ratings(
             }
 
             // Get user's current rating
-            let mut rating_prior =
-                match ratings_hash.get_mut(&(match_cost.player_id, curr_match.mode)) {
-                    None => panic!("No rating found?"),
-                    Some(rate) => rate.clone(),
-                };
+            let mut rating_prior = match ratings_hash.get_mut(&(match_cost.player_id, curr_match.mode)) {
+                None => panic!("No rating found?"),
+                Some(rate) => rate.clone()
+            };
             // If decay is possible, apply it to rating_prior
             if is_decay_possible(rating_prior.rating.mu) {
                 let adjustment = decay_tracker.decay(
@@ -180,18 +176,19 @@ pub fn calc_ratings(
                     curr_match.mode,
                     rating_prior.rating.mu,
                     rating_prior.rating.sigma,
-                    start_time,
+                    start_time
                 );
                 match adjustment {
                     Some(mut adj) => {
                         rating_prior.rating.mu = adj[adj.len() - 1].rating_after;
                         rating_prior.rating.sigma = adj[adj.len() - 1].volatility_after;
                         // Save all rating adjustments for graph displays in the front end
-                        rating_adjustments_hash.entry(match_cost.player_id)
+                        rating_adjustments_hash
+                            .entry(match_cost.player_id)
                             .and_modify(|a| a.append(&mut adj))
                             .or_insert(adj);
                     }
-                    None => (),
+                    None => ()
                 }
             }
             to_rate.push(rating_prior.clone());
@@ -224,36 +221,27 @@ pub fn calc_ratings(
                 let mut curr_player_team = 1;
                 // Find first Game in the Match where the player exists
                 for game in &curr_match.games {
-                    let game_with_player = game.match_scores
-                        .iter()
-                        .find(|x| x.player_id == rating_prior.player_id);
+                    let game_with_player = game.match_scores.iter().find(|x| x.player_id == rating_prior.player_id);
                     match game_with_player {
                         Some(g) => {
                             curr_player_team = g.team;
                             break;
-                        },
-                        None => continue,
+                        }
+                        None => continue
                     }
                 }
 
                 // Get IDs of all users in player's team and the opposite team
-                let (mut teammate_list, mut opponent_list):
-                    (Vec<MatchScore>, Vec<MatchScore>) = curr_match
+                let (mut teammate_list, mut opponent_list): (Vec<MatchScore>, Vec<MatchScore>) = curr_match
                     .games
                     .iter()
                     .map(|f| f.match_scores.clone())
                     .flatten()
                     .partition(|score| score.team == curr_player_team);
 
-                let mut teammate_list: Vec<i32> = teammate_list
-                    .iter()
-                    .map(|player| player.player_id)
-                    .collect();
+                let mut teammate_list: Vec<i32> = teammate_list.iter().map(|player| player.player_id).collect();
 
-                let mut opponent_list: Vec<i32> = opponent_list
-                    .iter()
-                    .map(|player| player.player_id)
-                    .collect();
+                let mut opponent_list: Vec<i32> = opponent_list.iter().map(|player| player.player_id).collect();
 
                 teammate_list.sort();
                 teammate_list.dedup();
@@ -282,8 +270,14 @@ pub fn calc_ratings(
             // Uses start_time as end_time can be null (issue on osu-web side)
             decay_tracker.record_activity(rating_prior.player_id, curr_match.mode, start_time);
 
-            let global_rank_before = get_global_rank(&rating_prior.rating.mu, &rating_prior.player_id, &initial_ratings);
-            let country_rank_before = get_country_rank(&rating_prior.rating.mu, &rating_prior.player_id, &country_mapping, &initial_ratings);
+            let global_rank_before =
+                get_global_rank(&rating_prior.rating.mu, &rating_prior.player_id, &initial_ratings);
+            let country_rank_before = get_country_rank(
+                &rating_prior.rating.mu,
+                &rating_prior.player_id,
+                &country_mapping,
+                &initial_ratings
+            );
             let percentile_before = get_percentile(global_rank_before, initial_ratings.len() as i32);
 
             let adjustment = MatchRatingStats {
@@ -306,23 +300,20 @@ pub fn calc_ratings(
                 percentile_after: 0.0,
                 percentile_change: 0.0,
                 average_teammate_rating: average_t_rating,
-                average_opponent_rating: average_o_rating,
+                average_opponent_rating: average_o_rating
             };
 
             stats.insert(rating_prior.player_id, adjustment);
         }
         // Sort rated players and their matchcosts by player IDs for correct mappings
         to_rate.sort_by(|x, y| x.player_id.cmp(&y.player_id));
-        match_costs.sort_by(|x,y| x.player_id.cmp(&y.player_id));
+        match_costs.sort_by(|x, y| x.player_id.cmp(&y.player_id));
 
         // Variable names are used according to the function signature for easier referencing
 
         // Model ratings require a vector of teams to be passed, but matches are considered as FFA
         // so we need to consider every player as a one-man team
-        let teams: Vec<Vec<Rating>> = to_rate
-            .iter()
-            .map(|player| vec![player.rating.clone()])
-            .collect();
+        let teams: Vec<Vec<Rating>> = to_rate.iter().map(|player| vec![player.rating.clone()]).collect();
         // Match costs are floats, but since we only need their order,
         // mapping them this way with precision loss should be fine
         let ranks: Vec<usize> = match_costs
@@ -332,18 +323,16 @@ pub fn calc_ratings(
             .collect();
         let model_rating = model.rate(teams, ranks);
         // Apply resulting ratings to the players
-        let flattened_ratings: Vec<Rating> = model_rating
-            .into_iter()
-            .flatten()
-            .collect();
+        let flattened_ratings: Vec<Rating> = model_rating.into_iter().flatten().collect();
         for (idx, player) in to_rate.iter_mut().enumerate() {
             player.rating = flattened_ratings[idx].clone();
         }
 
         for rating in to_rate {
-            ratings_hash.entry((rating.player_id, rating.mode)).and_modify(|mut f| *f = rating);
+            ratings_hash
+                .entry((rating.player_id, rating.mode))
+                .and_modify(|mut f| *f = rating);
         }
-
 
         for mc in match_costs {
             let curr_id = mc.player_id;
@@ -354,9 +343,13 @@ pub fn calc_ratings(
                 new_rating.rating.mu = 100.0;
             }
 
-
             let global_rank_after = get_global_rank(&new_rating.rating.mu, &new_rating.player_id, &initial_ratings);
-            let country_rank_after = get_country_rank(&new_rating.rating.mu, &new_rating.player_id, &country_mapping, &initial_ratings);
+            let country_rank_after = get_country_rank(
+                &new_rating.rating.mu,
+                &new_rating.player_id,
+                &country_mapping,
+                &initial_ratings
+            );
             let percentile_after = get_percentile(global_rank_after, initial_ratings.len() as i32);
 
             // get new global/country ranks and percentiles
@@ -388,14 +381,14 @@ pub fn calc_ratings(
         if is_decay_possible(mu) {
             // As all matches prior are processed, we can use current time to apply decay
             let curr_time = Utc::now();
-            let decays = match decay_tracker
-                .decay(*player_id, *gamemode, mu, sigma, curr_time.into()) {
+            let decays = match decay_tracker.decay(*player_id, *gamemode, mu, sigma, curr_time.into()) {
                 Some(adj) => {
-                    rating_adjustments_hash.entry(*player_id)
+                    rating_adjustments_hash
+                        .entry(*player_id)
                         .and_modify(|a| a.extend(adj.clone().into_iter()));
                     Some(adj)
-                },
-                None => None,
+                }
+                None => None
             };
 
             // If decays exist, apply them
@@ -416,7 +409,7 @@ pub fn calc_ratings(
     RatingCalculationResult {
         base_ratings,
         rating_stats,
-        adjustments,
+        adjustments
     }
 }
 fn get_percentile(rank: i32, player_count: i32) -> f64 {
@@ -425,44 +418,59 @@ fn get_percentile(rank: i32, player_count: i32) -> f64 {
     res
 }
 
-fn get_country_rank(mu: &f64, player_id: &i32, country_mapping: &&HashMap<i32, String>, existing_ratings: &&Vec<PlayerRating>) -> i32 {
+fn get_country_rank(
+    mu: &f64,
+    player_id: &i32,
+    country_mapping: &&HashMap<i32, String>,
+    existing_ratings: &&Vec<PlayerRating>
+) -> i32 {
     let mut ratings: Vec<f64> = existing_ratings
         .clone()
         .iter()
-        .filter(|r| r.player_id != *player_id
-            && country_mapping.get(player_id) == country_mapping.get(&r.player_id))
-        .map(|r| r.rating.mu).collect();
+        .filter(|r| r.player_id != *player_id && country_mapping.get(player_id) == country_mapping.get(&r.player_id))
+        .map(|r| r.rating.mu)
+        .collect();
     ratings.push(*mu);
     ratings.sort_by(|x, y| x.partial_cmp(y).unwrap());
     ratings.reverse();
     for (rank, mu_iter) in ratings.iter().enumerate() {
         if mu == mu_iter {
-            return (rank + 1) as i32
+            return (rank + 1) as i32;
         }
     }
     return 0;
 }
 
 fn get_global_rank(mu: &f64, player_id: &i32, existing_ratings: &&Vec<PlayerRating>) -> i32 {
-    let mut ratings: Vec<f64> = existing_ratings.clone().iter().filter(|r| r.player_id != *player_id).map(|r| r.rating.mu).collect();
+    let mut ratings: Vec<f64> = existing_ratings
+        .clone()
+        .iter()
+        .filter(|r| r.player_id != *player_id)
+        .map(|r| r.rating.mu)
+        .collect();
     ratings.push(*mu);
     ratings.sort_by(|x, y| x.partial_cmp(y).unwrap());
     ratings.reverse();
     for (rank, mu_iter) in ratings.iter().enumerate() {
         if mu == mu_iter {
-            return (rank + 1) as i32
+            return (rank + 1) as i32;
         }
     }
     return 0;
 }
 
-fn push_team_rating(ratings_hash: &mut HashMap<(i32, Mode), PlayerRating>, curr_match: &Match, teammate_list: Vec<i32>, teammate: &mut Vec<f64>) {
+fn push_team_rating(
+    ratings_hash: &mut HashMap<(i32, Mode), PlayerRating>,
+    curr_match: &Match,
+    teammate_list: Vec<i32>,
+    teammate: &mut Vec<f64>
+) {
     for id in teammate_list {
         let teammate_id = id;
         let mode = curr_match.mode;
         let rating = match ratings_hash.get(&(teammate_id, mode)) {
             Some(r) => r.rating.mu,
-            None => todo!("This player is not in the hashmap"),
+            None => todo!("This player is not in the hashmap")
         };
         teammate.push(rating)
     }
@@ -549,7 +557,7 @@ pub fn match_costs(games: &[Game]) -> Option<Vec<MatchCost>> {
 
         let mc = MatchCost {
             player_id,
-            match_cost: result,
+            match_cost: result
         };
 
         match_costs.push(mc);
@@ -575,16 +583,16 @@ pub fn mu_for_rank(rank: i32) -> f64 {
 
 #[cfg(test)]
 mod tests {
+    use crate::{
+        api::api_structs::{Beatmap, Game, Match, MatchScore},
+        model::{
+            calc_ratings, mu_for_rank,
+            structures::{mode::Mode, player_rating::PlayerRating, scoring_type::ScoringType, team_type::TeamType}
+        }
+    };
+    use chrono::DateTime;
+    use openskill::{model::model::Model, rating::Rating};
     use std::collections::HashMap;
-    use chrono::{DateTime};
-    use openskill::model::model::Model;
-    use openskill::rating::Rating;
-    use crate::api::api_structs::{Beatmap, Game, Match, MatchScore};
-    use crate::model::{calc_ratings, mu_for_rank};
-    use crate::model::structures::mode::Mode;
-    use crate::model::structures::player_rating::PlayerRating;
-    use crate::model::structures::scoring_type::ScoringType;
-    use crate::model::structures::team_type::TeamType;
 
     #[test]
     fn mu_for_rank_returns_correct_min() {
@@ -647,22 +655,19 @@ mod tests {
                     // but player 1 wins. Thus, we simulate an upset and
                     // associated stat changes
                     mu: 1500.0 - i as f64,
-                    sigma: 200.0,
+                    sigma: 200.0
                 }
             })
         }
 
-        /*
-        Create a match with the following structure:
-        - Match
-            - Game
-                - MatchScore (Player 0, Team 1, Score 525000)
-                - MatchScore (Player 1, Team 2, Score 525001)
-         */
+        // Create a match with the following structure:
+        // - Match
+        // - Game
+        // - MatchScore (Player 0, Team 1, Score 525000)
+        // - MatchScore (Player 1, Team 2, Score 525001)
         let mut matches = Vec::new();
 
-        let start_time = DateTime::parse_from_rfc3339("2021-01-01T00:00:00+00:00")
-            .unwrap();
+        let start_time = DateTime::parse_from_rfc3339("2021-01-01T00:00:00+00:00").unwrap();
         let end_time = Some(start_time); // Assuming end_time is the same as start_time for demonstration
 
         let beatmap = Beatmap {
@@ -679,7 +684,7 @@ mod tests {
             drain_time: 160.0,
             length: 165.0,
             title: "Testing".to_string(),
-            diff_name: Some("Testing".to_string()),
+            diff_name: Some("Testing".to_string())
         };
 
         let mut match_scores = Vec::new();
@@ -692,18 +697,18 @@ mod tests {
             accuracy_standard: 100.0,
             accuracy_taiko: 0.0,
             accuracy_catch: 0.0,
-            accuracy_mania: 0.0,
+            accuracy_mania: 0.0
         });
         match_scores.push(MatchScore {
             player_id: 1,
-            team: 2, // Red
+            team: 2,       // Red
             score: 525001, // +1 score from blue. Should be the winner.
             enabled_mods: None,
             misses: 0,
             accuracy_standard: 100.0,
             accuracy_taiko: 0.0,
             accuracy_catch: 0.0,
-            accuracy_mania: 0.0,
+            accuracy_mania: 0.0
         });
 
         let game = Game {
@@ -716,7 +721,7 @@ mod tests {
             end_time,
             beatmap: Some(beatmap),
             match_scores,
-            mods: 0,
+            mods: 0
         };
 
         let mut games = Vec::new();
@@ -729,7 +734,7 @@ mod tests {
             mode: Mode::Osu,
             start_time: Some(start_time),
             end_time: None,
-            games,
+            games
         };
 
         matches.push(match_instance);
@@ -739,65 +744,172 @@ mod tests {
 
         let model = super::create_model();
         let expected_outcome = model.rate(
-            vec![vec![Rating {
-                mu: 1500.0,
-                sigma: 200.0,
-            }],
-            vec![Rating {
-                mu: 1500.0,
-                sigma: 200.0,
-            }]], vec![winner_id, loser_id]);
+            vec![
+                vec![Rating {
+                    mu: 1500.0,
+                    sigma: 200.0
+                }],
+                vec![Rating {
+                    mu: 1500.0,
+                    sigma: 200.0
+                }],
+            ],
+            vec![winner_id, loser_id]
+        );
 
         let loser_expected_outcome = &expected_outcome[loser_id][0];
         let winner_expected_outcome = &expected_outcome[winner_id][0];
 
         let result = calc_ratings(&initial_ratings, &country_mapping, &matches, &model);
-        let loser_stats = result.rating_stats.iter().find(|x| x.player_id == loser_id as i32).unwrap();
-        let winner_stats = result.rating_stats.iter().find(|x| x.player_id == winner_id as i32).unwrap();
+        let loser_stats = result
+            .rating_stats
+            .iter()
+            .find(|x| x.player_id == loser_id as i32)
+            .unwrap();
+        let winner_stats = result
+            .rating_stats
+            .iter()
+            .find(|x| x.player_id == winner_id as i32)
+            .unwrap();
 
-        assert_eq!(result.base_ratings.len(), 2, "There are {} base ratings, should be {}", result.base_ratings.len(), 2);
-        assert_eq!(result.rating_stats.len(), 2, "There are {} rating stats, should be {}", result.rating_stats.len(), 2);
-        assert_eq!(result.adjustments.len(), 0, "There are {} rating adjustments, should be {}", result.adjustments.len(), 0);
+        assert_eq!(
+            result.base_ratings.len(),
+            2,
+            "There are {} base ratings, should be {}",
+            result.base_ratings.len(),
+            2
+        );
+        assert_eq!(
+            result.rating_stats.len(),
+            2,
+            "There are {} rating stats, should be {}",
+            result.rating_stats.len(),
+            2
+        );
+        assert_eq!(
+            result.adjustments.len(),
+            0,
+            "There are {} rating adjustments, should be {}",
+            result.adjustments.len(),
+            0
+        );
 
         // TODO: Test can be extended to accomodate other stats etc.
 
         // Ensure match cost of winner is > loser
-        assert!(winner_stats.match_cost > loser_stats.match_cost, "loser's match cost is higher");
+        assert!(
+            winner_stats.match_cost > loser_stats.match_cost,
+            "loser's match cost is higher"
+        );
 
         // Average teammate ratings (None because 1v1)
-        assert_eq!(loser_stats.average_teammate_rating, None, "Loser's teammate rating should be None");
-        assert_eq!(winner_stats.average_teammate_rating, None, "Winner's teammate rating should be None");
+        assert_eq!(
+            loser_stats.average_teammate_rating, None,
+            "Loser's teammate rating should be None"
+        );
+        assert_eq!(
+            winner_stats.average_teammate_rating, None,
+            "Winner's teammate rating should be None"
+        );
 
         // TODO: Figure out why the differences are this large
 
         // Expected mu = actual mu
-        assert!((loser_expected_outcome.mu - loser_stats.rating_after).abs() < 1.0, "Loser's rating is {}, should be {}", loser_stats.rating_after, loser_expected_outcome.mu);
-        assert!((loser_expected_outcome.sigma - loser_stats.volatility_after).abs() < 1.0, "Loser's volatility is {}, should be {}", loser_stats.volatility_after, loser_expected_outcome.sigma);
+        assert!(
+            (loser_expected_outcome.mu - loser_stats.rating_after).abs() < 1.0,
+            "Loser's rating is {}, should be {}",
+            loser_stats.rating_after,
+            loser_expected_outcome.mu
+        );
+        assert!(
+            (loser_expected_outcome.sigma - loser_stats.volatility_after).abs() < 1.0,
+            "Loser's volatility is {}, should be {}",
+            loser_stats.volatility_after,
+            loser_expected_outcome.sigma
+        );
 
         // Expected sigma = actual sigma
-        assert!((winner_expected_outcome.mu - winner_stats.rating_after).abs() < 1.0, "Winner's rating is {}, should be {}", winner_stats.rating_after, winner_expected_outcome.mu);
-        assert!((winner_expected_outcome.sigma - winner_stats.volatility_after).abs() < 1.0, "Winner's volatility is {}, should be {}", winner_stats.volatility_after, winner_expected_outcome.sigma);
+        assert!(
+            (winner_expected_outcome.mu - winner_stats.rating_after).abs() < 1.0,
+            "Winner's rating is {}, should be {}",
+            winner_stats.rating_after,
+            winner_expected_outcome.mu
+        );
+        assert!(
+            (winner_expected_outcome.sigma - winner_stats.volatility_after).abs() < 1.0,
+            "Winner's volatility is {}, should be {}",
+            winner_stats.volatility_after,
+            winner_expected_outcome.sigma
+        );
 
         // mu before
-        assert_eq!(loser_stats.rating_before, 1500.0, "Loser's rating before is {}, should be {}", loser_stats.rating_before, 1500.0);
-        assert_eq!(winner_stats.rating_before, 1499.0, "Winner's rating before is {}, should be {}", winner_stats.rating_before, 1499.0);
+        assert_eq!(
+            loser_stats.rating_before, 1500.0,
+            "Loser's rating before is {}, should be {}",
+            loser_stats.rating_before, 1500.0
+        );
+        assert_eq!(
+            winner_stats.rating_before, 1499.0,
+            "Winner's rating before is {}, should be {}",
+            winner_stats.rating_before, 1499.0
+        );
 
         // sigma before
-        assert_eq!(loser_stats.volatility_before, 200.0, "Loser's volatility before is {}, should be {}", loser_stats.volatility_before, 200.0);
-        assert_eq!(winner_stats.volatility_before, 200.0, "Winner's volatility before is {}, should be {}", winner_stats.volatility_before, 200.0);
+        assert_eq!(
+            loser_stats.volatility_before, 200.0,
+            "Loser's volatility before is {}, should be {}",
+            loser_stats.volatility_before, 200.0
+        );
+        assert_eq!(
+            winner_stats.volatility_before, 200.0,
+            "Winner's volatility before is {}, should be {}",
+            winner_stats.volatility_before, 200.0
+        );
 
         // mu change
-        assert_eq!(loser_stats.rating_change, loser_stats.rating_after - loser_stats.rating_before, "Loser's rating change is {}, should be {}", loser_stats.rating_change, loser_stats.rating_after - loser_stats.rating_before);
-        assert_eq!(winner_stats.rating_change, winner_stats.rating_after - winner_stats.rating_before, "Winner's rating change is {}, should be {}", winner_stats.rating_change, winner_stats.rating_after - winner_stats.rating_before);
+        assert_eq!(
+            loser_stats.rating_change,
+            loser_stats.rating_after - loser_stats.rating_before,
+            "Loser's rating change is {}, should be {}",
+            loser_stats.rating_change,
+            loser_stats.rating_after - loser_stats.rating_before
+        );
+        assert_eq!(
+            winner_stats.rating_change,
+            winner_stats.rating_after - winner_stats.rating_before,
+            "Winner's rating change is {}, should be {}",
+            winner_stats.rating_change,
+            winner_stats.rating_after - winner_stats.rating_before
+        );
 
         // sigma change
-        assert_eq!(loser_stats.volatility_change, loser_stats.volatility_after - loser_stats.volatility_before, "Loser's volatility change is {}, should be {}", loser_stats.volatility_change, loser_stats.volatility_after - loser_stats.volatility_before);
-        assert_eq!(winner_stats.volatility_change, winner_stats.volatility_after - winner_stats.volatility_before, "Winner's volatility change is {}, should be {}", winner_stats.volatility_change, winner_stats.volatility_after - winner_stats.volatility_before);
+        assert_eq!(
+            loser_stats.volatility_change,
+            loser_stats.volatility_after - loser_stats.volatility_before,
+            "Loser's volatility change is {}, should be {}",
+            loser_stats.volatility_change,
+            loser_stats.volatility_after - loser_stats.volatility_before
+        );
+        assert_eq!(
+            winner_stats.volatility_change,
+            winner_stats.volatility_after - winner_stats.volatility_before,
+            "Winner's volatility change is {}, should be {}",
+            winner_stats.volatility_change,
+            winner_stats.volatility_after - winner_stats.volatility_before
+        );
 
         // global rank before -- remember, we are simulating an upset,
         // so the loser should have a higher initial rank than the winner.
-        assert_eq!(loser_stats.global_rank_before, 1, "Loser's rank before is {}, should be {}", loser_stats.global_rank_before, 1);
-        assert_eq!(winner_stats.global_rank_before, 2, "Winner's rank before is {}, should be {}", winner_stats.global_rank_before, 2);
+        assert_eq!(
+            loser_stats.global_rank_before, 1,
+            "Loser's rank before is {}, should be {}",
+            loser_stats.global_rank_before, 1
+        );
+        assert_eq!(
+            winner_stats.global_rank_before, 2,
+            "Winner's rank before is {}, should be {}",
+            winner_stats.global_rank_before, 2
+        );
 
         // global rank after
         // Player 1 ended up winning, so they should be rank 1 now.
@@ -805,8 +917,14 @@ mod tests {
         assert_eq!(winner_stats.global_rank_after, 1);
 
         // global rank change
-        assert_eq!(loser_stats.global_rank_change, loser_stats.global_rank_after - loser_stats.global_rank_before);
-        assert_eq!(winner_stats.global_rank_change, winner_stats.global_rank_after - winner_stats.global_rank_before);
+        assert_eq!(
+            loser_stats.global_rank_change,
+            loser_stats.global_rank_after - loser_stats.global_rank_before
+        );
+        assert_eq!(
+            winner_stats.global_rank_change,
+            winner_stats.global_rank_after - winner_stats.global_rank_before
+        );
 
         // country rank before
         assert_eq!(loser_stats.country_rank_before, 1);
@@ -818,17 +936,39 @@ mod tests {
         assert_eq!(winner_stats.country_rank_after, 1);
 
         // country rank change
-        assert_eq!(loser_stats.country_rank_change, loser_stats.country_rank_after - loser_stats.country_rank_before);
-        assert_eq!(winner_stats.country_rank_change, winner_stats.country_rank_after - winner_stats.country_rank_before);
+        assert_eq!(
+            loser_stats.country_rank_change,
+            loser_stats.country_rank_after - loser_stats.country_rank_before
+        );
+        assert_eq!(
+            winner_stats.country_rank_change,
+            winner_stats.country_rank_after - winner_stats.country_rank_before
+        );
 
         // Percentile before
         // Worst in the collection (before match takes place)
-        assert_eq!(winner_stats.percentile_before, 1.0, "Winner's percentile before is {}, should be {}", winner_stats.percentile_before, 1.0);
+        assert_eq!(
+            winner_stats.percentile_before, 1.0,
+            "Winner's percentile before is {}, should be {}",
+            winner_stats.percentile_before, 1.0
+        );
         // Best in the collection
-        assert_eq!(loser_stats.percentile_before, 0.0, "Loser's percentile before is {}, should be {}", loser_stats.percentile_before, 0.0);
+        assert_eq!(
+            loser_stats.percentile_before, 0.0,
+            "Loser's percentile before is {}, should be {}",
+            loser_stats.percentile_before, 0.0
+        );
 
         // Percentile after (upset, so reverse the percentiles)
-        assert_eq!(winner_stats.percentile_after, 0.0, "Winner's percentile after is {:?}, should be {:?}", winner_stats.percentile_after, 0.0);
-        assert_eq!(loser_stats.percentile_after, 1.0, "Loser's percentile after is {:?}, should be {:?}", loser_stats.percentile_after, 1.0);
+        assert_eq!(
+            winner_stats.percentile_after, 0.0,
+            "Winner's percentile after is {:?}, should be {:?}",
+            winner_stats.percentile_after, 0.0
+        );
+        assert_eq!(
+            loser_stats.percentile_after, 1.0,
+            "Loser's percentile after is {:?}, should be {:?}",
+            loser_stats.percentile_after, 1.0
+        );
     }
 }
