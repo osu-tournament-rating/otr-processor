@@ -130,7 +130,6 @@ pub fn calc_ratings(
 
     for curr_match in matches {
         // Skip any match where expected ruleset of games doesn't match the declared one
-        // TODO: Implement proper median
         if curr_match
             .games
             .iter()
@@ -200,15 +199,6 @@ pub fn calc_ratings(
                 .entry((match_cost.player_id, curr_match.mode))
                 .and_modify(|f| f.rating.mu = prior_mu);
             // REQ: get user's rankings from somewhere
-
-            // let rating_stats_before = rating_stats_hash.get(&rating_prior.player_id).unwrap();
-            // let current_player_index = rating_stats_before
-            //     .iter()
-            //     .position(|x| x.player_id == rating_prior.player_id)
-            //     .unwrap();
-            // let global_rank_before = rating_stats_before[current_player_index].global_rank_before;
-            // let country_rank_before = rating_stats_before[current_player_index].country_rank_before;
-            // let percentile_before = rating_stats_before[current_player_index].percentile_before;
 
             // Count all games with H2H vs non-H2H team types
             let mut team_based_count = 0;
@@ -712,47 +702,47 @@ mod tests {
         let loser_stats = result.rating_stats.iter().find(|x| x.player_id == loser_id as i32).unwrap();
         let winner_stats = result.rating_stats.iter().find(|x| x.player_id == winner_id as i32).unwrap();
 
-        assert_eq!(result.base_ratings.len(), 2);
-        assert_eq!(result.rating_stats.len(), 2);
-        assert_eq!(result.adjustments.len(), 0);
+        assert_eq!(result.base_ratings.len(), 2, "There are {} base ratings, should be {}", result.base_ratings.len(), 2);
+        assert_eq!(result.rating_stats.len(), 2, "There are {} rating stats, should be {}", result.rating_stats.len(), 2);
+        assert_eq!(result.adjustments.len(), 0, "There are {} rating adjustments, should be {}", result.adjustments.len(), 0);
 
         // TODO: Test can be extended to accomodate other stats etc.
 
         // Ensure match cost of winner is > loser
-        assert!(winner_stats.match_cost > loser_stats.match_cost);
+        assert!(winner_stats.match_cost > loser_stats.match_cost, "loser's match cost is higher");
 
         // Average teammate ratings (None because 1v1)
-        assert_eq!(loser_stats.average_teammate_rating, None);
-        assert_eq!(winner_stats.average_teammate_rating, None);
+        assert_eq!(loser_stats.average_teammate_rating, None, "Loser's teammate rating should be None");
+        assert_eq!(winner_stats.average_teammate_rating, None, "Winner's teammate rating should be None");
 
         // Expected mu = actual mu
-        assert_eq!(loser_expected_outcome.mu, loser_stats.rating_after);
-        assert_eq!(loser_expected_outcome.sigma, loser_stats.volatility_after);
+        assert_eq!(loser_expected_outcome.mu, loser_stats.rating_after, "Loser's rating is {}, should be {}", loser_stats.rating_after, loser_expected_outcome.mu);
+        assert_eq!(loser_expected_outcome.sigma, loser_stats.volatility_after, "Loser's volatility is {}, should be {}", loser_stats.volatility_after, loser_expected_outcome.sigma);
 
         // Expected sigma = actual sigma
-        assert_eq!(winner_expected_outcome.mu, winner_stats.rating_after);
-        assert_eq!(winner_expected_outcome.sigma, winner_stats.volatility_after);
+        assert_eq!(winner_expected_outcome.mu, winner_stats.rating_after, "Winner's rating is {}, should be {}", winner_stats.rating_after, winner_expected_outcome.mu);
+        assert_eq!(winner_expected_outcome.sigma, winner_stats.volatility_after, "Winner's volatility is {}, should be {}", winner_stats.volatility_after, winner_expected_outcome.sigma);
 
         // mu before
-        assert_eq!(loser_stats.rating_before, 1500.0);
-        assert_eq!(winner_stats.rating_before, 1499.0);
+        assert_eq!(loser_stats.rating_before, 1500.0, "Loser's rating before is {}, should be {}", loser_stats.rating_before, 1500.0);
+        assert_eq!(winner_stats.rating_before, 1499.0, "Winner's rating before is {}, should be {}", winner_stats.rating_before, 1499.0);
 
         // sigma before
-        assert_eq!(loser_stats.volatility_before, 200.0);
-        assert_eq!(winner_stats.volatility_before, 200.0);
+        assert_eq!(loser_stats.volatility_before, 200.0, "Loser's volatility before is {}, should be {}", loser_stats.volatility_before, 200.0);
+        assert_eq!(winner_stats.volatility_before, 200.0, "Winner's volatility before is {}, should be {}", winner_stats.volatility_before, 200.0);
 
         // mu change
-        assert_eq!(loser_stats.rating_change, loser_stats.rating_after - loser_stats.rating_before);
-        assert_eq!(winner_stats.rating_change, winner_stats.rating_after - winner_stats.rating_before);
+        assert_eq!(loser_stats.rating_change, loser_stats.rating_after - loser_stats.rating_before, "Loser's rating change is {}, should be {}", loser_stats.rating_change, loser_stats.rating_after - loser_stats.rating_before);
+        assert_eq!(winner_stats.rating_change, winner_stats.rating_after - winner_stats.rating_before, "Winner's rating change is {}, should be {}", winner_stats.rating_change, winner_stats.rating_after - winner_stats.rating_before);
 
         // sigma change
-        assert_eq!(loser_stats.volatility_change, loser_stats.volatility_after - loser_stats.volatility_before);
-        assert_eq!(winner_stats.volatility_change, winner_stats.volatility_after - winner_stats.volatility_before);
+        assert_eq!(loser_stats.volatility_change, loser_stats.volatility_after - loser_stats.volatility_before, "Loser's volatility change is {}, should be {}", loser_stats.volatility_change, loser_stats.volatility_after - loser_stats.volatility_before);
+        assert_eq!(winner_stats.volatility_change, winner_stats.volatility_after - winner_stats.volatility_before, "Winner's volatility change is {}, should be {}", winner_stats.volatility_change, winner_stats.volatility_after - winner_stats.volatility_before);
 
         // global rank before -- remember, we are simulating an upset,
         // so the loser should have a higher initial rank than the winner.
-        assert_eq!(loser_stats.global_rank_before, 1);
-        assert_eq!(winner_stats.global_rank_before, 2);
+        assert_eq!(loser_stats.global_rank_before, 1, "Loser's rank before is {}, should be {}", loser_stats.global_rank_before, 1);
+        assert_eq!(winner_stats.global_rank_before, 2, "Winner's rank before is {}, should be {}", winner_stats.global_rank_before, 2);
 
         // global rank after
         // Player 1 ended up winning, so they should be rank 1 now.
