@@ -46,8 +46,17 @@ impl DecayTracker {
         sigma: f64,
         d: DateTime<FixedOffset>,
     ) -> Option<Vec<RatingAdjustment>> {
-        let last_play_time = self.last_play_time.get(&(player_id, mode)).unwrap();
-        let decay_weeks = Self::n_decay(d, *last_play_time);
+        let last_play_time = self.last_play_time.get(&(player_id, mode));
+        match last_play_time {
+            None => return None,
+            Some(t) => {
+                if d < *t {
+                    return None;
+                }
+            }
+        }
+
+        let decay_weeks = Self::n_decay(d, *last_play_time.unwrap());
 
         if decay_weeks < 1 {
             return None;
@@ -59,7 +68,7 @@ impl DecayTracker {
 
         for i in 0..decay_weeks {
             // Increment time by 7 days for each decay application (this is for accurate timestamps)
-            let now = last_play_time.fixed_offset() + chrono::Duration::days(i * 7);
+            let now = last_play_time.unwrap().fixed_offset() + chrono::Duration::days(i * 7);
             new_mu = decay_mu(new_mu);
             new_sigma = decay_sigma(new_sigma);
 
