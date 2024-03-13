@@ -104,16 +104,16 @@ pub struct OtrApiClient {
     /// reference, and because of this, we encounter a compile error
     /// indicating the variable has been moved.
     /// The workaround is pretty simple:
-    ///	Wrap the [`Sender`] inside an `Option`, so we can use [`std::mem::take`]
-    ///	to replace our sender with a default value (in our case, `None`)
-    ///	and allow the sender to consume itself peacefully.
+    /// 	Wrap the [`Sender`] inside an `Option`, so we can use [`std::mem::take`]
+    /// 	to replace our sender with a default value (in our case, [`None`])
+    /// 	and allow the sender to consume itself peacefully.
     refresh_tx: Option<Sender<()>>
 }
 
 impl Drop for OtrApiClient {
     fn drop(&mut self) {
         if let Some(tx) = std::mem::take(&mut self.refresh_tx) {
-            // Dropping error because either `Ok` or `Err` indicates
+            // Dropping send() result because either `Ok` or `Err` indicates
             // that the worker and loop are stopped.
             // Ok - means the channel is read and the loop is stopped.
             // Err - means the receiver was somehow dropped beforehand,
@@ -308,7 +308,7 @@ impl OtrApiClient {
         self.make_request(Method::GET, link).await
     }
 
-    // Get list of players
+    /// Get list of players
     pub async fn get_players(&self) -> Result<Vec<Player>, Error> {
         let link = "/v1/players/ranks/all";
 
@@ -319,7 +319,7 @@ impl OtrApiClient {
 #[cfg(test)]
 mod api_client_tests {
     use httpmock::prelude::*;
-    use serde_json::{json, Value};
+    use serde_json::json;
     use std::time::Duration;
 
     use async_once_cell::OnceCell;
@@ -411,12 +411,8 @@ mod api_client_tests {
         let initial_token = lock.token.clone();
         drop(lock);
 
-        // Sleeps added here to avoid getting same token
-        // because it runs too fast (maybe it's a bug?)
         let first_token = manually_refresh_token!(api);
-        tokio::time::sleep(Duration::from_secs(1)).await;
         let second_token = manually_refresh_token!(api);
-        tokio::time::sleep(Duration::from_secs(1)).await;
         let third_token = manually_refresh_token!(api);
 
         assert!(initial_token != first_token);
