@@ -3,14 +3,14 @@ pub mod api_structs;
 use crate::api::api_structs::{Match, MatchIdMapping, OAuthResponse, Player};
 use reqwest::{
     header::{AUTHORIZATION, CONTENT_TYPE},
-    Client, ClientBuilder, Error, Method
+    Client, ClientBuilder, Error, Method,
 };
 use serde::{de::DeserializeOwned, Serialize};
 
 pub struct OtrApiClient {
     client: Client,
     token: String,
-    api_root: String
+    api_root: String,
 }
 
 impl OtrApiClient {
@@ -23,7 +23,7 @@ impl OtrApiClient {
         Ok(Self {
             client,
             token: token_response.token,
-            api_root: api_root.to_owned()
+            api_root: api_root.to_owned(),
         })
     }
 
@@ -37,7 +37,7 @@ impl OtrApiClient {
         OtrApiClient::new(
             &std::env::var("API_ROOT").unwrap(),
             &std::env::var("CLIENT_ID").unwrap(),
-            &std::env::var("CLIENT_SECRET").unwrap()
+            &std::env::var("CLIENT_SECRET").unwrap(),
         )
         .await
     }
@@ -47,7 +47,7 @@ impl OtrApiClient {
         client: &Client,
         api_root: &str,
         client_id: &str,
-        client_secret: &str
+        client_secret: &str,
     ) -> Result<OAuthResponse, Error> {
         let link = format!(
             "{}/v1/oauth/token?clientId={}&clientSecret={}",
@@ -81,7 +81,7 @@ impl OtrApiClient {
     /// ```
     async fn make_request<T>(&self, method: Method, partial_url: &str) -> Result<T, Error>
     where
-        T: DeserializeOwned
+        T: DeserializeOwned,
     {
         self.make_request_with_body(method, partial_url, None::<u8>).await
     }
@@ -113,14 +113,14 @@ impl OtrApiClient {
     async fn make_request_with_body<T, B>(&self, method: Method, partial_url: &str, body: Option<B>) -> Result<T, Error>
     where
         T: DeserializeOwned,
-        B: Serialize
+        B: Serialize,
     {
         let request_link = format!("{}{}", self.api_root, partial_url);
 
         let mut request = match method {
             Method::GET => self.client.get(request_link),
             Method::POST => self.client.post(request_link),
-            _ => unimplemented!()
+            _ => unimplemented!(),
         };
 
         if let Some(body) = body {

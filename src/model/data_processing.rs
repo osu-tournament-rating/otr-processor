@@ -1,7 +1,7 @@
 use crate::{api::api_structs::Match, utils::progress_utils::progress_bar_spinner};
 
 pub struct ModMultipliers {
-    pub ez: f32
+    pub ez: f32,
 }
 
 fn get_mod_multipliers() -> ModMultipliers {
@@ -36,8 +36,8 @@ mod tests {
         api::api_structs::{Game, Match, MatchScore},
         model::{
             data_processing::{apply_mod_multipliers, get_mod_multipliers},
-            structures::{mode::Mode, scoring_type::ScoringType, team_type::TeamType}
-        }
+            structures::{mode::Mode, scoring_type::ScoringType, team_type::TeamType},
+        },
     };
 
     #[test]
@@ -61,7 +61,7 @@ mod tests {
             accuracy_standard: 0.0,
             accuracy_taiko: 0.0,
             accuracy_catch: 0.0,
-            accuracy_mania: 0.0
+            accuracy_mania: 0.0,
         };
 
         let game = Game {
@@ -74,7 +74,7 @@ mod tests {
             start_time: Default::default(),
             end_time: None,
             beatmap: None,
-            match_scores: vec![score]
+            match_scores: vec![score],
         };
 
         let m = Match {
@@ -84,7 +84,7 @@ mod tests {
             mode: Mode::Osu,
             start_time: None,
             end_time: None,
-            games: vec![game]
+            games: vec![game],
         };
 
         let mut matches = vec![m];
