@@ -17,11 +17,11 @@ pub struct OAuthResponse {
     pub expire_in: u32
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RatingAdjustment {
     pub player_id: i32,
-    pub mode: i32,
+    pub mode: Mode,
     pub rating_adjustment_amount: f64,
     pub volatility_adjustment_amount: f64,
     pub rating_before: f64,
@@ -144,7 +144,7 @@ pub struct Game {
     pub match_scores: Vec<MatchScore>
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MatchScore {
     pub player_id: i32,

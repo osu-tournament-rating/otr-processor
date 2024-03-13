@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 use chrono::{DateTime, FixedOffset};
 use crate::{api::api_structs::RatingAdjustment, model::{constants, structures::mode::Mode}};
-use crate::model::structures::mode;
-
 /// Tracks decay activity for players
 pub struct DecayTracker {
     last_play_time: HashMap<(i32, Mode), DateTime<FixedOffset>>,
@@ -121,7 +119,7 @@ pub fn decay_mu(mu: f64) -> f64 {
 mod tests {
     use std::ops::Add;
     use chrono::DateTime;
-    use crate::model::{decay::{decay_mu, decay_sigma, DecayTracker, is_decay_possible}, constants};
+    use crate::model::{decay::{decay_mu, decay_sigma, DecayTracker, is_decay_possible}, constants, structures::mode::Mode};
     use crate::model::constants::MULTIPLIER;
 
     #[test]
