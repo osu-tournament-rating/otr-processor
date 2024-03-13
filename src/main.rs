@@ -32,23 +32,23 @@ async fn main() {
     let ratings = model::create_initial_ratings(&matches, &players);
 
     todo!("Fetch country mapping from API & load into calc_ratings");
-    let calc_result = calc_ratings(&ratings, &matches, &create_model());
-
-    println!("{:?}", calc_result);
-
-    let bar = ProgressBar::new(matches.len() as u64);
-
-    let mut mcs: Vec<Vec<MatchCost>> = Vec::new();
-    for m in matches {
-        let mc = match_costs(&m.games);
-
-        match mc {
-            Some(match_costs) => mcs.push(match_costs),
-            None => continue
-        }
-    }
-
-    bar.finish();
+    // let calc_result = calc_ratings(&ratings, &matches, &create_model());
+    //
+    // println!("{:?}", calc_result);
+    //
+    // let bar = ProgressBar::new(matches.len() as u64);
+    //
+    // let mut mcs: Vec<Vec<MatchCost>> = Vec::new();
+    // for m in matches {
+    //     let mc = match_costs(&m.games);
+    //
+    //     match mc {
+    //         Some(match_costs) => mcs.push(match_costs),
+    //         None => continue
+    //     }
+    // }
+    //
+    // bar.finish();
 
     //println!("{:?}", mcs)
 }

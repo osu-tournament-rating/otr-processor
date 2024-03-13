@@ -228,14 +228,20 @@ pub fn calc_ratings(
 
             if team_based {
                 // Get user's team ID
-                // TODO: needs to be a median across all games ideally-
-                // let curr_player_team = curr_match.games[0]
-                //     .match_scores
-                //     .iter()
-                //     .find(|x| x.player_id == rating_prior.player_id)
-                //     .unwrap()
-                //     .team;
-                let curr_player_team = 0;
+                let mut curr_player_team = 0;
+                // Find first Game in the Match where the player exists
+                for game in curr_match.games {
+                    let game_with_player = game.match_scores
+                        .iter()
+                        .find(|x| x.player_id == rating_prior.player_id);
+                    match game_with_player {
+                        Some(g) => {
+                            curr_player_team = g.team;
+                            break;
+                        },
+                        None => continue,
+                    }
+                }
 
                 // Get IDs of all users in player's team and the opposite team
                 let (mut teammate_list, mut opponent_list):
