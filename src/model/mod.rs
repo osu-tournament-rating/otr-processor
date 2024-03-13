@@ -988,29 +988,19 @@ mod tests {
         // Ids 0-7 = Team 2 (Red)
         // Ids 8-15 = Team 1 (Blue)
 
-        country_mapping.insert(0, "US".to_string());
-        country_mapping.insert(1, "US".to_string());
-        country_mapping.insert(2, "US".to_string());
-        country_mapping.insert(3, "US".to_string());
-        country_mapping.insert(4, "US".to_string());
-        country_mapping.insert(5, "US".to_string());
-        country_mapping.insert(6, "US".to_string());
-        country_mapping.insert(7, "US".to_string());
-        country_mapping.insert(8, "SK".to_string());
-        country_mapping.insert(9, "SK".to_string());
-        country_mapping.insert(10, "SK".to_string());
-        country_mapping.insert(11, "SK".to_string());
-        country_mapping.insert(12, "SK".to_string());
-        country_mapping.insert(13, "SK".to_string());
-        country_mapping.insert(14, "SK".to_string());
-        country_mapping.insert(15, "SK".to_string());
+        for i in 0..8 {
+            country_mapping.insert(i, "US".to_string());
+        }
+
+        for i in 8..16 {
+            country_mapping.insert(i, "SK".to_string());
+        }
 
         let initial_mu = vec![
             2350.0, 2100.0, 2900.0, 1850.0, 1200.0, 2130.0, 2603.0, 2990.0, 3122.0, 3000.0, 2300.0, 2500.0, 2430.0,
             2405.0, 2740.0, 2004.0,
         ];
 
-        // Create 2 players with default ratings
         for i in 0..16 {
             let cur_mu = initial_mu[i];
             initial_ratings.push(PlayerRating {
@@ -1023,7 +1013,7 @@ mod tests {
             })
         }
 
-        let matches: Vec<Match> = Vec::new();
+        let mut matches: Vec<Match> = Vec::new();
 
         let start_time = DateTime::parse_from_rfc3339("2021-01-01T00:00:00+00:00").unwrap();
         let end_time = Some(start_time); // Assuming end_time is the same as start_time for demonstration
@@ -1031,7 +1021,7 @@ mod tests {
         let beatmap = test_beatmap();
 
         // =====================
-        // REGION: MATCH DEFINITION
+        // MATCH DEFINITION
         // =====================
 
         // Create a match with the following structure:
@@ -1364,10 +1354,8 @@ mod tests {
         };
 
         // =====================
-        // END REGION: MATCH DEFINITION
+        // END MATCH DEFINITION
         // =====================
-
-        // matches.push(fake_match);
 
         // Sort by match cost
         let mut match_costs = super::match_costs(&fake_match.games).unwrap();
@@ -1375,22 +1363,36 @@ mod tests {
 
         // Assumes match costs are correct.
         let sorted_player_ids: Vec<_> = match_costs.iter().map(|mc| mc.player_id).collect();
-        let model_ranks: Vec<usize> = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
 
-        let mut model_ratings: Vec<Vec<Rating>> = Vec::new();
-        for i in 0..16 {
-            model_ratings.push(vec![Rating {
-                mu: initial_mu[sorted_player_ids[i] as usize],
-                sigma: 200.0
-            }])
-        }
+        // let mut model_ratings: Vec<Vec<Rating>> = Vec::new();
+        // for id in sorted_player_ids.iter() {
+        //     model_ratings.push(vec![Rating {
+        //         mu: initial_ratings[*id as usize].rating.mu,
+        //         sigma: initial_ratings[*id as usize].rating.sigma,
+        //     }])
+        // }
 
-        let expected_ratings = model.rate(model_ratings, model_ranks);
+        // Mapped to initial rating ids. e.g. expected_ratings[5][0] = new result for player 5
+        let expected_ratings: Vec<Vec<Rating>> = model.rate(initial_ratings.iter().map(|x| vec![x.rating.clone()]).collect(),
+                                                            sorted_player_ids.iter().map(|x| *x as usize).collect());
 
+        matches.push(fake_match);
         let evaluation = calc_ratings(&initial_ratings, &country_mapping,
         &matches, &model);
 
+        println!("{:?}", initial_ratings);
         println!("{:?}", expected_ratings);
         println!("{:?}", evaluation);
+
+        for i in 0..16 {
+            let eval_rating = evaluation.base_ratings.iter().find(|x| x.player_id == i).unwrap();
+            let expected_mu = expected_ratings[i as usize][0].mu;
+            let expected_sigma = expected_ratings[i as usize][0].sigma;
+
+            let eval_mu = eval_rating.rating.mu;
+            let eval_sigma = eval_rating.rating.sigma;
+            assert!((eval_mu - expected_mu).abs() < 0.000001, "Player {}'s mu is {}, should be {}", i, eval_mu, expected_mu);
+            assert!((eval_sigma - expected_sigma).abs() < 0.000001, "Player {}'s sigma is {}, should be {}", i, eval_sigma, expected_sigma);
+        }
     }
 }
