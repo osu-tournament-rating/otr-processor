@@ -192,8 +192,6 @@ pub fn calc_ratings(
             to_rate.push(rating_prior.clone());
 
             let prior_mu = rating_prior.rating.mu;
-            // TODO: Get country
-            let country = ();
             // Updating rank for tracking
             ratings_hash
                 .entry((match_cost.player_id, curr_match.mode))
