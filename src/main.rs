@@ -8,47 +8,46 @@ mod utils;
 
 use indicatif::ProgressBar;
 
-use crate::model::{structures::match_cost::MatchCost, match_costs, calc_ratings, create_model};
+use crate::model::{match_costs, structures::match_cost::MatchCost};
 
 #[tokio::main]
 async fn main() {
     dotenv::dotenv().unwrap();
 
-    let api = api::OtrApiClient::new_from_priv_env().await
+    let api = api::OtrApiClient::new_from_env()
+        .await
         .expect("Failed to intialize otr api");
 
-    let match_ids = api.get_match_ids(Some(100))
+    let match_ids = api
+        .get_match_ids(Some(100))
         .await
         .expect("Match ids must be valid before proceeding");
 
-    let matches = api.get_matches(&match_ids, 250)
+    let matches = api
+        .get_matches(&match_ids, 250)
         .await
         .expect("Matches need to be loaded before continuing");
 
-    let players = api.get_players().await.expect("Ranks must be identified");
-
+    // let players = api.get_players().await.expect("Ranks must be identified");
 
     // Model
-    let ratings = model::create_initial_ratings(&matches, &players);
+    // let ratings = model::model::create_initial_ratings(matches, players);
 
-    todo!("Fetch country mapping from API & load into calc_ratings");
-    // let calc_result = calc_ratings(&ratings, &matches, &create_model());
-    //
-    // println!("{:?}", calc_result);
-    //
-    // let bar = ProgressBar::new(matches.len() as u64);
-    //
-    // let mut mcs: Vec<Vec<MatchCost>> = Vec::new();
-    // for m in matches {
-    //     let mc = match_costs(&m.games);
-    //
-    //     match mc {
-    //         Some(match_costs) => mcs.push(match_costs),
-    //         None => continue
-    //     }
-    // }
-    //
-    // bar.finish();
+    let bar = ProgressBar::new(matches.len() as u64);
 
-    //println!("{:?}", mcs)
+    let mut mcs: Vec<Vec<MatchCost>> = Vec::new();
+    for m in matches {
+        let mc = match_costs(&m.games);
+
+        bar.inc(1);
+
+        match mc {
+            Some(match_costs) => mcs.push(match_costs),
+            None => continue
+        }
+    }
+
+    bar.finish();
+
+    // println!("{:?}", mcs)
 }

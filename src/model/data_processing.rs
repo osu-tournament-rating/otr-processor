@@ -1,14 +1,11 @@
-use crate::api::api_structs::Match;
-use crate::utils::progress_utils::progress_bar_spinner;
+use crate::{api::api_structs::Match, utils::progress_utils::progress_bar_spinner};
 
 pub struct ModMultipliers {
     pub ez: f32
 }
 
 fn get_mod_multipliers() -> ModMultipliers {
-    ModMultipliers {
-        ez: 1.75
-    }
+    ModMultipliers { ez: 1.75 }
 }
 
 pub fn apply_mod_multipliers(matches: &mut Vec<Match>) {
@@ -35,11 +32,13 @@ pub fn apply_mod_multipliers(matches: &mut Vec<Match>) {
 
 #[cfg(test)]
 mod tests {
-    use crate::api::api_structs::{Game, Match, MatchScore};
-    use crate::model::data_processing::{apply_mod_multipliers, get_mod_multipliers};
-    use crate::model::structures::mode::Mode;
-    use crate::model::structures::scoring_type::ScoringType;
-    use crate::model::structures::team_type::TeamType;
+    use crate::{
+        api::api_structs::{Game, Match, MatchScore},
+        model::{
+            data_processing::{apply_mod_multipliers, get_mod_multipliers},
+            structures::{mode::Mode, scoring_type::ScoringType, team_type::TeamType}
+        }
+    };
 
     #[test]
     fn multipliers_ez() {
@@ -62,7 +61,7 @@ mod tests {
             accuracy_standard: 0.0,
             accuracy_taiko: 0.0,
             accuracy_catch: 0.0,
-            accuracy_mania: 0.0,
+            accuracy_mania: 0.0
         };
 
         let game = Game {
@@ -75,7 +74,7 @@ mod tests {
             start_time: Default::default(),
             end_time: None,
             beatmap: None,
-            match_scores: vec![score],
+            match_scores: vec![score]
         };
 
         let m = Match {
@@ -85,14 +84,23 @@ mod tests {
             mode: Mode::Osu,
             start_time: None,
             end_time: None,
-            games: vec![game],
+            games: vec![game]
         };
 
         let mut matches = vec![m];
 
         apply_mod_multipliers(&mut matches);
 
-        let new_score = matches.first().unwrap().games.first().unwrap().match_scores.first().unwrap().score;
+        let new_score = matches
+            .first()
+            .unwrap()
+            .games
+            .first()
+            .unwrap()
+            .match_scores
+            .first()
+            .unwrap()
+            .score;
 
         assert_eq!(new_score, expected_score);
     }

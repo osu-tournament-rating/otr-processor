@@ -1,6 +1,5 @@
+use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::convert::TryFrom;
-use serde_repr::{Serialize_repr, Deserialize_repr};
-
 
 #[derive(Deserialize_repr, Serialize_repr, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
@@ -20,7 +19,7 @@ impl TryFrom<i32> for Mode {
             1 => Ok(Mode::Taiko),
             2 => Ok(Mode::Catch),
             3 => Ok(Mode::Mania),
-            _ => Err(()),
+            _ => Err(())
         }
     }
 }

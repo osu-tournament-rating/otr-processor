@@ -4,24 +4,29 @@ mod decay;
 mod recalc_helpers;
 pub mod structures;
 
+
+use statrs::statistics::Statistics;
+use statrs::distribution::{ContinuousCDF, Normal};
+use std::collections::{HashMap, HashSet};
+use chrono::Utc;
+use openskill::model::model::Model;
+use openskill::model::plackett_luce::PlackettLuce;
+use openskill::rating::{default_gamma, Rating};
 use crate::api::api_structs::{Game, Match, MatchRatingStats, MatchScore, Player, RatingAdjustment};
-use crate::model::decay::{is_decay_possible, DecayTracker};
+use crate::model::decay::{DecayTracker, is_decay_possible};
 use crate::model::structures::match_cost::MatchCost;
 use crate::model::structures::mode::Mode;
 use crate::model::structures::player_rating::PlayerRating;
 use crate::model::structures::rating_calculation_result::RatingCalculationResult;
 use crate::model::structures::team_type::TeamType;
 use crate::utils::progress_utils::progress_bar;
-use chrono::Utc;
-use openskill::model::model::Model;
-use openskill::model::plackett_luce::PlackettLuce;
-use openskill::rating::{default_gamma, Rating};
-use statrs::distribution::{ContinuousCDF, Normal};
-use statrs::statistics::Statistics;
-use std::collections::{HashMap, HashSet};
 
 pub fn create_model() -> PlackettLuce {
-    PlackettLuce::new(constants::BETA, constants::KAPPA, default_gamma)
+    PlackettLuce::new(
+        constants::BETA,
+        constants::KAPPA,
+        default_gamma
+    )
 }
 
 // Rating generation
@@ -338,7 +343,7 @@ pub fn calc_ratings(
         for rating in to_rate {
             ratings_hash.entry((rating.player_id, rating.mode)).and_modify(|mut f| *f = rating);
         }
-        
+
 
         for mc in match_costs {
             let curr_id = mc.player_id;
@@ -554,8 +559,8 @@ pub fn match_costs(games: &[Game]) -> Option<Vec<MatchCost>> {
 }
 
 pub fn mu_for_rank(rank: i32) -> f64 {
-    let val = constants::MULTIPLIER * (constants::OSU_RATING_INTERCEPT -
-        (constants::OSU_RATING_SLOPE * (rank as f64).ln()));
+    let val =
+        constants::MULTIPLIER * (constants::OSU_RATING_INTERCEPT - (constants::OSU_RATING_SLOPE * (rank as f64).ln()));
 
     if val < constants::MULTIPLIER * constants::OSU_RATING_FLOOR {
         return constants::MULTIPLIER * constants::OSU_RATING_FLOOR;
