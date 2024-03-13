@@ -228,9 +228,9 @@ pub fn calc_ratings(
 
             if team_based {
                 // Get user's team ID
-                let mut curr_player_team = 0;
+                let mut curr_player_team = 1;
                 // Find first Game in the Match where the player exists
-                for game in curr_match.games {
+                for game in &curr_match.games {
                     let game_with_player = game.match_scores
                         .iter()
                         .find(|x| x.player_id == rating_prior.player_id);
@@ -709,8 +709,8 @@ mod tests {
         let winner_expected_outcome = &expected_outcome[winner_id][0];
 
         let result = calc_ratings(&initial_ratings, &country_mapping, &matches, &model);
-        let loser_stats = result.rating_stats.iter().find(|x| x.player_id == loser_id).unwrap();
-        let winner_stats = result.rating_stats.iter().find(|x| x.player_id == winner_id).unwrap();
+        let loser_stats = result.rating_stats.iter().find(|x| x.player_id == loser_id as i32).unwrap();
+        let winner_stats = result.rating_stats.iter().find(|x| x.player_id == winner_id as i32).unwrap();
 
         assert_eq!(result.base_ratings.len(), 2);
         assert_eq!(result.rating_stats.len(), 2);
