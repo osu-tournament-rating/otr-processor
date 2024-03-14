@@ -735,7 +735,7 @@ mod tests {
                     sigma: 200.0,
                 }],
                 vec![Rating {
-                    mu: 1500.0,
+                    mu: 1499.0,
                     sigma: 200.0,
                 }],
             ],
@@ -757,6 +757,20 @@ mod tests {
             .find(|x| x.player_id == winner_id as i32)
             .unwrap();
 
+        let winner_base_stat = result.base_ratings.iter().find(|x| x.player_id == winner_id as i32).unwrap();
+        let loser_base_stat = result.base_ratings.iter().find(|x| x.player_id == loser_id as i32).unwrap();
+
+        assert!((winner_base_stat.rating.mu - winner_expected_outcome.mu).abs() < f64::EPSILON,
+                "Winner's base stat mu is {}, should be {}", winner_base_stat.rating.mu, winner_expected_outcome.mu);
+
+        assert!((winner_base_stat.rating.sigma - winner_expected_outcome.sigma).abs() < f64::EPSILON,
+                "Winner's base stat sigma is {}, should be {}", winner_base_stat.rating.sigma, winner_expected_outcome.sigma);
+
+        assert!((loser_base_stat.rating.mu - loser_expected_outcome.mu).abs() < f64::EPSILON,
+                "Loser's base stat mu is {}, should be {}", loser_base_stat.rating.mu, loser_expected_outcome.mu);
+        assert!((loser_base_stat.rating.sigma - loser_expected_outcome.sigma).abs() < f64::EPSILON,
+                "Loser's base stat sigma is {}, should be {}", loser_base_stat.rating.sigma, loser_expected_outcome.sigma);
+
         assert_eq!(
             result.base_ratings.len(),
             2,
@@ -764,6 +778,7 @@ mod tests {
             result.base_ratings.len(),
             2
         );
+
         assert_eq!(
             result.rating_stats.len(),
             2,
@@ -1359,7 +1374,7 @@ mod tests {
 
         // Sort by match cost
         let mut match_costs = super::match_costs(&fake_match.games).unwrap();
-        match_costs.sort_by(|a, b| b.match_cost.partial_cmp(&a.match_cost).unwrap());
+        match_costs.sort_by(|a, b| a.player_id.partial_cmp(&b.player_id).unwrap());
 
         // Assumes match costs are correct.
         let sorted_player_ids: Vec<_> = match_costs.iter().map(|mc| mc.player_id).collect();
@@ -1374,7 +1389,7 @@ mod tests {
 
         // Mapped to initial rating ids. e.g. expected_ratings[5][0] = new result for player 5
         let expected_ratings: Vec<Vec<Rating>> = model.rate(initial_ratings.iter().map(|x| vec![x.rating.clone()]).collect(),
-                                                            sorted_player_ids.iter().map(|x| *x as usize).collect());
+                                                            match_costs.iter().map(|x| (x.match_cost * 1000.0) as usize).collect());
 
         matches.push(fake_match);
         let evaluation = calc_ratings(&initial_ratings, &country_mapping,
@@ -1391,8 +1406,8 @@ mod tests {
 
             let eval_mu = eval_rating.rating.mu;
             let eval_sigma = eval_rating.rating.sigma;
-            assert!((eval_mu - expected_mu).abs() < 0.000001, "Player {}'s mu is {}, should be {}", i, eval_mu, expected_mu);
-            assert!((eval_sigma - expected_sigma).abs() < 0.000001, "Player {}'s sigma is {}, should be {}", i, eval_sigma, expected_sigma);
+            assert!((eval_mu - expected_mu).abs() < f64::EPSILON, "Player {}'s mu is {}, should be {}", i, eval_mu, expected_mu);
+            assert!((eval_sigma - expected_sigma).abs() < f64::EPSILON, "Player {}'s sigma is {}, should be {}", i, eval_sigma, expected_sigma);
         }
     }
 }
