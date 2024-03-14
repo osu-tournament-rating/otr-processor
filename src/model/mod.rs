@@ -667,7 +667,7 @@ mod tests {
         // - MatchScore (Player 1, Team 2, Score 525001)
         let mut matches = Vec::new();
 
-        let start_time = DateTime::parse_from_rfc3339("2021-01-01T00:00:00+00:00").unwrap();
+        let start_time = chrono::offset::Utc::now().fixed_offset();
         let end_time = Some(start_time); // Assuming end_time is the same as start_time for demonstration
 
         let beatmap = test_beatmap();
@@ -1030,7 +1030,7 @@ mod tests {
 
         let mut matches: Vec<Match> = Vec::new();
 
-        let start_time = DateTime::parse_from_rfc3339("2021-01-01T00:00:00+00:00").unwrap();
+        let start_time = chrono::offset::Utc::now().fixed_offset();
         let end_time = Some(start_time); // Assuming end_time is the same as start_time for demonstration
 
         let beatmap = test_beatmap();
