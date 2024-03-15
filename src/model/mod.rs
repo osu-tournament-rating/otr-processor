@@ -448,7 +448,12 @@ fn ranks_from_match_costs(match_costs: &Vec<MatchCost>) -> Vec<usize> {
     let mut sorted_indices = (0..match_costs.len()).collect::<Vec<_>>();
 
     // Sort indices based on match_cost, preserving original order in case of ties
-    sorted_indices.sort_by(|&a, &b| match_costs[a].match_cost.partial_cmp(&match_costs[b].match_cost).unwrap());
+    sorted_indices.sort_by(|&a, &b| {
+        match_costs[a]
+            .match_cost
+            .partial_cmp(&match_costs[b].match_cost)
+            .unwrap()
+    });
 
     // Assign ranks based on sorted positions, with the minimum match cost getting the highest rank
     for (rank, &idx) in sorted_indices.iter().enumerate() {
@@ -638,7 +643,7 @@ mod tests {
             MatchCost {
                 player_id: 5,
                 match_cost: 2.1,
-            }
+            },
         ];
 
         let expected = vec![3, 5, 2, 4, 1];
@@ -732,14 +737,26 @@ mod tests {
 
             let mc = match_costs.get(i).unwrap();
             let expected_rating = team.get(0).unwrap();
-            let actual_rating = result.base_ratings.iter().find(|x| x.player_id == mc.player_id).unwrap();
+            let actual_rating = result
+                .base_ratings
+                .iter()
+                .find(|x| x.player_id == mc.player_id)
+                .unwrap();
 
             println!("Player id: {} Rating: {}", mc.player_id, expected_rating);
 
-            assert!((expected_rating.mu - actual_rating.rating.mu).abs() < f64::EPSILON,
-                    "Expected rating mu: {}, got: {}", expected_rating.mu, actual_rating.rating.mu);
-            assert!((expected_rating.sigma - actual_rating.rating.sigma).abs() < f64::EPSILON,
-                    "Expected rating sigma: {}, got: {}", expected_rating.sigma, actual_rating.rating.sigma);
+            assert!(
+                (expected_rating.mu - actual_rating.rating.mu).abs() < f64::EPSILON,
+                "Expected rating mu: {}, got: {}",
+                expected_rating.mu,
+                actual_rating.rating.mu
+            );
+            assert!(
+                (expected_rating.sigma - actual_rating.rating.sigma).abs() < f64::EPSILON,
+                "Expected rating sigma: {}, got: {}",
+                expected_rating.sigma,
+                actual_rating.rating.sigma
+            );
         }
 
         println!("Actual outcome:");
