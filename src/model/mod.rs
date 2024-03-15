@@ -227,7 +227,9 @@ pub fn calc_ratings(
                 let mut curr_player_team = BLUE_TEAM_ID;
                 // Find first Game in the Match where the player exists
                 for game in &curr_match.games {
-                    let game_with_player = game.match_scores.iter().find(|x| x.player_id == rating_prior.player_id);
+                    let game_with_player = game.match_scores
+                        .iter()
+                        .rfind(|x| x.player_id == rating_prior.player_id);
                     match game_with_player {
                         Some(g) => {
                             curr_player_team = g.team;
