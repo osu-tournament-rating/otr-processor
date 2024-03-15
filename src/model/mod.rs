@@ -1407,7 +1407,7 @@ mod tests {
         let player_ids: Vec<_> = match_costs.iter().map(|x| x.player_id).collect();
 
         // Generate rankings: best performance (highest `match_cost`) gets rank 1, and so on.
-        let rankings: Vec<_> = (1..=match_costs.len()).collect();
+        let rankings: Vec<_> = match_costs.iter().rev().map(|x| (x.match_cost * 1000.0) as usize).collect();
 
         // Prepare teams based on the sorted `player_ids` and their initial ratings.
         let teams: Vec<Vec<_>> = player_ids
