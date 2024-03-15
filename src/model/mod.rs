@@ -147,6 +147,7 @@ pub fn calc_ratings(
         };
         // Start time of the match
         // Skip the match if not defined
+        // This happens when a match cannot be retrieved by the API properly (i.e. dead link)
         let start_time = match curr_match.start_time {
             Some(t) => t,
             None => continue,
