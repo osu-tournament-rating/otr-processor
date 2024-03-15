@@ -142,8 +142,8 @@ pub fn calc_ratings(
         // Obtain all player match costs
         // Skip the match if there are no valid match costs
         let mut match_costs = match match_costs(&curr_match.games) {
-            Some(mc) => mc,
-            None => continue,
+            Some(mc) if mc.len() >= 1 => mc,
+            _ => continue,
         };
         // Start time of the match
         // Skip the match if not defined
@@ -1407,7 +1407,7 @@ mod tests {
         let player_ids: Vec<_> = match_costs.iter().map(|x| x.player_id).collect();
 
         // Generate rankings: best performance (highest `match_cost`) gets rank 1, and so on.
-        let rankings: Vec<_> = match_costs.iter().rev().map(|x| (x.match_cost * 1000.0) as usize).collect();
+        let rankings: Vec<_> = match_costs.iter().map(|x| (x.match_cost * 1000.0) as usize).collect();
 
         // Prepare teams based on the sorted `player_ids` and their initial ratings.
         let teams: Vec<Vec<_>> = player_ids
@@ -1425,6 +1425,9 @@ mod tests {
         // Calculate expected ratings using the openskill model.
         let expected_ratings = model.rate(teams, rankings);
         let actual_ratings = calc_ratings(&initial_ratings, &country_mapping, &matches, &model);
+
+        println!("{:#?}", expected_ratings.iter().flatten().max_by(|a, b| a.mu.total_cmp(&b.mu)));
+        println!("{:#?}", actual_ratings.base_ratings.iter().max_by(|a, b| a.rating.mu.total_cmp(&b.rating.mu)));
 
         // Check if the expected ratings match the actual ratings.
         // Assuming `expected_ratings` and `actual_ratings.base_ratings` are available
