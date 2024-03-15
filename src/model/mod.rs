@@ -25,6 +25,7 @@ use statrs::{
     statistics::Statistics,
 };
 use std::collections::{HashMap, HashSet};
+use crate::model::constants::BLUE_TEAM_ID;
 
 pub fn create_model() -> PlackettLuce {
     PlackettLuce::new(constants::BETA, constants::KAPPA, default_gamma)
@@ -223,7 +224,7 @@ pub fn calc_ratings(
 
             if team_based {
                 // Get user's team ID
-                let mut curr_player_team = 1;
+                let mut curr_player_team = BLUE_TEAM_ID;
                 // Find first Game in the Match where the player exists
                 for game in &curr_match.games {
                     let game_with_player = game.match_scores.iter().find(|x| x.player_id == rating_prior.player_id);
