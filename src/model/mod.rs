@@ -326,6 +326,8 @@ pub fn calc_ratings(
         let ranks: Vec<usize> = match_costs
             .iter()
             .map(|mc| (mc.match_cost * 1000.0) as usize)
+            // Reverse match costs as ranks should be "lower = better",
+            // which is the inverse of matchcosts
             .rev()
             .collect();
         let model_rating = model.rate(teams, ranks);
