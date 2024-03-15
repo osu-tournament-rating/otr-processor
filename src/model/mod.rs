@@ -337,12 +337,14 @@ pub fn calc_ratings(
             player.rating = flattened_ratings[idx].clone();
         }
 
+        // Set player's rating to a newly calculated value
         for rating in to_rate {
             ratings_hash
                 .entry((rating.player_id, rating.mode))
                 .and_modify(|mut f| *f = rating);
         }
 
+        // Calculate adjusted rankings for players
         for mc in match_costs {
             let curr_id = mc.player_id;
             let key = (mc.player_id, curr_match.mode);
