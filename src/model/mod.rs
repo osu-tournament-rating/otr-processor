@@ -441,6 +441,25 @@ fn get_country_rank(
     return 0;
 }
 
+/// Returns a vector of rankings as follows:
+/// - Minimum match cost has a rank equal to the size of the collection.
+/// - Maximum match cost has a rank of 1.
+///
+/// The lower the rank, the better. The results are returned in the
+/// same order as the input vector.
+fn ranks_from_match_costs(match_costs: &Vec<MatchCost>) -> Vec<usize> {
+    let mut ranks: Vec<usize> = Vec::new();
+    let sorted_copy = match_costs
+        .clone()
+        .sort_by(|a, b| b.match_cost.partial_cmp(&a.match_cost).unwrap());
+
+    for i in 0..sorted_copy.len() {
+        ranks.push(i);
+    }
+
+    ranks
+}
+
 fn get_global_rank(mu: &f64, player_id: &i32, existing_ratings: &&Vec<PlayerRating>) -> i32 {
     let mut ratings: Vec<f64> = existing_ratings
         .clone()
@@ -583,6 +602,7 @@ pub fn mu_for_rank(rank: i32) -> f64 {
 
 #[cfg(test)]
 mod tests {
+    use crate::model::structures::match_cost::MatchCost;
     use crate::{
         api::api_structs::{Beatmap, Game, Match, MatchScore},
         model::{
@@ -593,7 +613,6 @@ mod tests {
     use openskill::{model::model::Model, rating::Rating};
     use std::collections::HashMap;
     use std::ops::Add;
-    use crate::model::structures::match_cost::MatchCost;
 
     fn match_from_json(json: &str) -> Match {
         serde_json::from_str(json).unwrap()
@@ -674,21 +693,27 @@ mod tests {
         let model_ratings = initial_ratings.iter().map(|r| vec![r.rating.clone()]).collect();
 
         let model = super::create_model();
+
+        println!("Model input:");
+        println!("Input ratings: {:?}", &model_ratings);
+        println!("Input rankings: {:?}", &rankings);
         let expected = model.rate(model_ratings, rankings);
 
-        let result = super::calc_ratings(&initial_ratings, &country_mapping,
-                                         &vec![match_data], &model);
+        let result = super::calc_ratings(&initial_ratings, &country_mapping, &vec![match_data], &model);
 
         println!("Expected outcome:");
-        for r in expected {
-            let rating = r.first().unwrap();
-            println!("Rating: {}", rating);
+        for i in 0..expected.len() {
+            let expected_ratings = expected.get(i).unwrap();
+            let mc = match_costs.get(i).unwrap();
+
+            let rating = expected_ratings.get(0).unwrap();
+            println!("Match cost: {:?} Rating: {}", mc, rating);
         }
 
         println!("Result:");
 
         for stat in result.base_ratings {
-            println!("Rating: {}", stat.rating);
+            println!("Player id: {} Rating: {}", stat.player_id, &stat.rating);
         }
     }
 
