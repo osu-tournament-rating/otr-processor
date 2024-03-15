@@ -662,7 +662,7 @@ mod tests {
                 player_id: i,
                 mode: Mode::Osu,
                 rating: Rating {
-                    // We subtract 1.0 here because
+                    // We subtract 1.0 from player 1 here because
                     // global / country ranks etc. need to be known ahead of time.
                     // Player 0 has a higher starting rating than player 1,
                     // but player 1 wins. Thus, we simulate an upset and
