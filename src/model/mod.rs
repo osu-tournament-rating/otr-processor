@@ -118,7 +118,7 @@ pub fn calc_ratings(
     let mut rating_stats_hash: HashMap<i32, Vec<MatchRatingStats>> = HashMap::new();
     // Key = player_id
     // Value = Vec of RatingAdjustments per player
-    let mut rating_adjustments_hash: HashMap<i32, Vec<RatingAdjustment>> = HashMap::new();
+    let mut rating_adjustments_hash: HashMap<(i32, Mode), Vec<RatingAdjustment>> = HashMap::new();
 
     // Vector of match ratings to return
     let mut rating_stats: Vec<MatchRatingStats> = Vec::new();
@@ -185,7 +185,7 @@ pub fn calc_ratings(
                         rating_prior.rating.sigma = adj[adj.len() - 1].volatility_after;
                         // Save all rating adjustments for graph displays in the front end
                         rating_adjustments_hash
-                            .entry(match_cost.player_id)
+                            .entry((match_cost.player_id, curr_match.mode))
                             .and_modify(|a| a.append(&mut adj))
                             .or_insert(adj);
                     }
@@ -385,7 +385,7 @@ pub fn calc_ratings(
             let decays = match decay_tracker.decay(*player_id, *gamemode, mu, sigma, curr_time.into()) {
                 Some(adj) => {
                     rating_adjustments_hash
-                        .entry(*player_id)
+                        .entry((*player_id, *gamemode))
                         .and_modify(|a| a.extend(adj.clone().into_iter()));
                     Some(adj)
                 }
