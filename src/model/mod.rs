@@ -734,14 +734,15 @@ mod tests {
             let expected_rating = team.get(0).unwrap();
             let actual_rating = result.base_ratings.iter().find(|x| x.player_id == mc.player_id).unwrap();
 
+            println!("Player id: {} Rating: {}", mc.player_id, expected_rating);
+
             assert!((expected_rating.mu - actual_rating.rating.mu).abs() < f64::EPSILON,
                     "Expected rating mu: {}, got: {}", expected_rating.mu, actual_rating.rating.mu);
             assert!((expected_rating.sigma - actual_rating.rating.sigma).abs() < f64::EPSILON,
                     "Expected rating sigma: {}, got: {}", expected_rating.sigma, actual_rating.rating.sigma);
         }
 
-        println!("Result:");
-
+        println!("Actual outcome:");
         for stat in result.base_ratings {
             println!("Player id: {} Rating: {}", stat.player_id, &stat.rating);
         }
