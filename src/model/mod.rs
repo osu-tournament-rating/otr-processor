@@ -448,13 +448,15 @@ fn get_country_rank(
 /// The lower the rank, the better. The results are returned in the
 /// same order as the input vector.
 fn ranks_from_match_costs(match_costs: &Vec<MatchCost>) -> Vec<usize> {
-    let mut ranks: Vec<usize> = Vec::new();
-    let sorted_copy = match_costs
-        .clone()
-        .sort_by(|a, b| b.match_cost.partial_cmp(&a.match_cost).unwrap());
+    let mut ranks = vec![0; match_costs.len()];
+    let mut sorted_indices = (0..match_costs.len()).collect::<Vec<_>>();
 
-    for i in 0..sorted_copy.len() {
-        ranks.push(i);
+    // Sort indices based on match_cost, preserving original order in case of ties
+    sorted_indices.sort_by(|&a, &b| match_costs[a].match_cost.partial_cmp(&match_costs[b].match_cost).unwrap());
+
+    // Assign ranks based on sorted positions, with the minimum match cost getting the highest rank
+    for (rank, &idx) in sorted_indices.iter().enumerate() {
+        ranks[idx] = match_costs.len() - rank;
     }
 
     ranks
@@ -616,6 +618,37 @@ mod tests {
 
     fn match_from_json(json: &str) -> Match {
         serde_json::from_str(json).unwrap()
+    }
+
+    #[test]
+    fn ranks_from_match_costs_returns_correct_scalar() {
+        let match_costs = vec![
+            MatchCost {
+                player_id: 1,
+                match_cost: 0.5,
+            },
+            MatchCost {
+                player_id: 2,
+                match_cost: 0.2,
+            },
+            MatchCost {
+                player_id: 3,
+                match_cost: 0.7,
+            },
+            MatchCost {
+                player_id: 4,
+                match_cost: 0.3,
+            },
+            MatchCost {
+                player_id: 5,
+                match_cost: 2.1,
+            }
+        ];
+
+        let expected = vec![3, 5, 2, 4, 1];
+        let value = super::ranks_from_match_costs(&match_costs);
+
+        assert_eq!(expected, value);
     }
 
     #[test]
