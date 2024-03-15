@@ -771,13 +771,19 @@ mod tests {
         // Test stats
         for stat in &result.rating_stats {
             let player_id = stat.player_id;
-            let expected_starting_rating = initial_ratings
-                .iter()
-                .find(|x| x.player_id == player_id)
-                .unwrap();
+            let expected_starting_rating = initial_ratings.iter().find(|x| x.player_id == player_id).unwrap();
             let expected_evaluation = expected
                 .iter()
-                .find(|x| x[0].mu == result.base_ratings.iter().find(|y| y.player_id == player_id).unwrap().rating.mu)
+                .find(|x| {
+                    x[0].mu
+                        == result
+                            .base_ratings
+                            .iter()
+                            .find(|y| y.player_id == player_id)
+                            .unwrap()
+                            .rating
+                            .mu
+                })
                 .unwrap()
                 .get(0)
                 .unwrap();
@@ -791,36 +797,18 @@ mod tests {
             let expected_mu_change = expected_after_mu - expected_starting_mu;
             let expected_sigma_change = expected_after_sigma - expected_starting_sigma;
 
-            let expected_global_rank_before = super::get_global_rank(
-                &expected_starting_mu,
-                &player_id,
-                &&initial_ratings
-            );
-            let expected_country_rank_before = super::get_country_rank(
-                &expected_starting_mu,
-                &player_id,
-                &&country_mapping,
-                &&initial_ratings
-            );
-            let expected_percentile_before = super::get_percentile(
-                expected_global_rank_before,
-                initial_ratings.len() as i32
-            );
-            let expected_global_rank_after = super::get_global_rank(
-                &expected_after_mu,
-                &player_id,
-                &&result.base_ratings
-            );
-            let expected_country_rank_after = super::get_country_rank(
-                &expected_after_mu,
-                &player_id,
-                &&country_mapping,
-                &&result.base_ratings
-            );
-            let expected_percentile_after = super::get_percentile(
-                expected_global_rank_after,
-                result.base_ratings.len() as i32
-            );
+            let expected_global_rank_before =
+                super::get_global_rank(&expected_starting_mu, &player_id, &&initial_ratings);
+            let expected_country_rank_before =
+                super::get_country_rank(&expected_starting_mu, &player_id, &&country_mapping, &&initial_ratings);
+            let expected_percentile_before =
+                super::get_percentile(expected_global_rank_before, initial_ratings.len() as i32);
+            let expected_global_rank_after =
+                super::get_global_rank(&expected_after_mu, &player_id, &&result.base_ratings);
+            let expected_country_rank_after =
+                super::get_country_rank(&expected_after_mu, &player_id, &&country_mapping, &&result.base_ratings);
+            let expected_percentile_after =
+                super::get_percentile(expected_global_rank_after, result.base_ratings.len() as i32);
 
             let expected_global_rank_change = expected_global_rank_after - expected_global_rank_before;
             let expected_country_rank_change = expected_country_rank_after - expected_country_rank_before;
