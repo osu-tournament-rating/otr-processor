@@ -316,11 +316,7 @@ pub fn calc_ratings(
         let teams: Vec<Vec<Rating>> = to_rate.iter().map(|player| vec![player.rating.clone()]).collect();
         // Match costs are floats, but since we only need their order,
         // mapping them this way with precision loss should be fine
-        let ranks: Vec<usize> = match_costs
-            .iter()
-            .map(|mc| (mc.match_cost * 1000.0) as usize)
-            .rev()
-            .collect();
+        let ranks: Vec<usize> = ranks_from_match_costs(&match_costs);
         let model_rating = model.rate(teams, ranks);
         // Apply resulting ratings to the players
         let flattened_ratings: Vec<Rating> = model_rating.into_iter().flatten().collect();
@@ -692,7 +688,7 @@ mod tests {
     }
 
     #[test]
-    fn match_cost_returns_correct_evaluation_2v2() {
+    fn match_2v2_returns_correct_rating_result() {
         // Read data from /test_data/match_2v2.json
         let mut match_data = match_from_json(include_str!("../../test_data/match_2v2.json"));
 
@@ -701,11 +697,7 @@ mod tests {
         match_data.end_time = Some(chrono::offset::Utc::now().fixed_offset());
 
         let match_costs = super::match_costs(&match_data.games).unwrap();
-        let rankings: Vec<usize> = match_costs
-            .iter()
-            .rev()
-            .map(|mc| (mc.match_cost * 1000.0) as usize)
-            .collect();
+        let ranks = super::ranks_from_match_costs(&match_costs);
 
         let player_ids = match_costs.iter().map(|mc| mc.player_id).collect::<Vec<i32>>();
         let mut initial_ratings = vec![];
@@ -729,18 +721,23 @@ mod tests {
 
         println!("Model input:");
         println!("Input ratings: {:?}", &model_ratings);
-        println!("Input rankings: {:?}", &rankings);
-        let expected = model.rate(model_ratings, rankings);
+        println!("Input rankings: {:?}", &ranks);
+        let expected = model.rate(model_ratings, ranks);
 
         let result = super::calc_ratings(&initial_ratings, &country_mapping, &vec![match_data], &model);
 
         println!("Expected outcome:");
         for i in 0..expected.len() {
-            let expected_ratings = expected.get(i).unwrap();
-            let mc = match_costs.get(i).unwrap();
+            let team = expected.get(i).unwrap();
 
-            let rating = expected_ratings.get(0).unwrap();
-            println!("Match cost: {:?} Rating: {}", mc, rating);
+            let mc = match_costs.get(i).unwrap();
+            let expected_rating = team.get(0).unwrap();
+            let actual_rating = result.base_ratings.iter().find(|x| x.player_id == mc.player_id).unwrap();
+
+            assert!((expected_rating.mu - actual_rating.rating.mu).abs() < f64::EPSILON,
+                    "Expected rating mu: {}, got: {}", expected_rating.mu, actual_rating.rating.mu);
+            assert!((expected_rating.sigma - actual_rating.rating.sigma).abs() < f64::EPSILON,
+                    "Expected rating sigma: {}, got: {}", expected_rating.sigma, actual_rating.rating.sigma);
         }
 
         println!("Result:");
