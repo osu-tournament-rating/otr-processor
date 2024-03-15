@@ -709,16 +709,19 @@ mod tests {
         let mut initial_ratings = vec![];
         let mut country_mapping = HashMap::new();
 
+        let mut offset = 0.0;
         for id in player_ids {
             initial_ratings.push(PlayerRating {
                 player_id: id,
                 mode: Mode::Osu,
                 rating: Rating {
-                    mu: 1500.0,
+                    mu: 1500.0 + offset,
                     sigma: 200.0
                 }
             });
             country_mapping.insert(id, "US".to_string());
+
+            offset += 1.0;
         }
 
         let model_ratings = initial_ratings.iter().map(|r| vec![r.rating.clone()]).collect();
@@ -761,8 +764,104 @@ mod tests {
         }
 
         println!("Actual outcome:");
-        for stat in result.base_ratings {
+        for stat in &result.base_ratings {
             println!("Player id: {} Rating: {}", stat.player_id, &stat.rating);
+        }
+
+        // Test stats
+        for stat in &result.rating_stats {
+            let player_id = stat.player_id;
+            let expected_starting_rating = initial_ratings
+                .iter()
+                .find(|x| x.player_id == player_id)
+                .unwrap();
+            let expected_evaluation = expected
+                .iter()
+                .find(|x| x[0].mu == result.base_ratings.iter().find(|y| y.player_id == player_id).unwrap().rating.mu)
+                .unwrap()
+                .get(0)
+                .unwrap();
+
+            let expected_starting_mu = expected_starting_rating.rating.mu;
+            let expected_starting_sigma = expected_starting_rating.rating.sigma;
+
+            let expected_after_mu = expected_evaluation.mu;
+            let expected_after_sigma = expected_evaluation.sigma;
+
+            let expected_mu_change = expected_after_mu - expected_starting_mu;
+            let expected_sigma_change = expected_after_sigma - expected_starting_sigma;
+
+            let expected_global_rank_before = super::get_global_rank(
+                &expected_starting_mu,
+                &player_id,
+                &&initial_ratings
+            );
+            let expected_country_rank_before = super::get_country_rank(
+                &expected_starting_mu,
+                &player_id,
+                &&country_mapping,
+                &&initial_ratings
+            );
+            let expected_percentile_before = super::get_percentile(
+                expected_global_rank_before,
+                initial_ratings.len() as i32
+            );
+            let expected_global_rank_after = super::get_global_rank(
+                &expected_after_mu,
+                &player_id,
+                &&result.base_ratings
+            );
+            let expected_country_rank_after = super::get_country_rank(
+                &expected_after_mu,
+                &player_id,
+                &&country_mapping,
+                &&result.base_ratings
+            );
+            let expected_percentile_after = super::get_percentile(
+                expected_global_rank_after,
+                result.base_ratings.len() as i32
+            );
+
+            let expected_global_rank_change = expected_global_rank_after - expected_global_rank_before;
+            let expected_country_rank_change = expected_country_rank_after - expected_country_rank_before;
+            let expected_percentile_change = expected_percentile_after - expected_percentile_before;
+
+            let actual_starting_mu = stat.rating_before;
+            let actual_starting_sigma = stat.volatility_before;
+
+            let actual_after_mu = stat.rating_after;
+            let actual_after_sigma = stat.volatility_after;
+
+            let actual_mu_change = stat.rating_change;
+            let actual_sigma_change = stat.volatility_change;
+
+            let actual_global_rank_before = stat.global_rank_before;
+            let actual_country_rank_before = stat.country_rank_before;
+            let actual_percentile_before = stat.percentile_before;
+
+            let actual_global_rank_after = stat.global_rank_after;
+            let actual_country_rank_after = stat.country_rank_after;
+            let actual_percentile_after = stat.percentile_after;
+
+            let actual_global_rank_change = stat.global_rank_change;
+            let actual_country_rank_change = stat.country_rank_change;
+            let actual_percentile_change = stat.percentile_change;
+
+            assert_eq!(expected_starting_mu, actual_starting_mu);
+            assert_eq!(expected_starting_sigma, actual_starting_sigma);
+            assert_eq!(expected_after_mu, actual_after_mu);
+            assert_eq!(expected_after_sigma, actual_after_sigma);
+            assert_eq!(expected_mu_change, actual_mu_change);
+            assert_eq!(expected_sigma_change, actual_sigma_change);
+            assert_eq!(expected_global_rank_before, actual_global_rank_before);
+            assert_eq!(expected_country_rank_before, actual_country_rank_before);
+            assert_eq!(expected_percentile_before, actual_percentile_before);
+            assert_eq!(expected_global_rank_after, actual_global_rank_after);
+            assert_eq!(expected_country_rank_after, actual_country_rank_after);
+            assert_eq!(expected_percentile_after, actual_percentile_after);
+            assert_eq!(expected_global_rank_change, actual_global_rank_change);
+            assert_eq!(expected_country_rank_change, actual_country_rank_change);
+            assert_eq!(expected_percentile_change, actual_percentile_change);
         }
     }
 
