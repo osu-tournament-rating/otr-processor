@@ -248,7 +248,6 @@ pub fn calc_ratings(
                     .partition(|score| score.team == curr_player_team);
 
                 let mut teammate_list: Vec<i32> = teammate_list.iter().map(|player| player.player_id).collect();
-
                 let mut opponent_list: Vec<i32> = opponent_list.iter().map(|player| player.player_id).collect();
 
                 teammate_list.sort();
