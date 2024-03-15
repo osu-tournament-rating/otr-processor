@@ -43,7 +43,7 @@ async fn main() {
 
         match mc {
             Some(match_costs) => mcs.push(match_costs),
-            None => continue,
+            None => continue
         }
     }
 

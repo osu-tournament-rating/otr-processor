@@ -7,7 +7,7 @@ pub enum Mode {
     Osu = 0,
     Taiko = 1,
     Catch = 2,
-    Mania = 3,
+    Mania = 3
 }
 
 impl TryFrom<i32> for Mode {
@@ -19,7 +19,7 @@ impl TryFrom<i32> for Mode {
             1 => Ok(Mode::Taiko),
             2 => Ok(Mode::Catch),
             3 => Ok(Mode::Mania),
-            _ => Err(()),
+            _ => Err(())
         }
     }
 }

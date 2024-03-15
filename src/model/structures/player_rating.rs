@@ -5,5 +5,5 @@ use openskill::rating::Rating;
 pub struct PlayerRating {
     pub player_id: i32,
     pub mode: Mode,
-    pub rating: Rating,
+    pub rating: Rating
 }

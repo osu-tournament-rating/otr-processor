@@ -5,12 +5,12 @@ use std::{sync::Arc, time::Duration};
 use crate::api::api_structs::{Match, MatchIdMapping, OAuthResponse, Player};
 use reqwest::{
     header::{AUTHORIZATION, CONTENT_TYPE},
-    Client, ClientBuilder, Error, Method,
+    Client, ClientBuilder, Error, Method
 };
 use serde::{de::DeserializeOwned, Serialize};
 use tokio::sync::{
     oneshot::{Receiver, Sender},
-    RwLock,
+    RwLock
 };
 
 /// A loop that automatically refreshes token
@@ -53,7 +53,7 @@ pub async fn refresh_token_worker(api: Arc<OtrApiBody>, receiver: Receiver<()>) 
 pub struct OtrToken {
     pub token: String,
     pub refresh_token: String,
-    pub expire_in: u64,
+    pub expire_in: u64
 }
 
 impl OtrToken {
@@ -85,7 +85,7 @@ pub struct OtrApiBody {
 
     /// Wrapped in RwLock because we need
     /// a shared mutable access
-    token: RwLock<OtrToken>,
+    token: RwLock<OtrToken>
 }
 
 pub struct OtrApiClient {
@@ -107,7 +107,7 @@ pub struct OtrApiClient {
     /// 	Wrap the [`Sender`] inside an `Option`, so we can use [`std::mem::take`]
     /// 	to replace our sender with a default value (in our case, [`None`])
     /// 	and allow the sender to consume itself peacefully.
-    refresh_tx: Option<Sender<()>>,
+    refresh_tx: Option<Sender<()>>
 }
 
 impl Drop for OtrApiClient {
@@ -133,13 +133,13 @@ impl OtrApiClient {
         let token = OtrToken {
             token: token_response.token,
             refresh_token: token_response.refresh_token,
-            expire_in: token_response.expire_in,
+            expire_in: token_response.expire_in
         };
 
         let body = Arc::new(OtrApiBody {
             client,
             api_root: api_root.to_owned(),
-            token: RwLock::new(token),
+            token: RwLock::new(token)
         });
 
         let (refresh_tx, rx) = tokio::sync::oneshot::channel::<()>();
@@ -149,7 +149,7 @@ impl OtrApiClient {
 
         Ok(Self {
             refresh_tx: Some(refresh_tx),
-            body,
+            body
         })
     }
 
@@ -163,7 +163,7 @@ impl OtrApiClient {
         OtrApiClient::new(
             &std::env::var("API_ROOT").unwrap(),
             &std::env::var("CLIENT_ID").unwrap(),
-            &std::env::var("CLIENT_SECRET").unwrap(),
+            &std::env::var("CLIENT_SECRET").unwrap()
         )
         .await
     }
@@ -173,7 +173,7 @@ impl OtrApiClient {
         client: &Client,
         api_root: &str,
         client_id: &str,
-        client_secret: &str,
+        client_secret: &str
     ) -> Result<OAuthResponse, Error> {
         let link = format!(
             "{}/v1/oauth/token?clientId={}&clientSecret={}",
@@ -207,7 +207,7 @@ impl OtrApiClient {
     /// ```
     async fn make_request<T>(&self, method: Method, partial_url: &str) -> Result<T, Error>
     where
-        T: DeserializeOwned,
+        T: DeserializeOwned
     {
         self.make_request_with_body(method, partial_url, None::<u8>).await
     }
@@ -239,14 +239,14 @@ impl OtrApiClient {
     async fn make_request_with_body<T, B>(&self, method: Method, partial_url: &str, body: Option<B>) -> Result<T, Error>
     where
         T: DeserializeOwned,
-        B: Serialize,
+        B: Serialize
     {
         let request_link = format!("{}{}", self.body.api_root, partial_url);
 
         let mut request = match method {
             Method::GET => self.body.client.get(request_link),
             Method::POST => self.body.client.post(request_link),
-            _ => unimplemented!(),
+            _ => unimplemented!()
         };
 
         if let Some(body) = body {

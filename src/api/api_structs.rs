@@ -14,7 +14,7 @@ pub struct OAuthResponse {
 
     /// Expire time in seconds
     #[serde(rename = "accessExpiration")]
-    pub expire_in: u64,
+    pub expire_in: u64
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -29,7 +29,7 @@ pub struct RatingAdjustment {
     pub volatility_before: f64,
     pub volatility_after: f64,
     pub rating_adjustment_type: i32,
-    pub timestamp: DateTime<FixedOffset>,
+    pub timestamp: DateTime<FixedOffset>
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -46,7 +46,7 @@ pub struct PlayerMatchStats {
     pub games_lost: i32,
     pub games_played: i32,
     pub teammate_ids: Vec<i32>,
-    pub opponent_ids: Vec<i32>,
+    pub opponent_ids: Vec<i32>
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -71,7 +71,7 @@ pub struct MatchRatingStats {
     pub percentile_after: f64,
     pub percentile_change: f64,
     pub average_teammate_rating: Option<f64>,
-    pub average_opponent_rating: Option<f64>,
+    pub average_opponent_rating: Option<f64>
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -84,7 +84,7 @@ pub struct BaseStatsPost {
     pub mode: i32,
     pub percentile: f64,
     pub global_rank: i32,
-    pub country_rank: i32,
+    pub country_rank: i32
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -94,7 +94,7 @@ pub struct GameWinRecord {
     pub winners: Vec<i32>,
     pub losers: Vec<i32>,
     pub winner_team: i32,
-    pub loser_team: i32,
+    pub loser_team: i32
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -107,7 +107,7 @@ pub struct MatchWinRecord {
     pub red_points: i32,
     pub winner_team: Option<i32>,
     pub loser_team: Option<i32>,
-    pub match_type: Option<i32>,
+    pub match_type: Option<i32>
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -119,14 +119,14 @@ pub struct Match {
     pub mode: Mode,
     pub start_time: Option<DateTime<FixedOffset>>,
     pub end_time: Option<DateTime<FixedOffset>>,
-    pub games: Vec<Game>,
+    pub games: Vec<Game>
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MatchIdMapping {
     pub id: i32,
-    pub osu_match_id: i64,
+    pub osu_match_id: i64
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -141,7 +141,7 @@ pub struct Game {
     pub start_time: DateTime<FixedOffset>,
     pub end_time: Option<DateTime<FixedOffset>>,
     pub beatmap: Option<Beatmap>,
-    pub match_scores: Vec<MatchScore>,
+    pub match_scores: Vec<MatchScore>
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -155,7 +155,7 @@ pub struct MatchScore {
     pub accuracy_standard: f64,
     pub accuracy_taiko: f64,
     pub accuracy_catch: f64,
-    pub accuracy_mania: f64,
+    pub accuracy_mania: f64
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -174,7 +174,7 @@ pub struct Beatmap {
     pub drain_time: f64,
     pub length: f64,
     pub title: String,
-    pub diff_name: Option<String>,
+    pub diff_name: Option<String>
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -195,5 +195,5 @@ pub struct Player {
     pub earliest_mania_global_rank: Option<i32>,
     pub earliest_mania_global_rank_date: Option<DateTime<FixedOffset>>,
     pub username: Option<String>,
-    pub country: Option<String>,
+    pub country: Option<String>
 }
