@@ -214,7 +214,7 @@ pub fn calc_ratings(
                 }
             }
             let team_based = if team_based_count == single_count {
-                &curr_match.games[curr_match.games.len() - 1].play_mode != TeamType::HeadToHead
+                &curr_match.games[curr_match.games.len() - 1].team_type != &TeamType::HeadToHead
             } else {
                 team_based_count > single_count
             };
