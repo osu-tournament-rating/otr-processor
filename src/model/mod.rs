@@ -590,7 +590,6 @@ mod tests {
             structures::{mode::Mode, player_rating::PlayerRating, scoring_type::ScoringType, team_type::TeamType},
         },
     };
-    use chrono::DateTime;
     use openskill::{model::model::Model, rating::Rating};
     use std::collections::HashMap;
 
@@ -757,19 +756,43 @@ mod tests {
             .find(|x| x.player_id == winner_id as i32)
             .unwrap();
 
-        let winner_base_stat = result.base_ratings.iter().find(|x| x.player_id == winner_id as i32).unwrap();
-        let loser_base_stat = result.base_ratings.iter().find(|x| x.player_id == loser_id as i32).unwrap();
+        let winner_base_stat = result
+            .base_ratings
+            .iter()
+            .find(|x| x.player_id == winner_id as i32)
+            .unwrap();
+        let loser_base_stat = result
+            .base_ratings
+            .iter()
+            .find(|x| x.player_id == loser_id as i32)
+            .unwrap();
 
-        assert!((winner_base_stat.rating.mu - winner_expected_outcome.mu).abs() < f64::EPSILON,
-                "Winner's base stat mu is {}, should be {}", winner_base_stat.rating.mu, winner_expected_outcome.mu);
+        assert!(
+            (winner_base_stat.rating.mu - winner_expected_outcome.mu).abs() < f64::EPSILON,
+            "Winner's base stat mu is {}, should be {}",
+            winner_base_stat.rating.mu,
+            winner_expected_outcome.mu
+        );
 
-        assert!((winner_base_stat.rating.sigma - winner_expected_outcome.sigma).abs() < f64::EPSILON,
-                "Winner's base stat sigma is {}, should be {}", winner_base_stat.rating.sigma, winner_expected_outcome.sigma);
+        assert!(
+            (winner_base_stat.rating.sigma - winner_expected_outcome.sigma).abs() < f64::EPSILON,
+            "Winner's base stat sigma is {}, should be {}",
+            winner_base_stat.rating.sigma,
+            winner_expected_outcome.sigma
+        );
 
-        assert!((loser_base_stat.rating.mu - loser_expected_outcome.mu).abs() < f64::EPSILON,
-                "Loser's base stat mu is {}, should be {}", loser_base_stat.rating.mu, loser_expected_outcome.mu);
-        assert!((loser_base_stat.rating.sigma - loser_expected_outcome.sigma).abs() < f64::EPSILON,
-                "Loser's base stat sigma is {}, should be {}", loser_base_stat.rating.sigma, loser_expected_outcome.sigma);
+        assert!(
+            (loser_base_stat.rating.mu - loser_expected_outcome.mu).abs() < f64::EPSILON,
+            "Loser's base stat mu is {}, should be {}",
+            loser_base_stat.rating.mu,
+            loser_expected_outcome.mu
+        );
+        assert!(
+            (loser_base_stat.rating.sigma - loser_expected_outcome.sigma).abs() < f64::EPSILON,
+            "Loser's base stat sigma is {}, should be {}",
+            loser_base_stat.rating.sigma,
+            loser_expected_outcome.sigma
+        );
 
         assert_eq!(
             result.base_ratings.len(),
@@ -1017,9 +1040,9 @@ mod tests {
         ];
 
         for i in 0..16 {
-            let cur_mu = initial_mu[i];
+            let cur_mu = initial_mu[i as usize];
             initial_ratings.push(PlayerRating {
-                player_id: i as i32,
+                player_id: i,
                 mode: Mode::Osu,
                 rating: Rating {
                     mu: cur_mu,
@@ -1063,351 +1086,379 @@ mod tests {
             mode: Mode::Osu,
             start_time: Some(end_time.unwrap()),
             end_time,
-            games: vec![Game {
-                id: 1,
-                play_mode: Mode::Osu,
-                scoring_type: ScoringType::ScoreV2,
-                team_type: TeamType::TeamVs,
-                mods: 9, // HD NF
-                game_id: 1002340238,
-                start_time,
-                end_time,
-                beatmap: Some(beatmap.clone()),
-                match_scores: vec![
-                    MatchScore {
-                        player_id: 0,
-                        team: 2,
-                        score: 1_020_480,
-                        enabled_mods: None,
-                        misses: 0,
-                        accuracy_standard: 0.0,
-                        accuracy_taiko: 0.0,
-                        accuracy_catch: 0.0,
-                        accuracy_mania: 0.0,
-                    },
-                    MatchScore {
-                        player_id: 1,
-                        team: 2,
-                        score: 1_000_000,
-                        enabled_mods: None,
-                        misses: 0,
-                        accuracy_standard: 0.0,
-                        accuracy_taiko: 0.0,
-                        accuracy_catch: 0.0,
-                        accuracy_mania: 0.0,
-                    },
-                    MatchScore {
-                        player_id: 2,
-                        team: 2,
-                        score: 803_028,
-                        enabled_mods: None,
-                        misses: 0,
-                        accuracy_standard: 0.0,
-                        accuracy_taiko: 0.0,
-                        accuracy_catch: 0.0,
-                        accuracy_mania: 0.0,
-                    },
-                    MatchScore {
-                        player_id: 3,
-                        team: 2,
-                        score: 723_019,
-                        enabled_mods: None,
-                        misses: 0,
-                        accuracy_standard: 0.0,
-                        accuracy_taiko: 0.0,
-                        accuracy_catch: 0.0,
-                        accuracy_mania: 0.0,
-                    },
-                    MatchScore {
-                        player_id: 8,
-                        team: 1,
-                        score: 639_200,
-                        enabled_mods: None,
-                        misses: 0,
-                        accuracy_standard: 0.0,
-                        accuracy_taiko: 0.0,
-                        accuracy_catch: 0.0,
-                        accuracy_mania: 0.0,
-                    },
-                    MatchScore {
-                        player_id: 9,
-                        team: 1,
-                        score: 620_109,
-                        enabled_mods: None,
-                        misses: 0,
-                        accuracy_standard: 0.0,
-                        accuracy_taiko: 0.0,
-                        accuracy_catch: 0.0,
-                        accuracy_mania: 0.0,
-                    },
-                    MatchScore {
-                        player_id: 10,
-                        team: 1,
-                        score: 500_012,
-                        enabled_mods: None,
-                        misses: 0,
-                        accuracy_standard: 0.0,
-                        accuracy_taiko: 0.0,
-                        accuracy_catch: 0.0,
-                        accuracy_mania: 0.0,
-                    },
-                    MatchScore {
-                        player_id: 11,
-                        team: 1,
-                        score: 300_120,
-                        enabled_mods: None,
-                        misses: 0,
-                        accuracy_standard: 0.0,
-                        accuracy_taiko: 0.0,
-                        accuracy_catch: 0.0,
-                        accuracy_mania: 0.0,
-                    },
-                ],
-            },
-            Game {
-                id: 2,
-                play_mode: Mode::Osu,
-                scoring_type: ScoringType::ScoreV2,
-                team_type: TeamType::TeamVs,
-                mods: 1, // NF
-                game_id: 1002340239,
-                start_time,
-                end_time,
-                beatmap: Some(beatmap.clone()),
-                match_scores: vec![
-                    MatchScore {
-                        player_id: 12,
-                        team: 1,
-                        score: 1_020_480,
-                        enabled_mods: None,
-                        misses: 0,
-                        accuracy_standard: 0.0,
-                        accuracy_taiko: 0.0,
-                        accuracy_catch: 0.0,
-                        accuracy_mania: 0.0,
-                    },
-                    MatchScore {
-                        player_id: 13,
-                        team: 1,
-                        score: 1_000_000,
-                        enabled_mods: None,
-                        misses: 0,
-                        accuracy_standard: 0.0,
-                        accuracy_taiko: 0.0,
-                        accuracy_catch: 0.0,
-                        accuracy_mania: 0.0,
-                    },
-                    MatchScore {
-                        player_id: 14,
-                        team: 1,
-                        score: 803_028,
-                        enabled_mods: None,
-                        misses: 0,
-                        accuracy_standard: 0.0,
-                        accuracy_taiko: 0.0,
-                        accuracy_catch: 0.0,
-                        accuracy_mania: 0.0,
-                    },
-                    MatchScore {
-                        player_id: 15,
-                        team: 1,
-                        score: 723_019,
-                        enabled_mods: None,
-                        misses: 0,
-                        accuracy_standard: 0.0,
-                        accuracy_taiko: 0.0,
-                        accuracy_catch: 0.0,
-                        accuracy_mania: 0.0,
-                    },
-                    MatchScore {
-                        player_id: 4,
-                        team: 2,
-                        score: 639_200,
-                        enabled_mods: None,
-                        misses: 0,
-                        accuracy_standard: 0.0,
-                        accuracy_taiko: 0.0,
-                        accuracy_catch: 0.0,
-                        accuracy_mania: 0.0,
-                    },
-                    MatchScore {
-                        player_id: 5,
-                        team: 2,
-                        score: 620_109,
-                        enabled_mods: None,
-                        misses: 0,
-                        accuracy_standard: 0.0,
-                        accuracy_taiko: 0.0,
-                        accuracy_catch: 0.0,
-                        accuracy_mania: 0.0,
-                    },
-                    MatchScore {
-                        player_id: 6,
-                        team: 2,
-                        score: 500_012,
-                        enabled_mods: None,
-                        misses: 0,
-                        accuracy_standard: 0.0,
-                        accuracy_taiko: 0.0,
-                        accuracy_catch: 0.0,
-                        accuracy_mania: 0.0,
-                    },
-                    MatchScore {
-                        player_id: 7,
-                        team: 2,
-                        score: 300_120,
-                        enabled_mods: None,
-                        misses: 0,
-                        accuracy_standard: 0.0,
-                        accuracy_taiko: 0.0,
-                        accuracy_catch: 0.0,
-                        accuracy_mania: 0.0,
-                    },
-                ],
-            },
-            Game {
-                id: 3,
-                play_mode: Mode::Osu,
-                scoring_type: ScoringType::ScoreV2,
-                team_type: TeamType::TeamVs,
-                mods: 1, // NF
-                game_id: 1002340240,
-                start_time,
-                end_time,
-                beatmap: Some(beatmap.clone()),
-                match_scores: vec![
-                    MatchScore {
-                        player_id: 3,
-                        team: 2,
-                        score: 1_020_480,
-                        enabled_mods: None,
-                        misses: 0,
-                        accuracy_standard: 0.0,
-                        accuracy_taiko: 0.0,
-                        accuracy_catch: 0.0,
-                        accuracy_mania: 0.0,
-                    },
-                    MatchScore {
-                        player_id: 4,
-                        team: 2,
-                        score: 1_000_000,
-                        enabled_mods: None,
-                        misses: 0,
-                        accuracy_standard: 0.0,
-                        accuracy_taiko: 0.0,
-                        accuracy_catch: 0.0,
-                        accuracy_mania: 0.0,
-                    },
-                    MatchScore {
-                        player_id: 5,
-                        team: 2,
-                        score: 803_028,
-                        enabled_mods: None,
-                        misses: 0,
-                        accuracy_standard: 0.0,
-                        accuracy_taiko: 0.0,
-                        accuracy_catch: 0.0,
-                        accuracy_mania: 0.0,
-                    },
-                    MatchScore {
-                        player_id: 6,
-                        team: 2,
-                        score: 723_019,
-                        enabled_mods: None,
-                        misses: 0,
-                        accuracy_standard: 0.0,
-                        accuracy_taiko: 0.0,
-                        accuracy_catch: 0.0,
-                        accuracy_mania: 0.0,
-                    },
-                    MatchScore {
-                        player_id: 10,
-                        team: 1,
-                        score: 639_200,
-                        enabled_mods: None,
-                        misses: 0,
-                        accuracy_standard: 0.0,
-                        accuracy_taiko: 0.0,
-                        accuracy_catch: 0.0,
-                        accuracy_mania: 0.0,
-                    },
-                    MatchScore {
-                        player_id: 11,
-                        team: 1,
-                        score: 620_109,
-                        enabled_mods: None,
-                        misses: 0,
-                        accuracy_standard: 0.0,
-                        accuracy_taiko: 0.0,
-                        accuracy_catch: 0.0,
-                        accuracy_mania: 0.0,
-                    },
-                    MatchScore {
-                        player_id: 12,
-                        team: 1,
-                        score: 500_012,
-                        enabled_mods: None,
-                        misses: 0,
-                        accuracy_standard: 0.0,
-                        accuracy_taiko: 0.0,
-                        accuracy_catch: 0.0,
-                        accuracy_mania: 0.0,
-                    },
-                    MatchScore {
-                        player_id: 13,
-                        team: 1,
-                        score: 300_120,
-                        enabled_mods: None,
-                        misses: 0,
-                        accuracy_standard: 0.0,
-                        accuracy_taiko: 0.0,
-                        accuracy_catch: 0.0,
-                        accuracy_mania: 0.0,
-                    },
-                ],
-            }],
+            games: vec![
+                Game {
+                    id: 1,
+                    play_mode: Mode::Osu,
+                    scoring_type: ScoringType::ScoreV2,
+                    team_type: TeamType::TeamVs,
+                    mods: 9, // HD NF
+                    game_id: 1002340238,
+                    start_time,
+                    end_time,
+                    beatmap: Some(beatmap.clone()),
+                    match_scores: vec![
+                        MatchScore {
+                            player_id: 0,
+                            team: 2,
+                            score: 1_020_480,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 0.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0,
+                        },
+                        MatchScore {
+                            player_id: 1,
+                            team: 2,
+                            score: 1_000_000,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 0.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0,
+                        },
+                        MatchScore {
+                            player_id: 2,
+                            team: 2,
+                            score: 803_028,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 0.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0,
+                        },
+                        MatchScore {
+                            player_id: 3,
+                            team: 2,
+                            score: 723_019,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 0.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0,
+                        },
+                        MatchScore {
+                            player_id: 8,
+                            team: 1,
+                            score: 639_200,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 0.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0,
+                        },
+                        MatchScore {
+                            player_id: 9,
+                            team: 1,
+                            score: 620_109,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 0.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0,
+                        },
+                        MatchScore {
+                            player_id: 10,
+                            team: 1,
+                            score: 500_012,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 0.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0,
+                        },
+                        MatchScore {
+                            player_id: 11,
+                            team: 1,
+                            score: 300_120,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 0.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0,
+                        },
+                    ],
+                },
+                Game {
+                    id: 2,
+                    play_mode: Mode::Osu,
+                    scoring_type: ScoringType::ScoreV2,
+                    team_type: TeamType::TeamVs,
+                    mods: 1, // NF
+                    game_id: 1002340239,
+                    start_time,
+                    end_time,
+                    beatmap: Some(beatmap.clone()),
+                    match_scores: vec![
+                        MatchScore {
+                            player_id: 12,
+                            team: 1,
+                            score: 1_020_480,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 0.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0,
+                        },
+                        MatchScore {
+                            player_id: 13,
+                            team: 1,
+                            score: 1_000_000,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 0.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0,
+                        },
+                        MatchScore {
+                            player_id: 14,
+                            team: 1,
+                            score: 803_028,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 0.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0,
+                        },
+                        MatchScore {
+                            player_id: 15,
+                            team: 1,
+                            score: 723_019,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 0.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0,
+                        },
+                        MatchScore {
+                            player_id: 4,
+                            team: 2,
+                            score: 639_200,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 0.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0,
+                        },
+                        MatchScore {
+                            player_id: 5,
+                            team: 2,
+                            score: 620_109,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 0.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0,
+                        },
+                        MatchScore {
+                            player_id: 6,
+                            team: 2,
+                            score: 500_012,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 0.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0,
+                        },
+                        MatchScore {
+                            player_id: 7,
+                            team: 2,
+                            score: 300_120,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 0.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0,
+                        },
+                    ],
+                },
+                Game {
+                    id: 3,
+                    play_mode: Mode::Osu,
+                    scoring_type: ScoringType::ScoreV2,
+                    team_type: TeamType::TeamVs,
+                    mods: 1, // NF
+                    game_id: 1002340240,
+                    start_time,
+                    end_time,
+                    beatmap: Some(beatmap.clone()),
+                    match_scores: vec![
+                        MatchScore {
+                            player_id: 3,
+                            team: 2,
+                            score: 1_020_480,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 0.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0,
+                        },
+                        MatchScore {
+                            player_id: 4,
+                            team: 2,
+                            score: 1_000_000,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 0.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0,
+                        },
+                        MatchScore {
+                            player_id: 5,
+                            team: 2,
+                            score: 803_028,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 0.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0,
+                        },
+                        MatchScore {
+                            player_id: 6,
+                            team: 2,
+                            score: 723_019,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 0.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0,
+                        },
+                        MatchScore {
+                            player_id: 10,
+                            team: 1,
+                            score: 639_200,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 0.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0,
+                        },
+                        MatchScore {
+                            player_id: 11,
+                            team: 1,
+                            score: 620_109,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 0.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0,
+                        },
+                        MatchScore {
+                            player_id: 12,
+                            team: 1,
+                            score: 500_012,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 0.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0,
+                        },
+                        MatchScore {
+                            player_id: 13,
+                            team: 1,
+                            score: 300_120,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 0.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0,
+                        },
+                    ],
+                },
+            ],
         };
 
         // =====================
         // END MATCH DEFINITION
         // =====================
 
-        // Sort by match cost
         let mut match_costs = super::match_costs(&fake_match.games).unwrap();
-        match_costs.sort_by(|a, b| a.player_id.partial_cmp(&b.player_id).unwrap());
-
-        // Assumes match costs are correct.
-        let sorted_player_ids: Vec<_> = match_costs.iter().map(|mc| mc.player_id).collect();
-
-        // let mut model_ratings: Vec<Vec<Rating>> = Vec::new();
-        // for id in sorted_player_ids.iter() {
-        //     model_ratings.push(vec![Rating {
-        //         mu: initial_ratings[*id as usize].rating.mu,
-        //         sigma: initial_ratings[*id as usize].rating.sigma,
-        //     }])
-        // }
-
-        // Mapped to initial rating ids. e.g. expected_ratings[5][0] = new result for player 5
-        let expected_ratings: Vec<Vec<Rating>> = model.rate(initial_ratings.iter().map(|x| vec![x.rating.clone()]).collect(),
-                                                            match_costs.iter().map(|x| (x.match_cost * 1000.0) as usize).collect());
-
         matches.push(fake_match);
-        let evaluation = calc_ratings(&initial_ratings, &country_mapping,
-        &matches, &model);
 
-        println!("{:?}", initial_ratings);
-        println!("{:?}", expected_ratings);
-        println!("{:?}", evaluation);
+        // Sort `match_costs` in descending order based on `match_cost`, so higher values (better performance) come first.
+        match_costs.sort_by(|a, b| b.match_cost.partial_cmp(&a.match_cost).unwrap());
 
-        for i in 0..16 {
-            let eval_rating = evaluation.base_ratings.iter().find(|x| x.player_id == i).unwrap();
-            let expected_mu = expected_ratings[i as usize][0].mu;
-            let expected_sigma = expected_ratings[i as usize][0].sigma;
+        // Generate player IDs and rankings based on the new order.
+        let player_ids: Vec<_> = match_costs.iter().map(|x| x.player_id).collect();
 
-            let eval_mu = eval_rating.rating.mu;
-            let eval_sigma = eval_rating.rating.sigma;
-            assert!((eval_mu - expected_mu).abs() < f64::EPSILON, "Player {}'s mu is {}, should be {}", i, eval_mu, expected_mu);
-            assert!((eval_sigma - expected_sigma).abs() < f64::EPSILON, "Player {}'s sigma is {}, should be {}", i, eval_sigma, expected_sigma);
+        // Generate rankings: best performance (highest `match_cost`) gets rank 1, and so on.
+        let rankings: Vec<_> = (1..=match_costs.len()).collect();
+
+        // Prepare teams based on the sorted `player_ids` and their initial ratings.
+        let teams: Vec<Vec<_>> = player_ids
+            .iter()
+            .map(|id| {
+                vec![initial_ratings
+                    .iter()
+                    .find(|x| x.player_id == *id)
+                    .unwrap()
+                    .rating
+                    .clone()]
+            })
+            .collect();
+
+        // Calculate expected ratings using the openskill model.
+        let expected_ratings = model.rate(teams, rankings);
+        let actual_ratings = calc_ratings(&initial_ratings, &country_mapping, &matches, &model);
+
+        // Check if the expected ratings match the actual ratings.
+        // Assuming `expected_ratings` and `actual_ratings.base_ratings` are available
+        // and `player_ids` contains the IDs in the order used for calculating `expected_ratings`.
+
+        // Iterate through `player_ids` to ensure we're comparing the correct players.
+        for (index, player_id) in player_ids.iter().enumerate() {
+            // Find the actual rating for the player.
+            let actual_rating = actual_ratings
+                .base_ratings
+                .iter()
+                .find(|r| r.player_id == *player_id)
+                .expect("Player ID should exist");
+
+            // Retrieve the expected rating for this player based on the order they were processed.
+            let expected_rating = &expected_ratings[index][0];
+
+            // Compare mu values
+            assert!(
+                (expected_rating.mu - actual_rating.rating.mu).abs() < f64::EPSILON,
+                "Player {}'s mu is {}, should be {}",
+                player_id,
+                actual_rating.rating.mu,
+                expected_rating.mu
+            );
+
+            // Compare sigma values
+            assert!(
+                (expected_rating.sigma - actual_rating.rating.sigma).abs() < f64::EPSILON,
+                "Player {}'s sigma is {}, should be {}",
+                player_id,
+                actual_rating.rating.sigma,
+                expected_rating.sigma
+            );
         }
     }
 }

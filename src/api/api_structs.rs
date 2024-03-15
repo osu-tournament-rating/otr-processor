@@ -14,7 +14,7 @@ pub struct OAuthResponse {
 
     /// Expire time in seconds
     #[serde(rename = "accessExpiration")]
-    pub expire_in: u64
+    pub expire_in: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
