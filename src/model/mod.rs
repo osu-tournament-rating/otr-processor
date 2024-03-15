@@ -424,9 +424,7 @@ pub fn calc_ratings(
     }
 }
 fn get_percentile(rank: i32, player_count: i32) -> f64 {
-    let res = (rank / player_count) as f64;
-    // println!("percentile: {:?}", res);
-    res
+    (rank / player_count) as f64
 }
 
 fn get_country_rank(
