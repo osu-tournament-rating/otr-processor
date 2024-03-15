@@ -972,13 +972,13 @@ mod tests {
 
         // Expected mu = actual mu
         assert!(
-            (loser_expected_outcome.mu - loser_stats.rating_after).abs() < 1.0,
+            (loser_expected_outcome.mu - loser_stats.rating_after).abs() < f64::EPSILON,
             "Loser's rating is {}, should be {}",
             loser_stats.rating_after,
             loser_expected_outcome.mu
         );
         assert!(
-            (loser_expected_outcome.sigma - loser_stats.volatility_after).abs() < 1.0,
+            (loser_expected_outcome.sigma - loser_stats.volatility_after).abs() < f64::EPSILON,
             "Loser's volatility is {}, should be {}",
             loser_stats.volatility_after,
             loser_expected_outcome.sigma
@@ -986,13 +986,13 @@ mod tests {
 
         // Expected sigma = actual sigma
         assert!(
-            (winner_expected_outcome.mu - winner_stats.rating_after).abs() < 1.0,
+            (winner_expected_outcome.mu - winner_stats.rating_after).abs() < f64::EPSILON,
             "Winner's rating is {}, should be {}",
             winner_stats.rating_after,
             winner_expected_outcome.mu
         );
         assert!(
-            (winner_expected_outcome.sigma - winner_stats.volatility_after).abs() < 1.0,
+            (winner_expected_outcome.sigma - winner_stats.volatility_after).abs() < f64::EPSILON,
             "Winner's volatility is {}, should be {}",
             winner_stats.volatility_after,
             winner_expected_outcome.sigma
