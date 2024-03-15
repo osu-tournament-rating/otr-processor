@@ -195,7 +195,7 @@ pub fn calc_ratings(
             to_rate.push(rating_prior.clone());
 
             let prior_mu = rating_prior.rating.mu;
-            // Updating rank for tracking
+            // Updating rank for tracking base stats
             ratings_hash
                 .entry((match_cost.player_id, curr_match.mode))
                 .and_modify(|f| f.rating.mu = prior_mu);
@@ -212,7 +212,11 @@ pub fn calc_ratings(
                     team_based_count += 1;
                 }
             }
-            let team_based = team_based_count > single_count;
+            let team_based = if team_based_count == single_count {
+                &curr_match.games[curr_match.games.len() - 1].play_mode != TeamType::HeadToHead
+            } else {
+                team_based_count > single_count
+            };
 
             let mut teammate_ratings: Option<Vec<_>> = None;
             let mut opponent_ratings: Option<Vec<_>> = None;
