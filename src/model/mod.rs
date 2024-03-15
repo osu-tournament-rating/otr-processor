@@ -595,7 +595,7 @@ mod tests {
     use crate::{
         api::api_structs::{Beatmap, Game, Match, MatchScore},
         model::{
-            calc_ratings, mu_for_rank,
+            calc_ratings, mu_for_rank, get_percentile,
             structures::{mode::Mode, player_rating::PlayerRating, scoring_type::ScoringType, team_type::TeamType},
         },
     };
@@ -642,6 +642,11 @@ mod tests {
         assert!((expected - value).abs() < 0.000001);
     }
 
+    #[test]
+    fn test_percentile() {
+        assert!((0.0 - get_percentile(1, 2)).abs() < f64::EPSILON);
+        assert!((1.0 - get_percentile(2, 2)).abs() < f64::EPSILON);
+    }
     #[test]
     fn test_calc_ratings_1v1() {
         let mut initial_ratings = Vec::new();
