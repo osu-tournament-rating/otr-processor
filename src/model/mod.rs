@@ -270,15 +270,23 @@ pub fn calc_ratings(
             // Uses start_time as end_time can be null (issue on osu-web side)
             decay_tracker.record_activity(rating_prior.player_id, curr_match.mode, start_time);
 
+            // Use this set of ratings to determine global ranks
+            let prior_ratings: Vec<PlayerRating> = ratings_hash
+                .iter()
+                .map(|(_, v)| v)
+                .filter(|x| x.mode == curr_match.mode)
+                .cloned() // This will clone each `&PlayerRating` to `PlayerRating`
+                .collect();
+
             let global_rank_before =
-                get_global_rank(&rating_prior.rating.mu, &rating_prior.player_id, &initial_ratings);
+                get_global_rank(&rating_prior.rating.mu, &rating_prior.player_id, &&prior_ratings);
             let country_rank_before = get_country_rank(
                 &rating_prior.rating.mu,
                 &rating_prior.player_id,
                 &country_mapping,
-                &initial_ratings
+                &&prior_ratings
             );
-            let percentile_before = get_percentile(global_rank_before, initial_ratings.len() as i32);
+            let percentile_before = get_percentile(global_rank_before, prior_ratings.len() as i32);
 
             let adjustment = MatchRatingStats {
                 player_id: rating_prior.player_id,
@@ -330,6 +338,13 @@ pub fn calc_ratings(
                 .and_modify(|mut f| *f = rating);
         }
 
+        let current_ratings: Vec<PlayerRating> = ratings_hash
+            .iter()
+            .map(|x| x.1)
+            .filter(|x| x.mode == curr_match.mode)
+            .cloned()
+            .collect();
+
         for mc in match_costs {
             let curr_id = mc.player_id;
             let key = (mc.player_id, curr_match.mode);
@@ -339,14 +354,14 @@ pub fn calc_ratings(
                 new_rating.rating.mu = 100.0;
             }
 
-            let global_rank_after = get_global_rank(&new_rating.rating.mu, &new_rating.player_id, &initial_ratings);
+            let global_rank_after = get_global_rank(&new_rating.rating.mu, &new_rating.player_id, &&current_ratings);
             let country_rank_after = get_country_rank(
                 &new_rating.rating.mu,
                 &new_rating.player_id,
                 &country_mapping,
-                &initial_ratings
+                &&current_ratings
             );
-            let percentile_after = get_percentile(global_rank_after, initial_ratings.len() as i32);
+            let percentile_after = get_percentile(global_rank_after, current_ratings.len() as i32);
 
             // get new global/country ranks and percentiles
             stats.entry(curr_id).and_modify(|f| {
