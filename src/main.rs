@@ -19,7 +19,7 @@ async fn main() {
         .expect("Failed to intialize otr api");
 
     let match_ids = api
-        .get_match_ids(Some(100))
+        .get_match_ids(None)
         .await
         .expect("Match ids must be valid before proceeding");
 
@@ -28,26 +28,17 @@ async fn main() {
         .await
         .expect("Matches need to be loaded before continuing");
 
-    // let players = api.get_players().await.expect("Ranks must be identified");
+    let players = api.get_players().await.expect("Ranks must be identified");
+    let country_mappings = api
+        .get_player_country_mapping()
+        .await
+        .expect("Country mappings must be identified");
 
     // Model
-    // let ratings = model::model::create_initial_ratings(matches, players);
+    let plackett_luce = model::create_model();
+    let ratings = model::create_initial_ratings(&matches, &players);
+    let result = model::calc_ratings(&ratings, &country_mappings, &matches, &plackett_luce);
 
-    let bar = ProgressBar::new(matches.len() as u64);
-
-    let mut mcs: Vec<Vec<MatchCost>> = Vec::new();
-    for m in matches {
-        let mc = match_costs(&m.games);
-
-        bar.inc(1);
-
-        match mc {
-            Some(match_costs) => mcs.push(match_costs),
-            None => continue,
-        }
-    }
-
-    bar.finish();
-
+    println!("{:?} ratings processed", result.base_ratings.len());
     // println!("{:?}", mcs)
 }
