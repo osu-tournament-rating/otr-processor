@@ -2,7 +2,10 @@ pub mod api_structs;
 
 use std::{sync::Arc, time::Duration};
 
-use crate::api::api_structs::{Match, MatchIdMapping, OAuthResponse, Player};
+use crate::{
+    api::api_structs::{Match, MatchIdMapping, OAuthResponse, Player, PlayerCountryMapping},
+    utils::progress_utils::progress_bar
+};
 use reqwest::{
     header::{AUTHORIZATION, CONTENT_TYPE},
     Client, ClientBuilder, Error, Method
@@ -291,10 +294,13 @@ impl OtrApiClient {
 
         let mut data: Vec<Match> = Vec::new();
 
+        println!("Fetching match data...");
+        let bar = progress_bar(match_ids.len() as u64);
         for chunk in match_ids.chunks(chunk_size) {
             let response: Vec<Match> = self.make_request_with_body(Method::POST, link, Some(chunk)).await?;
 
-            data.extend(response)
+            data.extend(response);
+            bar.inc(chunk.len() as u64);
         }
 
         Ok(data)
@@ -311,6 +317,13 @@ impl OtrApiClient {
     /// Get list of players
     pub async fn get_players(&self) -> Result<Vec<Player>, Error> {
         let link = "/v1/players/ranks/all";
+
+        self.make_request(Method::GET, link).await
+    }
+
+    /// Get list of player country mappings
+    pub async fn get_player_country_mapping(&self) -> Result<Vec<PlayerCountryMapping>, Error> {
+        let link = "/v1/players/country-mapping";
 
         self.make_request(Method::GET, link).await
     }

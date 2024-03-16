@@ -18,3 +18,5 @@ pub static OSU_RATING_SLOPE: f64 = 3.2;
 lazy_static! {
     pub static ref VOLATILITY_GROWTH_RATE: f64 = 0.08 * (f64::powf(MULTIPLIER, 2.0));
 }
+
+pub const BLUE_TEAM_ID: i32 = 1;

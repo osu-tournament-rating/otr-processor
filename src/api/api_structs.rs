@@ -17,11 +17,11 @@ pub struct OAuthResponse {
     pub expire_in: u64
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RatingAdjustment {
     pub player_id: i32,
-    pub mode: i32,
+    pub mode: Mode,
     pub rating_adjustment_amount: f64,
     pub volatility_adjustment_amount: f64,
     pub rating_before: f64,
@@ -131,6 +131,13 @@ pub struct MatchIdMapping {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct PlayerCountryMapping {
+    pub playerId: i32,
+    pub country: Option<String>
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Game {
     pub id: i32,
     pub play_mode: Mode,
@@ -144,7 +151,7 @@ pub struct Game {
     pub match_scores: Vec<MatchScore>
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MatchScore {
     pub player_id: i32,
@@ -158,7 +165,7 @@ pub struct MatchScore {
     pub accuracy_mania: f64
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Beatmap {
     pub artist: String,

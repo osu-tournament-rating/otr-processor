@@ -50,7 +50,8 @@ jobs:
         run: |
           touch .env
           echo API_ROOT=${{ secrets.ENV_DEV__API_ROOT }} >> .env
-          echo PRIVILEGED_SECRET=${{ secrets.ENV_DEV__PRIVILEGED_SECRET }} >> .env
+          echo CLIENT_ID=${{ secrets.ENV_DEV__OAUTH_CLIENT_ID }} >> .env
+          echo CLIENT_SECRET=${{ secrets.ENV_DEV__OAUTH_CLIENT_SECRET }} >> .env
 
       - name: Test
         run: cargo test
