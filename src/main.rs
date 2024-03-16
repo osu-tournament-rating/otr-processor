@@ -1,14 +1,4 @@
-#[macro_use]
-extern crate lazy_static;
-
-mod api;
-mod env;
-mod model;
-mod utils;
-
-use indicatif::ProgressBar;
-
-use crate::model::{match_costs, structures::match_cost::MatchCost, hash_country_mappings};
+use otr_processor::{api, model::{self, hash_country_mappings}};
 
 #[tokio::main]
 async fn main() {
@@ -50,8 +40,8 @@ async fn main() {
         }
     }
 
-    //let result = model::calc_ratings(&ratings, &country_mappings, &matches, &plackett_luce);
+    let result = model::calc_ratings(&ratings, &country_mappings, &matches, &plackett_luce);
 
-    //println!("{:?} ratings processed", result.base_ratings.len());
-    // println!("{:?}", mcs)
+    println!("{:?} ratings processed", result.base_ratings.len());
+    //println!("{:?}", mcs);
 }
