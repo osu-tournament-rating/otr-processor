@@ -132,7 +132,7 @@ pub struct MatchIdMapping {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerCountryMapping {
-    pub playerId: i32,
+    pub player_id: i32,
     pub country: Option<String>
 }
 

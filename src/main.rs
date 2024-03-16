@@ -8,7 +8,7 @@ mod utils;
 
 use indicatif::ProgressBar;
 
-use crate::model::{match_costs, structures::match_cost::MatchCost};
+use crate::model::{match_costs, structures::match_cost::MatchCost, hash_country_mappings};
 
 #[tokio::main]
 async fn main() {
@@ -36,9 +36,22 @@ async fn main() {
 
     // Model
     let plackett_luce = model::create_model();
-    let ratings = model::create_initial_ratings(&matches, &players);
-    let result = model::calc_ratings(&ratings, &country_mappings, &matches, &plackett_luce);
+    let country_hash = hash_country_mappings(&country_mappings);
+    let mut ratings = model::create_initial_ratings(&matches, &players);
 
-    println!("{:?} ratings processed", result.base_ratings.len());
+    // Filling PlayerRating with their country
+    for player_rating in ratings.iter_mut() {
+        if let Some(Some(country)) = country_hash.get(&player_rating.player_id) {
+            if player_rating.country.len() == 0 {
+                player_rating.country.push_str(&country)
+            } else {
+                panic!("WTF!@#$!@");
+            }
+        }
+    }
+
+    //let result = model::calc_ratings(&ratings, &country_mappings, &matches, &plackett_luce);
+
+    //println!("{:?} ratings processed", result.base_ratings.len());
     // println!("{:?}", mcs)
 }

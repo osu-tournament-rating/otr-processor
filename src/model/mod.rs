@@ -44,7 +44,7 @@ pub fn create_initial_ratings(matches: &Vec<Match>, players: &Vec<Player>) -> Ve
     let bar = progress_bar(matches.len() as u64);
 
     // Map the osu ids for fast lookup
-    let mut player_hashmap: HashMap<i32, Player> = HashMap::new();
+    let mut player_hashmap: HashMap<i32, Player> = HashMap::with_capacity(players.len());
 
     for player in players {
         player_hashmap.entry(player.id).or_insert(player.clone());
@@ -92,7 +92,10 @@ pub fn create_initial_ratings(matches: &Vec<Match>, players: &Vec<Player>) -> Ve
                 let player_rating = PlayerRating {
                     player_id: score.player_id,
                     mode,
-                    rating
+                    rating,
+                    global_ranking: 0,
+                    country_ranking: 0,
+                    country: String::with_capacity(2),
                 };
                 ratings.push(player_rating);
 
@@ -106,11 +109,11 @@ pub fn create_initial_ratings(matches: &Vec<Match>, players: &Vec<Player>) -> Ve
     ratings
 }
 
-pub fn hash_country_mappings(country_mappings: &Vec<PlayerCountryMapping>) -> HashMap<i32, Option<String>> {
-    let mut country_mappings_hash: HashMap<i32, Option<String>> = HashMap::new();
+pub fn hash_country_mappings(country_mappings: &[PlayerCountryMapping]) -> HashMap<i32, Option<String>> {
+    let mut country_mappings_hash: HashMap<i32, Option<String>> = HashMap::with_capacity(country_mappings.len());
 
     for c in country_mappings {
-        country_mappings_hash.insert(c.playerId, c.country.clone());
+        country_mappings_hash.insert(c.player_id, c.country.clone());
     }
 
     country_mappings_hash
@@ -119,17 +122,17 @@ pub fn hash_country_mappings(country_mappings: &Vec<PlayerCountryMapping>) -> Ha
 /// Calculates a vector of initial ratings based on match cost,
 /// returns the new ratings
 pub fn calc_ratings(
-    initial_ratings: &Vec<PlayerRating>,
-    country_mappings: &Vec<PlayerCountryMapping>,
-    matches: &Vec<Match>,
+    initial_ratings: &[PlayerRating],
+    country_mappings: &[PlayerCountryMapping],
+    matches: &[Match],
     model: &PlackettLuce
 ) -> RatingCalculationResult {
     // Key = (player_id, mode as i32)
     // Value = Associated PlayerRating (if available)
-    let mut ratings_hash: HashMap<(i32, Mode), PlayerRating> = HashMap::new();
+    let mut ratings_hash: HashMap<(i32, Mode), PlayerRating> = HashMap::with_capacity(initial_ratings.len());
     // Key = match_id
     // Value = Vec of MatchRatingStats per match
-    let mut rating_stats_hash: HashMap<i32, Vec<MatchRatingStats>> = HashMap::new();
+    let rating_stats_hash: HashMap<i32, Vec<MatchRatingStats>> = HashMap::new();
     // Key = player_id
     // Value = Vec of RatingAdjustments per player
     let mut rating_adjustments_hash: HashMap<(i32, Mode), Vec<RatingAdjustment>> = HashMap::new();
@@ -140,7 +143,7 @@ pub fn calc_ratings(
     // Vector of match ratings to return
     let mut rating_stats: Vec<MatchRatingStats> = Vec::new();
     // Vector of adjustments to return
-    let mut adjustments: Vec<RatingAdjustment> = Vec::new();
+    let adjustments: Vec<RatingAdjustment> = Vec::new();
 
     // Insert every given player into initial ratings
     for r in initial_ratings {
@@ -259,7 +262,7 @@ pub fn calc_ratings(
                 }
 
                 // Get IDs of all users in player's team and the opposite team
-                let (mut teammate_list, mut opponent_list): (Vec<MatchScore>, Vec<MatchScore>) = curr_match
+                let (teammate_list, opponent_list): (Vec<MatchScore>, Vec<MatchScore>) = curr_match
                     .games
                     .iter()
                     .map(|f| f.match_scores.clone())
@@ -281,11 +284,11 @@ pub fn calc_ratings(
                 push_team_rating(&mut ratings_hash, curr_match, teammate_list, &mut teammates);
                 push_team_rating(&mut ratings_hash, curr_match, opponent_list, &mut opponents);
 
-                if teammates.len() > 0 {
+                if !teammates.is_empty() {
                     teammate_ratings = Some(teammates);
                 }
 
-                if opponents.len() > 0 {
+                if !opponents.is_empty() {
                     opponent_ratings = Some(opponents);
                 }
             }
@@ -298,18 +301,17 @@ pub fn calc_ratings(
 
             // Use this set of ratings to determine global ranks
             let prior_ratings: Vec<PlayerRating> = ratings_hash
-                .iter()
-                .map(|(_, v)| v)
+                .values()
                 .filter(|x| x.mode == curr_match.mode)
                 .cloned() // This will clone each `&PlayerRating` to `PlayerRating`
                 .collect();
 
-            let global_rank_before = get_global_rank(&rating_prior.rating.mu, &rating_prior.player_id, &&prior_ratings);
+            let global_rank_before = get_global_rank(&rating_prior.rating.mu, &rating_prior.player_id, &prior_ratings);
             let country_rank_before = get_country_rank(
                 &rating_prior.rating.mu,
                 &rating_prior.player_id,
-                &&country_mappings_hash,
-                &&prior_ratings
+                &country_mappings_hash,
+                &prior_ratings
             );
             let percentile_before = get_percentile(global_rank_before, prior_ratings.len() as i32);
 
@@ -338,6 +340,10 @@ pub fn calc_ratings(
 
             stats.insert(rating_prior.player_id, adjustment);
         }
+        
+        // Generating adjustments
+
+
         // Sort rated players and their matchcosts by player IDs for correct mappings
         to_rate.sort_by(|x, y| x.player_id.cmp(&y.player_id));
         match_costs.sort_by(|x, y| x.player_id.cmp(&y.player_id));
@@ -361,7 +367,7 @@ pub fn calc_ratings(
         for rating in to_rate {
             ratings_hash
                 .entry((rating.player_id, rating.mode))
-                .and_modify(|mut f| *f = rating);
+                .and_modify(|f| *f = rating);
         }
 
         let current_ratings: Vec<PlayerRating> = ratings_hash
@@ -381,12 +387,12 @@ pub fn calc_ratings(
                 new_rating.rating.mu = 100.0;
             }
 
-            let global_rank_after = get_global_rank(&new_rating.rating.mu, &new_rating.player_id, &&current_ratings);
+            let global_rank_after = get_global_rank(&new_rating.rating.mu, &new_rating.player_id, &current_ratings);
             let country_rank_after = get_country_rank(
                 &new_rating.rating.mu,
                 &new_rating.player_id,
-                &&country_mappings_hash,
-                &&current_ratings
+                &country_mappings_hash,
+                &current_ratings
             );
             let percentile_after = get_percentile(global_rank_after, current_ratings.len() as i32);
 
@@ -457,11 +463,10 @@ fn get_percentile(rank: i32, player_count: i32) -> f64 {
 fn get_country_rank(
     mu: &f64,
     player_id: &i32,
-    country_mappings_hash: &&HashMap<i32, Option<String>>,
-    existing_ratings: &&Vec<PlayerRating>
+    country_mappings_hash: &HashMap<i32, Option<String>>,
+    existing_ratings: &[PlayerRating]
 ) -> i32 {
     let mut ratings: Vec<f64> = existing_ratings
-        .clone()
         .iter()
         .filter(|r| {
             r.player_id != *player_id && country_mappings_hash.get(player_id) == country_mappings_hash.get(&r.player_id)
@@ -469,15 +474,16 @@ fn get_country_rank(
         .filter(|r| country_mappings_hash.get(&r.player_id).is_some())
         .map(|r| r.rating.mu)
         .collect();
+
     ratings.push(*mu);
-    ratings.sort_by(|x, y| x.partial_cmp(y).unwrap());
-    ratings.reverse();
+    ratings.sort_by(|x, y| y.partial_cmp(x).unwrap());
     for (rank, mu_iter) in ratings.iter().enumerate() {
         if mu == mu_iter {
             return (rank + 1) as i32;
         }
     }
-    return 0;
+
+    0
 }
 
 /// Returns a vector of rankings as follows:
@@ -486,7 +492,7 @@ fn get_country_rank(
 ///
 /// The lower the rank, the better. The results are returned in the
 /// same order as the input vector.
-fn ranks_from_match_costs(match_costs: &Vec<MatchCost>) -> Vec<usize> {
+fn ranks_from_match_costs(match_costs: &[MatchCost]) -> Vec<usize> {
     let mut ranks = vec![0; match_costs.len()];
     let mut sorted_indices = (0..match_costs.len()).collect::<Vec<_>>();
 
@@ -506,22 +512,22 @@ fn ranks_from_match_costs(match_costs: &Vec<MatchCost>) -> Vec<usize> {
     ranks
 }
 
-fn get_global_rank(mu: &f64, player_id: &i32, existing_ratings: &&Vec<PlayerRating>) -> i32 {
+fn get_global_rank(mu: &f64, player_id: &i32, existing_ratings: &[PlayerRating]) -> i32 {
     let mut ratings: Vec<f64> = existing_ratings
-        .clone()
         .iter()
         .filter(|r| r.player_id != *player_id)
         .map(|r| r.rating.mu)
         .collect();
+
     ratings.push(*mu);
-    ratings.sort_by(|x, y| x.partial_cmp(y).unwrap());
-    ratings.reverse();
+    ratings.sort_by(|x, y| y.partial_cmp(x).unwrap());
     for (rank, mu_iter) in ratings.iter().enumerate() {
         if mu == mu_iter {
             return (rank + 1) as i32;
         }
     }
-    return 0;
+
+    0
 }
 
 fn push_team_rating(
@@ -542,14 +548,13 @@ fn push_team_rating(
 }
 
 fn average_rating(ratings: Option<Vec<f64>>) -> Option<f64> {
-    let avg_rating = if let Some(rating) = ratings {
+    if let Some(rating) = ratings {
         let len = rating.len() as f64;
         let s_ratings: f64 = rating.into_iter().sum();
         Some(s_ratings / len)
     } else {
         None
-    };
-    avg_rating
+    }
 }
 
 // Utility
@@ -648,6 +653,8 @@ pub fn mu_for_rank(rank: i32) -> f64 {
 
 #[cfg(test)]
 mod tests {
+    use std::{collections::{HashMap, HashSet}, cmp::Ordering};
+
     use crate::{
         api::api_structs::{Beatmap, Game, Match, MatchScore, PlayerCountryMapping},
         model::{
@@ -655,12 +662,13 @@ mod tests {
             structures::{
                 match_cost::MatchCost, mode::Mode, player_rating::PlayerRating, scoring_type::ScoringType,
                 team_type::TeamType
-            }
+            }, get_global_rank
         },
         utils::test_utils
     };
     use openskill::{model::model::Model, rating::Rating};
-    use std::{collections::HashMap, ops::Add};
+
+    use super::get_country_rank;
 
     fn match_from_json(json: &str) -> Match {
         serde_json::from_str(json).unwrap()
@@ -767,10 +775,13 @@ mod tests {
                 rating: Rating {
                     mu: 1500.0 + offset,
                     sigma: 200.0
-                }
+                },
+                global_ranking: 0,
+                country_ranking: 0,
+                country: String::new(),
             });
             country_mappings.push(PlayerCountryMapping {
-                playerId: id,
+                player_id: id,
                 country: Some("US".to_string())
             });
 
@@ -926,7 +937,7 @@ mod tests {
         // Create 2 players with default ratings
         for i in 0..2 {
             country_mappings.push(PlayerCountryMapping {
-                playerId: i,
+                player_id: i,
                 country: Some("US".to_string())
             });
 
@@ -941,7 +952,10 @@ mod tests {
                     // associated stat changes
                     mu: 1500.0 - i as f64,
                     sigma: 200.0
-                }
+                },
+                global_ranking: 0,
+                country_ranking: 0,
+                country: String::new(),
             })
         }
 
@@ -1301,4 +1315,193 @@ mod tests {
             diff_name: Some("Testing".to_string())
         }
     }
-}
+
+    fn calc_rankings(existing_ratings: &mut [PlayerRating], country_hash: &HashMap<i32, Option<String>>) {
+        // Global ranking
+        existing_ratings
+            .sort_by(|x, y| y.rating.mu.partial_cmp(&x.rating.mu).unwrap());
+
+        existing_ratings
+            .iter_mut()
+            .enumerate()
+            .for_each(|(i, plr)| plr.global_ranking = i as u32 + 1);
+
+        let mut countries = HashSet::new();
+        
+        // Country ranking
+        country_hash.values()
+            .flatten()
+            .map(|x| x.clone())
+            .for_each(|x| { countries.insert(x); });
+
+        existing_ratings
+            .sort_by(|x, y| {
+                x.country.cmp(&y.country)
+            });
+        
+        for country in countries {
+            // TODO
+            let country_start = existing_ratings
+                .iter()
+                .position(|x| x.country == country)
+                .unwrap();
+
+            let country_slice = &mut existing_ratings[country_start..];
+
+            let country_end = country_slice 
+                .iter()
+                .position(|x| x.country != country)
+                .unwrap_or(country_slice.len());
+            
+            let country_slice = &mut country_slice[..country_end];
+
+            country_slice 
+                .iter_mut()
+                .enumerate()
+                .for_each(|(i, plr)| plr.country_ranking = i as u32 + 1);
+        }
+    }
+
+    #[test]
+    fn test_country_ranks() {
+        let existing_ratings = vec![
+            PlayerRating { 
+                country: "BY".to_owned(), country_ranking: 0, 
+                global_ranking: 0, 
+                player_id: 1, 
+                mode: Mode::Osu, 
+                rating: Rating { mu: 1500.0, sigma: 200.0 }
+            },
+            PlayerRating { 
+                country: "BY".to_owned(), country_ranking: 0, 
+                global_ranking: 0, 
+                player_id: 2, 
+                mode: Mode::Osu, 
+                rating: Rating { mu: 1300.0, sigma: 200.0 }
+            },
+            PlayerRating { 
+                country: "US".to_owned(), country_ranking: 0, 
+                global_ranking: 0, 
+                player_id: 203, 
+                mode: Mode::Osu, 
+                rating: Rating { mu: 1488.0, sigma: 200.0 }
+            },
+            PlayerRating { 
+                country: "BY".to_owned(), country_ranking: 0, 
+                global_ranking: 0, 
+                player_id: 3, 
+                mode: Mode::Osu, 
+                rating: Rating { mu: 1000.0, sigma: 200.0 }
+            },
+            PlayerRating { 
+                country: "RU".to_owned(), country_ranking: 0, 
+                global_ranking: 0, 
+                player_id: 100, 
+                mode: Mode::Osu, 
+                rating: Rating { mu: 1400.0, sigma: 200.0 }
+            },
+            PlayerRating { 
+                country: "US".to_owned(), country_ranking: 0, 
+                global_ranking: 0, 
+                player_id: 200, 
+                mode: Mode::Osu, 
+                rating: Rating { mu: 1400.0, sigma: 200.0 }
+            },
+            PlayerRating { 
+                country: "US".to_owned(), country_ranking: 0, 
+                global_ranking: 0, 
+                player_id: 201, 
+                mode: Mode::Osu, 
+                rating: Rating { mu: 1300.0, sigma: 200.0 }
+            },
+            PlayerRating { 
+                country: "RU".to_owned(), country_ranking: 0, 
+                global_ranking: 0, 
+                player_id: 101, 
+                mode: Mode::Osu, 
+                rating: Rating { mu: 800.0, sigma: 200.0 }
+            },
+            PlayerRating { 
+                country: "RU".to_owned(), country_ranking: 0, 
+                global_ranking: 0, 
+                player_id: 102, 
+                mode: Mode::Osu, 
+                rating: Rating { mu: 500.0, sigma: 200.0 }
+            },
+        ];
+
+
+        let mut cloned_ratings = existing_ratings.clone();
+
+        let mut country_hash = HashMap::new();
+        country_hash.insert(1, Some("BY".to_owned()));
+        country_hash.insert(2, Some("BY".to_owned()));
+        country_hash.insert(3, Some("BY".to_owned()));
+        country_hash.insert(100, Some("RU".to_owned()));
+        country_hash.insert(101, Some("RU".to_owned()));
+        country_hash.insert(102, Some("RU".to_owned()));
+        country_hash.insert(200, Some("US".to_owned()));
+        country_hash.insert(201, Some("US".to_owned()));
+        country_hash.insert(203, Some("US".to_owned()));
+        country_hash.insert(202, Some("US".to_owned()));
+
+        calc_rankings(&mut cloned_ratings, &country_hash);
+
+        for player in existing_ratings.iter() {
+            let rank = get_country_rank(
+                &player.rating.mu,
+                &player.player_id,
+                &country_hash,
+                &existing_ratings
+            );
+
+            let result = cloned_ratings.iter().find(|x| x.player_id == player.player_id)
+                .unwrap();
+
+            assert_eq!(result.country_ranking, rank as u32)
+        }
+    }
+
+    #[test]
+    fn test_global_ranks() {
+        let existing_ratings = vec![
+            PlayerRating { 
+                country: "BY".to_owned(), country_ranking: 0, 
+                global_ranking: 0, 
+                player_id: 1, 
+                mode: Mode::Osu, 
+                rating: Rating { mu: 1500.0, sigma: 200.0 }
+            },
+            PlayerRating { 
+                country: "BY".to_owned(), country_ranking: 0, 
+                global_ranking: 0, 
+                player_id: 2, 
+                mode: Mode::Osu, 
+                rating: Rating { mu: 1300.0, sigma: 200.0 }
+            },
+        ];
+
+
+        let mut cloned_ratings = existing_ratings.clone();
+
+        let mut country_hash = HashMap::new();
+        country_hash.insert(1, Some("BY".to_owned()));
+        country_hash.insert(2, Some("BY".to_owned()));
+
+        calc_rankings(&mut cloned_ratings, &country_hash);
+
+        for player in existing_ratings.iter() {
+            let rank = get_global_rank(
+                &player.rating.mu,
+                &player.player_id,
+                &existing_ratings
+            );
+
+            let result = cloned_ratings.iter().find(|x| x.player_id == player.player_id)
+                .unwrap();
+
+            assert_eq!(result.global_ranking, rank as u32)
+        }
+
+    }
+ }

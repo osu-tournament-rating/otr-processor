@@ -26,3 +26,6 @@ serde_json = "1.0.114"
 [lints.rust]
 dead_code = "allow"
 unused_variables = "allow"
+
+[profile.release]
+debug = true
