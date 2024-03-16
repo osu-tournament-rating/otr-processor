@@ -278,8 +278,7 @@ pub fn calc_ratings(
                 .cloned() // This will clone each `&PlayerRating` to `PlayerRating`
                 .collect();
 
-            let global_rank_before =
-                get_global_rank(&rating_prior.rating.mu, &rating_prior.player_id, &&prior_ratings);
+            let global_rank_before = get_global_rank(&rating_prior.rating.mu, &rating_prior.player_id, &&prior_ratings);
             let country_rank_before = get_country_rank(
                 &rating_prior.rating.mu,
                 &rating_prior.player_id,
