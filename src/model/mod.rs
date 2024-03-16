@@ -477,7 +477,7 @@ fn get_country_rank(
             return (rank + 1) as i32;
         }
     }
-    return 0;
+    0
 }
 
 /// Returns a vector of rankings as follows:
@@ -521,7 +521,7 @@ fn get_global_rank(mu: &f64, player_id: &i32, existing_ratings: &&Vec<PlayerRati
             return (rank + 1) as i32;
         }
     }
-    return 0;
+    0
 }
 
 fn push_team_rating(
