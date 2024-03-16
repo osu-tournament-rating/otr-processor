@@ -5,7 +5,7 @@ mod recalc_helpers;
 pub mod structures;
 
 use crate::{
-    api::api_structs::{Game, Match, MatchRatingStats, MatchScore, Player, RatingAdjustment},
+    api::api_structs::{Game, Match, MatchRatingStats, MatchScore, Player, PlayerCountryMapping, RatingAdjustment},
     model::{
         decay::{is_decay_possible, DecayTracker},
         structures::{
@@ -38,6 +38,8 @@ pub fn create_initial_ratings(matches: &Vec<Match>, players: &Vec<Player>) -> Ve
     // A fast lookup used for understanding who has default ratings created at this time.
     let mut stored_lookup_log: HashSet<(i32, Mode)> = HashSet::new();
     let mut ratings: Vec<PlayerRating> = Vec::new();
+
+    println!("Processing initial ratings...");
     let bar = progress_bar(matches.len() as u64);
 
     // Map the osu ids for fast lookup
@@ -102,11 +104,22 @@ pub fn create_initial_ratings(matches: &Vec<Match>, players: &Vec<Player>) -> Ve
 
     ratings
 }
+
+pub fn hash_country_mappings(country_mappings: &Vec<PlayerCountryMapping>) -> HashMap<i32, Option<String>> {
+    let mut country_mappings_hash: HashMap<i32, Option<String>> = HashMap::new();
+
+    for c in country_mappings {
+        country_mappings_hash.insert(c.playerId, c.country.clone());
+    }
+
+    country_mappings_hash
+}
+
 /// Calculates a vector of initial ratings based on match cost,
 /// returns the new ratings
 pub fn calc_ratings(
     initial_ratings: &Vec<PlayerRating>,
-    country_mapping: &HashMap<i32, String>,
+    country_mappings: &Vec<PlayerCountryMapping>,
     matches: &Vec<Match>,
     model: &PlackettLuce
 ) -> RatingCalculationResult {
@@ -119,6 +132,9 @@ pub fn calc_ratings(
     // Key = player_id
     // Value = Vec of RatingAdjustments per player
     let mut rating_adjustments_hash: HashMap<i32, Vec<RatingAdjustment>> = HashMap::new();
+    // Key = player_id
+    // Value = Country code in string form
+    let country_mappings_hash = hash_country_mappings(country_mappings);
 
     // Vector of match ratings to return
     let mut rating_stats: Vec<MatchRatingStats> = Vec::new();
@@ -129,9 +145,11 @@ pub fn calc_ratings(
     for r in initial_ratings {
         ratings_hash.insert((r.player_id, r.mode), r.clone());
     }
+
     // Create a decay tracker to run decay adjustments
     let mut decay_tracker = DecayTracker::new();
     // Create a progress bar for match processing
+    println!("Calculating all ratings...");
     let bar = progress_bar(matches.len() as u64);
 
     for curr_match in matches {
@@ -282,7 +300,7 @@ pub fn calc_ratings(
             let country_rank_before = get_country_rank(
                 &rating_prior.rating.mu,
                 &rating_prior.player_id,
-                &country_mapping,
+                &&country_mappings_hash,
                 &&prior_ratings
             );
             let percentile_before = get_percentile(global_rank_before, prior_ratings.len() as i32);
@@ -357,7 +375,7 @@ pub fn calc_ratings(
             let country_rank_after = get_country_rank(
                 &new_rating.rating.mu,
                 &new_rating.player_id,
-                &country_mapping,
+                &&country_mappings_hash,
                 &&current_ratings
             );
             let percentile_after = get_percentile(global_rank_after, current_ratings.len() as i32);
@@ -431,13 +449,16 @@ fn get_percentile(rank: i32, player_count: i32) -> f64 {
 fn get_country_rank(
     mu: &f64,
     player_id: &i32,
-    country_mapping: &&HashMap<i32, String>,
+    country_mappings_hash: &&HashMap<i32, Option<String>>,
     existing_ratings: &&Vec<PlayerRating>
 ) -> i32 {
     let mut ratings: Vec<f64> = existing_ratings
         .clone()
         .iter()
-        .filter(|r| r.player_id != *player_id && country_mapping.get(player_id) == country_mapping.get(&r.player_id))
+        .filter(|r| {
+            r.player_id != *player_id && country_mappings_hash.get(player_id) == country_mappings_hash.get(&r.player_id)
+        })
+        .filter(|r| country_mappings_hash.get(&r.player_id).is_some())
         .map(|r| r.rating.mu)
         .collect();
     ratings.push(*mu);
@@ -620,7 +641,7 @@ pub fn mu_for_rank(rank: i32) -> f64 {
 #[cfg(test)]
 mod tests {
     use crate::{
-        api::api_structs::{Beatmap, Game, Match, MatchScore},
+        api::api_structs::{Beatmap, Game, Match, MatchScore, PlayerCountryMapping},
         model::{
             calc_ratings, mu_for_rank,
             structures::{
@@ -721,7 +742,7 @@ mod tests {
 
         let player_ids = match_costs.iter().map(|mc| mc.player_id).collect::<Vec<i32>>();
         let mut initial_ratings = vec![];
-        let mut country_mapping = HashMap::new();
+        let mut country_mappings: Vec<PlayerCountryMapping> = vec![];
 
         let mut offset = 0.0;
         for id in player_ids {
@@ -733,11 +754,15 @@ mod tests {
                     sigma: 200.0
                 }
             });
-            country_mapping.insert(id, "US".to_string());
+            country_mappings.push(PlayerCountryMapping {
+                playerId: id,
+                country: Some("US".to_string())
+            });
 
             offset += 1.0;
         }
 
+        let country_mappings_hash = super::hash_country_mappings(&country_mappings);
         let model_ratings = initial_ratings.iter().map(|r| vec![r.rating.clone()]).collect();
 
         let model = super::create_model();
@@ -747,7 +772,7 @@ mod tests {
         println!("Input rankings: {:?}", &ranks);
         let expected = model.rate(model_ratings, ranks);
 
-        let result = super::calc_ratings(&initial_ratings, &country_mapping, &vec![match_data], &model);
+        let result = super::calc_ratings(&initial_ratings, &country_mappings, &vec![match_data], &model);
 
         println!("Expected outcome:");
         for i in 0..expected.len() {
@@ -813,14 +838,22 @@ mod tests {
 
             let expected_global_rank_before =
                 super::get_global_rank(&expected_starting_mu, &player_id, &&initial_ratings);
-            let expected_country_rank_before =
-                super::get_country_rank(&expected_starting_mu, &player_id, &&country_mapping, &&initial_ratings);
+            let expected_country_rank_before = super::get_country_rank(
+                &expected_starting_mu,
+                &player_id,
+                &&country_mappings_hash,
+                &&initial_ratings
+            );
             let expected_percentile_before =
                 super::get_percentile(expected_global_rank_before, initial_ratings.len() as i32);
             let expected_global_rank_after =
                 super::get_global_rank(&expected_after_mu, &player_id, &&result.base_ratings);
-            let expected_country_rank_after =
-                super::get_country_rank(&expected_after_mu, &player_id, &&country_mapping, &&result.base_ratings);
+            let expected_country_rank_after = super::get_country_rank(
+                &expected_after_mu,
+                &player_id,
+                &&country_mappings_hash,
+                &&result.base_ratings
+            );
             let expected_percentile_after =
                 super::get_percentile(expected_global_rank_after, result.base_ratings.len() as i32);
 
@@ -870,14 +903,16 @@ mod tests {
     #[test]
     fn test_calc_ratings_1v1() {
         let mut initial_ratings = Vec::new();
-        let mut country_mapping = HashMap::new();
+        let mut country_mappings: Vec<PlayerCountryMapping> = Vec::new();
 
         // Set both players to be from the same country to check country rankings
-        country_mapping.insert(0, "US".to_string());
-        country_mapping.insert(1, "US".to_string());
-
         // Create 2 players with default ratings
         for i in 0..2 {
+            country_mappings.push(PlayerCountryMapping {
+                playerId: i,
+                country: Some("US".to_string())
+            });
+
             initial_ratings.push(PlayerRating {
                 player_id: i,
                 mode: Mode::Osu,
@@ -978,7 +1013,7 @@ mod tests {
         let loser_expected_outcome = &expected_outcome[loser_id][0];
         let winner_expected_outcome = &expected_outcome[winner_id][0];
 
-        let result = calc_ratings(&initial_ratings, &country_mapping, &matches, &model);
+        let result = calc_ratings(&initial_ratings, &country_mappings, &matches, &model);
         let loser_stats = result
             .rating_stats
             .iter()

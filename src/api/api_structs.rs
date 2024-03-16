@@ -131,6 +131,13 @@ pub struct MatchIdMapping {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct PlayerCountryMapping {
+    pub playerId: i32,
+    pub country: Option<String>
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Game {
     pub id: i32,
     pub play_mode: Mode,
