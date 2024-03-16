@@ -542,14 +542,13 @@ fn push_team_rating(
 }
 
 fn average_rating(ratings: Option<Vec<f64>>) -> Option<f64> {
-    let avg_rating = if let Some(rating) = ratings {
+    if let Some(rating) = ratings {
         let len = rating.len() as f64;
         let s_ratings: f64 = rating.into_iter().sum();
         Some(s_ratings / len)
     } else {
         None
-    };
-    avg_rating
+    }
 }
 
 // Utility
