@@ -7,6 +7,7 @@ pub mod structures;
 use crate::{
     api::api_structs::{Game, Match, MatchRatingStats, MatchScore, Player, PlayerCountryMapping, RatingAdjustment},
     model::{
+        constants::BLUE_TEAM_ID,
         decay::{is_decay_possible, DecayTracker},
         structures::{
             match_cost::MatchCost, mode::Mode, player_rating::PlayerRating,
@@ -25,7 +26,6 @@ use statrs::{
     statistics::Statistics
 };
 use std::collections::{HashMap, HashSet};
-use crate::model::constants::BLUE_TEAM_ID;
 
 pub fn create_model() -> PlackettLuce {
     PlackettLuce::new(constants::BETA, constants::KAPPA, default_gamma)
@@ -245,7 +245,8 @@ pub fn calc_ratings(
                 let mut curr_player_team = BLUE_TEAM_ID;
                 // Find first Game in the Match where the player exists
                 for game in &curr_match.games {
-                    let game_with_player = game.match_scores
+                    let game_with_player = game
+                        .match_scores
                         .iter()
                         .rfind(|x| x.player_id == rating_prior.player_id);
                     match game_with_player {
@@ -650,17 +651,16 @@ mod tests {
     use crate::{
         api::api_structs::{Beatmap, Game, Match, MatchScore, PlayerCountryMapping},
         model::{
-            calc_ratings, mu_for_rank,
+            calc_ratings, get_percentile, mu_for_rank,
             structures::{
                 match_cost::MatchCost, mode::Mode, player_rating::PlayerRating, scoring_type::ScoringType,
                 team_type::TeamType
             }
         },
+        utils::test_utils
     };
     use openskill::{model::model::Model, rating::Rating};
     use std::{collections::HashMap, ops::Add};
-    use crate::model::get_percentile;
-    use crate::utils::test_utils;
 
     fn match_from_json(json: &str) -> Match {
         serde_json::from_str(json).unwrap()
@@ -833,12 +833,12 @@ mod tests {
                 .find(|x| {
                     x[0].mu
                         == result
-                        .base_ratings
-                        .iter()
-                        .find(|y| y.player_id == player_id)
-                        .unwrap()
-                        .rating
-                        .mu
+                            .base_ratings
+                            .iter()
+                            .find(|y| y.player_id == player_id)
+                            .unwrap()
+                            .rating
+                            .mu
                 })
                 .unwrap()
                 .get(0)
@@ -1298,7 +1298,7 @@ mod tests {
             drain_time: 160.0,
             length: 165.0,
             title: "Testing".to_string(),
-            diff_name: Some("Testing".to_string()),
+            diff_name: Some("Testing".to_string())
         }
     }
 }
