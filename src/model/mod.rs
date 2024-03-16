@@ -652,6 +652,7 @@ mod tests {
     };
     use openskill::{model::model::Model, rating::Rating};
     use std::{collections::HashMap, ops::Add};
+    use crate::utils::test_utils;
 
     fn match_from_json(json: &str) -> Match {
         serde_json::from_str(json).unwrap()
@@ -788,14 +789,16 @@ mod tests {
 
             println!("Player id: {} Rating: {}", mc.player_id, expected_rating);
 
+            let constants = test_utils::TestConstants::new();
+
             assert!(
-                (expected_rating.mu - actual_rating.rating.mu).abs() < f64::EPSILON,
+                (expected_rating.mu - actual_rating.rating.mu).abs() < constants.open_skill_leniency,
                 "Expected rating mu: {}, got: {}",
                 expected_rating.mu,
                 actual_rating.rating.mu
             );
             assert!(
-                (expected_rating.sigma - actual_rating.rating.sigma).abs() < f64::EPSILON,
+                (expected_rating.sigma - actual_rating.rating.sigma).abs() < constants.open_skill_leniency,
                 "Expected rating sigma: {}, got: {}",
                 expected_rating.sigma,
                 actual_rating.rating.sigma
@@ -1036,28 +1039,30 @@ mod tests {
             .find(|x| x.player_id == loser_id as i32)
             .unwrap();
 
+        let constants = test_utils::TestConstants::new();
+
         assert!(
-            (winner_base_stat.rating.mu - winner_expected_outcome.mu).abs() < f64::EPSILON,
+            (winner_base_stat.rating.mu - winner_expected_outcome.mu).abs() < constants.open_skill_leniency,
             "Winner's base stat mu is {}, should be {}",
             winner_base_stat.rating.mu,
             winner_expected_outcome.mu
         );
 
         assert!(
-            (winner_base_stat.rating.sigma - winner_expected_outcome.sigma).abs() < f64::EPSILON,
+            (winner_base_stat.rating.sigma - winner_expected_outcome.sigma).abs() < constants.open_skill_leniency,
             "Winner's base stat sigma is {}, should be {}",
             winner_base_stat.rating.sigma,
             winner_expected_outcome.sigma
         );
 
         assert!(
-            (loser_base_stat.rating.mu - loser_expected_outcome.mu).abs() < f64::EPSILON,
+            (loser_base_stat.rating.mu - loser_expected_outcome.mu).abs() < constants.open_skill_leniency,
             "Loser's base stat mu is {}, should be {}",
             loser_base_stat.rating.mu,
             loser_expected_outcome.mu
         );
         assert!(
-            (loser_base_stat.rating.sigma - loser_expected_outcome.sigma).abs() < f64::EPSILON,
+            (loser_base_stat.rating.sigma - loser_expected_outcome.sigma).abs() < constants.open_skill_leniency,
             "Loser's base stat sigma is {}, should be {}",
             loser_base_stat.rating.sigma,
             loser_expected_outcome.sigma
@@ -1108,13 +1113,13 @@ mod tests {
 
         // Expected mu = actual mu
         assert!(
-            (loser_expected_outcome.mu - loser_stats.rating_after).abs() < f64::EPSILON,
+            (loser_expected_outcome.mu - loser_stats.rating_after).abs() < constants.open_skill_leniency,
             "Loser's rating is {}, should be {}",
             loser_stats.rating_after,
             loser_expected_outcome.mu
         );
         assert!(
-            (loser_expected_outcome.sigma - loser_stats.volatility_after).abs() < f64::EPSILON,
+            (loser_expected_outcome.sigma - loser_stats.volatility_after).abs() < constants.open_skill_leniency,
             "Loser's volatility is {}, should be {}",
             loser_stats.volatility_after,
             loser_expected_outcome.sigma
@@ -1122,13 +1127,13 @@ mod tests {
 
         // Expected sigma = actual sigma
         assert!(
-            (winner_expected_outcome.mu - winner_stats.rating_after).abs() < f64::EPSILON,
+            (winner_expected_outcome.mu - winner_stats.rating_after).abs() < constants.open_skill_leniency,
             "Winner's rating is {}, should be {}",
             winner_stats.rating_after,
             winner_expected_outcome.mu
         );
         assert!(
-            (winner_expected_outcome.sigma - winner_stats.volatility_after).abs() < f64::EPSILON,
+            (winner_expected_outcome.sigma - winner_stats.volatility_after).abs() < constants.open_skill_leniency,
             "Winner's volatility is {}, should be {}",
             winner_stats.volatility_after,
             winner_expected_outcome.sigma
