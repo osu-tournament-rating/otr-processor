@@ -258,11 +258,15 @@ impl OtrApiClient {
 
         let lock = &self.body.token.read().await;
 
-        request
+        let resp = request
             .header(AUTHORIZATION, &lock.token)
             .header(CONTENT_TYPE, "application/json")
             .send()
-            .await?
+            .await?;
+
+        dbg!(resp.status());
+
+        resp
             .json()
             .await
     }

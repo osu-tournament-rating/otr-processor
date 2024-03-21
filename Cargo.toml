@@ -41,5 +41,9 @@ unused_variables = "allow"
 name = "global_country_rank"
 harness = false
 
+[[bench]]
+name = "calc_rating"
+harness = false
+
 [profile.release]
 debug = true

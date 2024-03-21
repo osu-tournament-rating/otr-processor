@@ -6,7 +6,8 @@ async fn main() {
 
     let api = api::OtrApiClient::new_from_env()
         .await
-        .expect("Failed to intialize otr api");
+        .unwrap();
+
 
     let match_ids = api
         .get_match_ids(None)
@@ -40,8 +41,10 @@ async fn main() {
         }
     }
 
-    let result = model::calc_ratings(&ratings, &country_mappings, &matches, &plackett_luce);
+    let mut result = model::calc_ratings_v2(&ratings, &matches, &plackett_luce);
 
-    println!("{:?} ratings processed", result.base_ratings.len());
+    model::calc_post_match_info(&mut ratings, &mut result);
+
+    //println!("{:?} ratings processed", result.base_ratings.len());
     //println!("{:?}", mcs);
 }

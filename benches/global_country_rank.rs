@@ -22,7 +22,6 @@ impl Display for TestInput {
     }
 }
 
-
 pub fn calc_rankings_old(existing_ratings: &mut [PlayerRating], country_hash: &HashMap<i32, Option<String>>) {
     for player in existing_ratings.iter() {
         let _global_rank = get_global_rank (
@@ -89,7 +88,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
     c.bench_with_input(BenchmarkId::new("calc_rankings_new", input.clone()), &input, |b, s| {
         let mut input = input.clone();
-        b.iter(|| calc_rankings(&mut input.ratings, &input.country_hash));
+        b.iter(|| calc_rankings(&mut input.ratings));
     });
 
     c.bench_with_input(BenchmarkId::new("calc_rankings_old", input.clone()), &input, |b, s| {
