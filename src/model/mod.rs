@@ -795,7 +795,7 @@ pub fn calc_ratings(
                 &prior_ratings
             );
 
-            let percentile_before = get_percentile(global_rank_before, prior_ratings.len() as i32);
+            let percentile_before = calc_percentile(global_rank_before, prior_ratings.len() as i32);
 
             let adjustment = MatchRatingStats {
                 player_id: rating_prior.player_id,
@@ -892,7 +892,7 @@ pub fn calc_ratings(
                 &country_mappings_hash,
                 &current_ratings
             );
-            let percentile_after = get_percentile(global_rank_after, current_ratings.len() as i32);
+            let percentile_after = calc_percentile(global_rank_after, current_ratings.len() as i32);
 
             // get new global/country ranks and percentiles
             stats.entry(curr_id).and_modify(|f| {
@@ -955,7 +955,7 @@ pub fn calc_ratings(
         adjustments
     }
 }
-fn get_percentile(rank: i32, player_count: i32) -> f64 {
+fn calc_percentile(rank: i32, player_count: i32) -> f64 {
     rank as f64 / player_count as f64
 }
 
@@ -1160,7 +1160,7 @@ mod tests {
     use crate::{
         api::api_structs::{Beatmap, Game, Match, MatchScore, Player, PlayerCountryMapping},
         model::{
-            calc_global_ranks, calc_post_match_info, calc_ratings, calc_ratings_fully, get_global_rank, get_percentile,
+            calc_global_ranks, calc_post_match_info, calc_ratings, calc_ratings_fully, get_global_rank, calc_percentile,
             mu_for_rank,
             structures::{
                 match_cost::MatchCost, mode::Mode, player_rating::PlayerRating, scoring_type::ScoringType,
@@ -1262,8 +1262,16 @@ mod tests {
 
     #[test]
     fn test_percentile() {
-        assert!((0.0 - get_percentile(1, 2)).abs() < f64::EPSILON);
-        assert!((1.0 - get_percentile(2, 2)).abs() < f64::EPSILON);
+        let percentiles = vec![1.0, 0.75, 0.5, 0.25, 0.0];
+        let ranks = vec![1, 2, 3, 4, 5];
+
+        for i in 0..percentiles.len() {
+            let expected_percentile = percentiles[i];
+            let rank = ranks[i];
+
+            let calculated_percentile = calc_percentile(rank, percentiles.len() as i32);
+            assert_eq!(calculated_percentile, expected_percentile);
+        }
     }
 
     #[test]
@@ -1388,7 +1396,7 @@ mod tests {
                 &&initial_ratings
             );
             let expected_percentile_before =
-                super::get_percentile(expected_global_rank_before, initial_ratings.len() as i32);
+                super::calc_percentile(expected_global_rank_before, initial_ratings.len() as i32);
             let expected_global_rank_after =
                 super::get_global_rank(&expected_after_mu, &player_id, &&result.base_ratings);
             let expected_country_rank_after = super::get_country_rank(
@@ -1398,7 +1406,7 @@ mod tests {
                 &&result.base_ratings
             );
             let expected_percentile_after =
-                super::get_percentile(expected_global_rank_after, result.base_ratings.len() as i32);
+                super::calc_percentile(expected_global_rank_after, result.base_ratings.len() as i32);
 
             let expected_global_rank_change = expected_global_rank_after - expected_global_rank_before;
             let expected_country_rank_change = expected_country_rank_after - expected_country_rank_before;
