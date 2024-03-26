@@ -1822,10 +1822,6 @@ mod tests {
 
         let country_hash = hash_country_mappings(&country_mapping);
 
-        let expected_global_ranks: HashMap<i32, i32> = HashMap::new();
-        let expected_country_ranks: HashMap<i32, i32> = HashMap::new();
-        let expected_percentiles: HashMap<i32, f64> = HashMap::new();
-
         // Organized by country, sorted by rating
         let country_ordering: HashMap<String, Vec<PlayerRating>> = HashMap::new();
 
@@ -1840,8 +1836,32 @@ mod tests {
 
         let match_rating_stats = calc_post_match_info(&mut copied_initial_ratings, &mut processed_match_data);
         let adjustments = calc_player_adjustments(&initial_ratings, &copied_initial_ratings);
+
+        // The amount of players that participated in the matches
+        let mut players_count = 0;
+
+        for m in &match_data {
+            let mut player_map: HashMap<i32, i32> = HashMap::new();
+
+            for g in &m.games {
+                for s in &g.match_scores {
+                    if player_map.contains_key(&s.player_id) {
+                        continue;
+                    }
+
+                    player_map.insert(s.player_id, 0);
+                }
+            }
+
+            players_count += player_map.len();
+        }
+
         // Assert
 
+        // Ensure the length of match rating stats matches the
+        // total count of unique players in each match
+        assert_eq!(match_rating_stats.len(), players_count);
+        assert_eq!(processed_match_data.len(), match_data.len());
     }
 
     fn test_beatmap() -> Beatmap {
