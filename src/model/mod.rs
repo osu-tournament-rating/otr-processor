@@ -344,7 +344,7 @@ pub fn create_initial_ratings(matches: &Vec<Match>, players: &Vec<Player>) -> Ve
                     rating,
                     global_ranking: 0,
                     country_ranking: 0,
-                    country: String::with_capacity(2)
+                    country: player.country.clone().unwrap_or(String::with_capacity(2))
                 };
                 ratings.push(player_rating);
 
@@ -1171,7 +1171,7 @@ mod tests {
     };
     use openskill::{model::model::Model, rating::Rating};
 
-    use super::{calc_country_ranks, calc_rankings, calc_ratings_v2, create_initial_ratings, get_country_rank};
+    use super::{calc_country_ranks, calc_player_adjustments, calc_rankings, calc_ratings_v2, create_initial_ratings, create_model, get_country_rank};
 
     fn match_from_json(json: &str) -> Match {
         serde_json::from_str(json).unwrap()
@@ -1182,6 +1182,10 @@ mod tests {
     }
 
     fn players_from_json(json: &str) -> Vec<Player> {
+        serde_json::from_str(json).unwrap()
+    }
+
+    fn country_mapping_from_json(json: &str) -> Vec<PlayerCountryMapping> {
         serde_json::from_str(json).unwrap()
     }
 
@@ -1814,8 +1818,18 @@ mod tests {
         let match_data = matches_from_json(include_str!("../../test_data/owc_2023.json"));
         let player_data = players_from_json(include_str!("../../test_data/owc_2023_players.json"));
 
-        let initial_ratings = create_initial_ratings(&match_data, &player_data);
-        println!("{:?}", initial_ratings)
+        let plackett_luce = create_model();
+        let mut initial_ratings = create_initial_ratings(&match_data, &player_data);
+        let mut processed_match_data = calc_ratings_v2(&initial_ratings, &match_data, &plackett_luce);
+
+        let mut copied_initial_ratings = initial_ratings.clone();
+
+        let match_rating_stats = calc_post_match_info(&mut copied_initial_ratings, &mut processed_match_data);
+        let adjustments = calc_player_adjustments(&initial_ratings, &copied_initial_ratings);
+
+
+
+
     }
 
     fn test_beatmap() -> Beatmap {
