@@ -207,6 +207,8 @@ impl OtrApiClient {
     /// # Examples
     /// 1. Fetch some endpoint
     /// ```
+    /// use reqwest::Method;
+    /// use otr_processor::api::OtrApiClient;
     /// let api = OtrApiClient::new("MYSECRET", "example.com/api");
     /// api.make_request(Method::GET, "/fetch_something");
     /// ```
@@ -238,7 +240,7 @@ impl OtrApiClient {
     /// 1. Make request to some endpoint with `Vec<32>` as body
     /// ```
     /// let api = OtrApiClient::new("MYSECRET", "example.com/api");
-    /// let my_numbers: Vec<32> = vec![1, 2, 3, 4, 5];
+    /// let my_numbers: Vec<i32> = vec![1, 2, 3, 4, 5];
     /// api.make_request_with_body(Method::GET, "/fetch_something", Some(&my_numbers));
     /// ```
     async fn make_request_with_body<T, B>(&self, method: Method, partial_url: &str, body: Option<B>) -> Result<T, Error>

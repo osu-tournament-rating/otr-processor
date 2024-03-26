@@ -747,8 +747,7 @@ pub fn calc_ratings(
                 let (teammate_list, opponent_list): (Vec<MatchScore>, Vec<MatchScore>) = curr_match
                     .games
                     .iter()
-                    .map(|f| f.match_scores.clone())
-                    .flatten()
+                    .flat_map(|f| f.match_scores.clone())
                     .partition(|score| score.team == curr_player_team);
 
                 let mut teammate_list: Vec<i32> = teammate_list.iter().map(|player| player.player_id).collect();
