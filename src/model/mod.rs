@@ -956,7 +956,7 @@ pub fn calc_ratings(
     }
 }
 fn get_percentile(rank: i32, player_count: i32) -> f64 {
-    (rank / player_count) as f64
+    rank as f64 / player_count as f64
 }
 
 pub fn get_country_rank(
