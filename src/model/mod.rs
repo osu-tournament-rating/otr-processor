@@ -155,8 +155,8 @@ pub fn calc_post_match_info(
             .players_stats
             .iter()
             .map(|x| {
-                let p_before = (x.old_global_ranking / initial_ratings.len() as u32) as f64;
-                let p_after = (x.new_global_ranking / initial_ratings.len() as u32) as f64;
+                let p_before = x.old_global_ranking as f64 / initial_ratings.len() as f64;
+                let p_after = x.new_global_ranking as f64 / initial_ratings.len() as f64;
 
                 MatchRatingStats {
                     player_id: x.player_id,
@@ -174,7 +174,7 @@ pub fn calc_post_match_info(
                     country_rank_before: x.old_country_ranking as i32,
                     country_rank_after: x.new_country_ranking as i32,
                     country_rank_change: x.new_country_ranking as i32 - x.old_country_ranking as i32,
-                    percentile_before: p_before, // TODO
+                    percentile_before: p_before,
                     percentile_after: p_after,
                     percentile_change: p_after - p_before,
                     average_teammate_rating: x.average_teammate_rating,
@@ -1171,7 +1171,7 @@ mod tests {
     };
     use openskill::{model::model::Model, rating::Rating};
 
-    use super::{calc_country_ranks, calc_player_adjustments, calc_rankings, calc_ratings_v2, create_initial_ratings, create_model, get_country_rank};
+    use super::{calc_country_ranks, calc_player_adjustments, calc_rankings, calc_ratings_v2, create_initial_ratings, create_model, get_country_rank, hash_country_mappings};
 
     fn match_from_json(json: &str) -> Match {
         serde_json::from_str(json).unwrap()
@@ -1815,10 +1815,24 @@ mod tests {
 
     #[test]
     fn test_owc_2023_data() {
+        // Arrange
         let match_data = matches_from_json(include_str!("../../test_data/owc_2023.json"));
         let player_data = players_from_json(include_str!("../../test_data/owc_2023_players.json"));
+        let country_mapping = country_mapping_from_json(include_str!("../../test_data/country_mapping.json"));
 
+        let country_hash = hash_country_mappings(&country_mapping);
+
+        let expected_global_ranks: HashMap<i32, i32> = HashMap::new();
+        let expected_country_ranks: HashMap<i32, i32> = HashMap::new();
+        let expected_percentiles: HashMap<i32, f64> = HashMap::new();
+
+        // Organized by country, sorted by rating
+        let country_ordering: HashMap<String, Vec<PlayerRating>> = HashMap::new();
+
+        // Act
         let plackett_luce = create_model();
+
+        // Process initial ratings, establish expected data
         let mut initial_ratings = create_initial_ratings(&match_data, &player_data);
         let mut processed_match_data = calc_ratings_v2(&initial_ratings, &match_data, &plackett_luce);
 
@@ -1826,9 +1840,7 @@ mod tests {
 
         let match_rating_stats = calc_post_match_info(&mut copied_initial_ratings, &mut processed_match_data);
         let adjustments = calc_player_adjustments(&initial_ratings, &copied_initial_ratings);
-
-
-
+        // Assert
 
     }
 
