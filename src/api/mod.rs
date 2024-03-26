@@ -191,9 +191,7 @@ impl OtrApiClient {
 
         dbg!(response.status());
 
-        let mut json: OAuthResponse = response
-            .json()
-            .await?;
+        let mut json: OAuthResponse = response.json().await?;
 
         // Putting `Bearer` just to save allocations
         // on every request made
@@ -270,9 +268,7 @@ impl OtrApiClient {
 
         dbg!(resp.status());
 
-        resp
-            .json()
-            .await
+        resp.json().await
     }
 
     /// Get ids of matches
