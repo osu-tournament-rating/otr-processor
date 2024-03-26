@@ -16,7 +16,7 @@ use crate::{
     },
     utils::progress_utils::progress_bar
 };
-use chrono::Utc;
+use chrono::{Utc, Local};
 use openskill::{
     model::{model::Model, plackett_luce::PlackettLuce},
     rating::{default_gamma, Rating}
@@ -56,6 +56,51 @@ pub struct ProcessedMatchData {
     pub players_stats: Vec<PlayerMatchData>,
 }
 
+pub fn calc_player_adjustments(
+    initial_ratings: &[PlayerRating],
+    new_ratings: &[PlayerRating]
+) -> Vec<RatingAdjustment> {
+
+    let mut buff = Vec::with_capacity(new_ratings.len());
+
+    for new_rating in new_ratings.iter() {
+        let old_rating_idx = initial_ratings.iter().position(|x| x.player_id == new_rating.player_id);
+
+        if old_rating_idx.is_none() {
+            println!("bebra");
+        }
+
+        let old_rating_idx = old_rating_idx.unwrap();
+
+        let old_rating = &initial_ratings[old_rating_idx];
+
+        let rating_before = old_rating.rating.mu;
+        let rating_after = new_rating.rating.mu;
+        let volatility_before = old_rating.rating.sigma;
+        let volatility_after = new_rating.rating.sigma;
+
+        let rating_change = rating_after - rating_before;
+        let volatility_change = volatility_after - volatility_before;
+
+        buff.push(
+            RatingAdjustment {
+                player_id: new_rating.player_id,
+                mode: new_rating.mode,
+                rating_adjustment_amount: rating_change,
+                volatility_adjustment_amount: volatility_change,
+                rating_before,
+                rating_after,
+                volatility_before,
+                volatility_after,
+                rating_adjustment_type: 0,
+                timestamp: Local::now().into(),
+            }
+        )
+    }
+
+    buff
+}
+
 pub fn calc_post_match_info(initial_ratings: &mut [PlayerRating], match_adjs: &mut [ProcessedMatchData]) -> Vec<MatchRatingStats> {
     let mut res = Vec::with_capacity(match_adjs.len());
 
@@ -63,6 +108,9 @@ pub fn calc_post_match_info(initial_ratings: &mut [PlayerRating], match_adjs: &m
     calc_country_ranks(initial_ratings);
     
     for match_info in match_adjs.iter_mut() {
+
+        // Preparing initial_ratings with new rating
+        // and extracting old country/global ranking placements
         for player_info in &mut match_info.players_stats {
             let player_idx = initial_ratings.iter_mut().position(|x| x.player_id == player_info.player_id);
 
@@ -98,7 +146,6 @@ pub fn calc_post_match_info(initial_ratings: &mut [PlayerRating], match_adjs: &m
             player_info.new_global_ranking = player.global_ranking;
             player_info.new_country_ranking = player.country_ranking;
         }
-
     }
 
 
@@ -107,8 +154,8 @@ pub fn calc_post_match_info(initial_ratings: &mut [PlayerRating], match_adjs: &m
         match_info.players_stats
             .iter()
             .map(|x| {
-                let p_before = x.old_global_ranking as f64 / initial_ratings.len() as f64;
-                let p_after = x.new_global_ranking as f64 / initial_ratings.len() as f64;
+                let p_before = (x.old_global_ranking / initial_ratings.len() as u32) as f64;
+                let p_after = (x.new_global_ranking / initial_ratings.len() as u32) as f64;
 
                 MatchRatingStats {
                     player_id: x.player_id,
@@ -135,6 +182,8 @@ pub fn calc_post_match_info(initial_ratings: &mut [PlayerRating], match_adjs: &m
             })
         .for_each(|x| res.push(x));
     }
+
+    // Since `initial_ratings` now contains new ratings
 
     res
 }
@@ -345,7 +394,7 @@ pub fn calc_ratings_fully(
     let match_info = calc_post_match_info(&mut copied_ratings, &mut result);
     
     RatingCalculationResult {
-        base_ratings: initial_ratings,
+        base_ratings: copied_ratings,
         rating_stats: match_info,
         adjustments: Vec::new(),
     }

@@ -8,7 +8,6 @@ async fn main() {
         .await
         .unwrap();
 
-
     let match_ids = api
         .get_match_ids(None)
         .await
@@ -43,7 +42,10 @@ async fn main() {
 
     let mut result = model::calc_ratings_v2(&ratings, &matches, &plackett_luce);
 
-    model::calc_post_match_info(&mut ratings, &mut result);
+    let mut copied_initial_ratings = ratings.clone();
+
+    model::calc_post_match_info(&mut copied_initial_ratings, &mut result);
+    model::calc_player_adjustments(&ratings, &copied_initial_ratings);
 
     //println!("{:?} ratings processed", result.base_ratings.len());
     //println!("{:?}", mcs);

@@ -183,19 +183,23 @@ impl OtrApiClient {
             api_root, client_id, client_secret
         );
 
-        let mut response: OAuthResponse = client
+        let response = client
             .post(link)
             .header(CONTENT_TYPE, "application/json")
             .send()
-            .await?
+            .await?;
+
+        dbg!(response.status());
+
+        let mut json: OAuthResponse = response
             .json()
             .await?;
 
         // Putting `Bearer` just to save allocations
         // on every request made
-        response.token.insert_str(0, "Bearer ");
+        json.token.insert_str(0, "Bearer ");
 
-        Ok(response)
+        Ok(json)
     }
 
     /// Wrapper to make authorized requests without body
