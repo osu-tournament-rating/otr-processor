@@ -189,6 +189,8 @@ pub struct Beatmap {
 pub struct Player {
     pub id: i32,
     pub osu_id: i64,
+    pub username: Option<String>,
+    pub country: Option<String>,
     pub rank_standard: Option<i32>,
     pub rank_taiko: Option<i32>,
     pub rank_catch: Option<i32>,
@@ -200,7 +202,5 @@ pub struct Player {
     pub earliest_catch_global_rank: Option<i32>,
     pub earliest_catch_global_rank_date: Option<DateTime<FixedOffset>>,
     pub earliest_mania_global_rank: Option<i32>,
-    pub earliest_mania_global_rank_date: Option<DateTime<FixedOffset>>,
-    pub username: Option<String>,
-    pub country: Option<String>
+    pub earliest_mania_global_rank_date: Option<DateTime<FixedOffset>>
 }
