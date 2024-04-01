@@ -41,12 +41,12 @@ async fn main() {
         }
     }
 
-    let mut result = model::calc_ratings_v2(&ratings, &matches, &plackett_luce);
+    let mut result = model::calculate_processed_match_data(&ratings, &matches, &plackett_luce);
 
     let mut copied_initial_ratings = ratings.clone();
 
-    model::calc_post_match_info(&mut copied_initial_ratings, &mut result);
-    model::calc_player_adjustments(&ratings, &copied_initial_ratings);
+    model::calculate_post_match_info(&mut copied_initial_ratings, &mut result);
+    model::calculate_player_adjustments(&ratings, &copied_initial_ratings);
 
     // println!("{:?} ratings processed", result.base_ratings.len());
     // println!("{:?}", mcs);
