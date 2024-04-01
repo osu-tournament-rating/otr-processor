@@ -11,12 +11,12 @@ use crate::{
         decay::{is_decay_possible, DecayTracker},
         structures::{
             match_cost::MatchCost, mode::Mode, player_rating::PlayerRating,
-            rating_calculation_result::RatingCalculationResult, team_type::TeamType
+            processing::RatingCalculationResult, team_type::TeamType
         }
     },
     utils::progress_utils::progress_bar
 };
-use chrono::{Local, Utc};
+use chrono::Local;
 use openskill::{
     model::{model::Model, plackett_luce::PlackettLuce},
     rating::{default_gamma, Rating}
@@ -27,32 +27,10 @@ use statrs::{
 };
 use std::collections::{HashMap, HashSet};
 
+use self::structures::processing::{ProcessedMatchData, PlayerMatchData};
+
 pub fn create_model() -> PlackettLuce {
     PlackettLuce::new(constants::BETA, constants::KAPPA, default_gamma)
-}
-
-#[derive(Clone, Debug)]
-pub struct PlayerMatchData {
-    pub player_id: i32,
-    pub match_cost: f64,
-    pub old_rating: Rating,
-    pub new_rating: Rating,
-
-    pub average_opponent_rating: Option<f64>,
-    pub average_teammate_rating: Option<f64>,
-
-    // Gets filled after
-    pub old_global_ranking: u32,
-    pub new_global_ranking: u32,
-
-    pub old_country_ranking: u32,
-    pub new_country_ranking: u32
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct ProcessedMatchData {
-    pub match_id: i32,
-    pub players_stats: Vec<PlayerMatchData>
 }
 
 /// Calculates [`RatingAdjustment`] based on initial ratings
@@ -773,7 +751,7 @@ mod tests {
     use crate::{
         api::api_structs::{Beatmap, Game, Match, MatchScore, Player, PlayerCountryMapping},
         model::{
-            calculate_post_match_info, calculate_ratings, get_global_rank, calc_percentile,
+            calculate_post_match_info, calculate_ratings, calc_percentile,
             mu_for_rank,
             structures::{
                 match_cost::MatchCost, mode::Mode, player_rating::PlayerRating, scoring_type::ScoringType,
@@ -784,7 +762,7 @@ mod tests {
     };
     use openskill::{model::model::Model, rating::Rating};
 
-    use super::{calculate_player_adjustments, calculate_processed_match_data, create_initial_ratings, create_model, get_country_rank, hash_country_mappings};
+    use super::{calculate_player_adjustments, calculate_processed_match_data, create_initial_ratings, create_model, hash_country_mappings};
 
     fn match_from_json(json: &str) -> Match {
         serde_json::from_str(json).unwrap()
@@ -1460,7 +1438,7 @@ mod tests {
         let plackett_luce = create_model();
 
         // Process initial ratings, establish expected data
-        let mut initial_ratings = create_initial_ratings(&match_data, &player_data);
+        let initial_ratings = create_initial_ratings(&match_data, &player_data);
         let mut processed_match_data = calculate_processed_match_data(&initial_ratings, &match_data, &plackett_luce);
 
         let mut copied_initial_ratings = initial_ratings.clone();
