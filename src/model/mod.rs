@@ -45,7 +45,8 @@ pub fn calculate_player_adjustments(
         let old_rating_idx = initial_ratings.iter().position(|x| x.player_id == new_rating.player_id);
 
         if old_rating_idx.is_none() {
-            println!("bebra");
+            // TODO log here?
+            continue;
         }
 
         let old_rating_idx = old_rating_idx.unwrap();
