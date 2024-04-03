@@ -434,9 +434,9 @@ mod api_client_tests {
         let second_token = manually_refresh_token!(api);
         let third_token = manually_refresh_token!(api);
 
-        assert!(initial_token != first_token);
-        assert!(first_token != second_token);
-        assert!(second_token != third_token);
+        assert_ne!(initial_token, first_token);
+        assert_ne!(first_token, second_token);
+        assert_ne!(second_token, third_token);
     }
 
     #[tokio::test]
