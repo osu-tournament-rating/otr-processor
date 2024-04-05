@@ -8,34 +8,6 @@
     "endTime": "2023-12-01T23:10:00-05:00",
     "games": [
       {
-        "id": 350342,
-        "playMode": 0,
-        "scoringType": 3,
-        "teamType": 2,
-        "mods": 0,
-        "gameId": 576784020,
-        "startTime": "2023-12-01T22:06:30-05:00",
-        "endTime": null,
-        "beatmap": {
-          "id": 41350,
-          "artist": "Kommisar",
-          "beatmapId": 4393042,
-          "bpm": 245,
-          "mapperId": 10466315,
-          "mapperName": "Serenhaide",
-          "sr": 8.04636,
-          "cs": 3.8,
-          "ar": 10,
-          "hp": 5,
-          "od": 9.3,
-          "drainTime": 158,
-          "length": 165,
-          "title": "AKARI BEAM CANNON LAST BOSS",
-          "diffName": "TEMPORAL BLAST"
-        },
-        "matchScores": []
-      },
-      {
         "id": 350343,
         "playMode": 0,
         "scoringType": 3,

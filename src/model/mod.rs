@@ -355,7 +355,7 @@ pub fn calculate_processed_match_data(
 
     for curr_match in matches {
         let mut current_match_stats = ProcessedMatchData {
-            match_id: curr_match.match_id as i32,
+            match_id: curr_match.id,
             players_stats: Vec::new()
         };
 
@@ -1472,6 +1472,88 @@ mod tests {
         // total count of unique players in each match
         assert_eq!(match_rating_stats.len(), players_count);
         assert_eq!(processed_match_data.len(), match_data.len());
+    }
+
+    #[test]
+    fn test_multiple_mode_tracking() {
+        // Load in OWC 2023 data
+        // Duplicate & change all of the ruleset values to taiko (1)
+        // we label it as twc for convenience, but it's the same exact
+        // data as OWC with a different name (and ruleset change)
+
+        // Arrange
+        let owc_data = matches_from_json(include_str!("../../test_data/owc_2023.json"));
+        // This will be modified to have all modes set to 1 -
+        // structure of the data is identical between modes
+        let mut twc_data = matches_from_json(include_str!("../../test_data/owc_2023.json"));
+        let mut player_data = players_from_json(include_str!("../../test_data/owc_2023_players.json"));
+        let country_mapping = country_mapping_from_json(include_str!("../../test_data/country_mapping.json"));
+        let country_hash = hash_country_mappings(&country_mapping);
+
+        // Organized by country, sorted by rating
+        let country_ordering: HashMap<String, Vec<PlayerRating>> = HashMap::new();
+        let plackett_luce = create_model();
+
+        // Act
+        // Set all modes in twc_data to 1
+        for m in &mut twc_data {
+            // Set the id to something different
+            m.mode = Mode::Taiko;
+            m.id += 10000;
+            m.match_id = m.match_id + 1;
+
+            for g in &mut m.games {
+                g.play_mode = Mode::Taiko;
+            }
+        }
+
+        let standard_match_ids: Vec<_> = owc_data.iter().map(|x| x.id).collect();
+        let taiko_match_ids: Vec<_> = twc_data.iter().map(|x| x.id).collect();
+
+        // Combine the match data into a new vector
+        let mut match_data = Vec::new();
+        match_data.extend(owc_data);
+        match_data.extend(twc_data);
+
+        // Set the osu ranks for taiko to be the exact same as standard
+        for player in &mut player_data {
+            player.rank_taiko = player.rank_standard;
+            player.earliest_taiko_global_rank = player.earliest_osu_global_rank;
+            player.earliest_taiko_global_rank_date = player.earliest_catch_global_rank_date;
+        }
+
+        let initial_ratings = create_initial_ratings(&match_data, &player_data);
+        let mut processed_match_data = calculate_processed_match_data(&initial_ratings, &match_data, &plackett_luce);
+        let mut copied_initial_ratings = initial_ratings.clone();
+
+        let match_rating_stats = calculate_post_match_info(&mut copied_initial_ratings, &mut processed_match_data);
+        let adjustments = calculate_player_adjustments(&initial_ratings, &copied_initial_ratings);
+
+        // Assert
+        // We want to ensure all players have standard & taiko data that is identical.
+        // This is to ensure that the model is correctly tracking multiple modes.
+       for i in 0..taiko_match_ids.len() {
+            let standard_match_id = standard_match_ids[i];
+            let taiko_match_id = taiko_match_ids[i];
+
+           // Take two stats from the same player and compare for equality
+            let standard_match_stats = match_rating_stats.iter().find(|x| x.match_id == standard_match_id).unwrap();
+            let taiko_match_stats = match_rating_stats.iter().find(|x| x.match_id == taiko_match_id && x.player_id == standard_match_stats.player_id).unwrap();
+
+            assert_eq!(standard_match_stats.match_id, standard_match_id);
+            assert_eq!(taiko_match_stats.match_id, taiko_match_id);
+
+            assert_eq!(standard_match_stats.rating_after, taiko_match_stats.rating_after);
+            assert_eq!(standard_match_stats.volatility_after, taiko_match_stats.volatility_after);
+            assert_eq!(standard_match_stats.rating_change, taiko_match_stats.rating_change);
+            assert_eq!(standard_match_stats.volatility_change, taiko_match_stats.volatility_change);
+            assert_eq!(standard_match_stats.global_rank_after, taiko_match_stats.global_rank_after);
+            assert_eq!(standard_match_stats.country_rank_after, taiko_match_stats.country_rank_after);
+            assert_eq!(standard_match_stats.percentile_after, taiko_match_stats.percentile_after);
+            assert_eq!(standard_match_stats.global_rank_change, taiko_match_stats.global_rank_change);
+            assert_eq!(standard_match_stats.country_rank_change, taiko_match_stats.country_rank_change);
+            assert_eq!(standard_match_stats.percentile_change, taiko_match_stats.percentile_change);
+       }
     }
 
     fn test_beatmap() -> Beatmap {
