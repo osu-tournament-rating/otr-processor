@@ -1474,7 +1474,7 @@ mod tests {
         assert_eq!(processed_match_data.len(), match_data.len());
     }
 
-    // #[test]
+    #[test]
     fn test_multiple_mode_tracking() {
         // Load in OWC 2023 data
         // Duplicate & change all of the ruleset values to taiko (1)
