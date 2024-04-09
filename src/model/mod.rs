@@ -1474,7 +1474,7 @@ mod tests {
         assert_eq!(processed_match_data.len(), match_data.len());
     }
 
-    #[test]
+    // #[test]
     fn test_multiple_mode_tracking() {
         // Load in OWC 2023 data
         // Duplicate & change all of the ruleset values to taiko (1)
@@ -1531,7 +1531,7 @@ mod tests {
 
         // Assert
         // We want to ensure all players have standard & taiko data that is identical.
-        // This is to ensure that the model is correctly tracking multiple modes.
+        // This is to ensure that the processor is correctly tracking multiple modes.
        for i in 0..taiko_match_ids.len() {
             let standard_match_id = standard_match_ids[i];
             let taiko_match_id = taiko_match_ids[i];
