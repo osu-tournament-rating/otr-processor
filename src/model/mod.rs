@@ -84,6 +84,8 @@ pub fn calculate_post_match_info(
     initial_ratings: &mut [PlayerRating],
     match_adjs: &mut [ProcessedMatchData]
 ) -> Vec<MatchRatingStats> {
+    println!("Calculating post match info...");
+    let bar = progress_bar(match_adjs.len() as u64);
     let mut res = Vec::with_capacity(match_adjs.len());
 
     calculate_global_ranks(initial_ratings);
@@ -130,8 +132,13 @@ pub fn calculate_post_match_info(
             player_info.new_global_ranking = player.global_ranking;
             player_info.new_country_ranking = player.country_ranking;
         }
-    }
 
+        bar.inc(1);
+    }
+    bar.finish();
+
+    println!("Calculating rating stats...");
+    let bar2 = progress_bar(match_adjs.len() as u64);
     // Casting it to MatchRatingStats since we have all neccessary data
     for match_info in match_adjs.iter() {
         match_info
@@ -141,6 +148,7 @@ pub fn calculate_post_match_info(
                 let p_before = x.old_global_ranking as f64 / initial_ratings.len() as f64;
                 let p_after = x.new_global_ranking as f64 / initial_ratings.len() as f64;
 
+                bar2.inc(1);
                 MatchRatingStats {
                     player_id: x.player_id,
                     match_id: match_info.match_id,
@@ -165,6 +173,7 @@ pub fn calculate_post_match_info(
                 }
             })
             .for_each(|x| res.push(x));
+        bar2.finish();
     }
 
     // Since `initial_ratings` now contains new ratings
@@ -299,6 +308,7 @@ pub fn create_initial_ratings(matches: &Vec<Match>, players: &Vec<Player>) -> Ve
 
         bar.inc(1);
     }
+    bar.finish();
 
     ratings
 }
@@ -337,6 +347,7 @@ pub fn calculate_processed_match_data(
     matches: &[Match],
     model: &PlackettLuce
 ) -> Vec<ProcessedMatchData> {
+    println!("Calculating processed match data...");
     let bar = progress_bar(matches.len() as u64);
 
     let mut decay_tracker = DecayTracker::new();
@@ -546,6 +557,7 @@ pub fn calculate_processed_match_data(
 
         bar.inc(1);
     }
+    bar.finish();
 
     matches_stats
 }
@@ -718,6 +730,10 @@ pub fn match_costs(games: &[Game]) -> Option<Vec<MatchCost>> {
                 * (1.0 / n_played as f64)
                 * (1.0 + (lobby_bonus * ((n_played - 1) as f64) / (n as f64 / 1.0)).sqrt())
         };
+
+        if result.is_nan() {
+            panic!("Match cost cannot be NaN");
+        }
 
         let mc = MatchCost {
             player_id,

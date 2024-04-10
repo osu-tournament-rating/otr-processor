@@ -312,6 +312,7 @@ impl OtrApiClient {
             data.extend(response);
             bar.inc(chunk.len() as u64);
         }
+        bar.finish();
 
         Ok(data)
     }

@@ -41,13 +41,20 @@ async fn main() {
         }
     }
 
-    let mut result = model::calculate_processed_match_data(&ratings, &matches, &plackett_luce);
+    let result = model::calculate_ratings(ratings, &country_mappings, &matches, &plackett_luce);
 
-    let mut copied_initial_ratings = ratings.clone();
-
-    model::calculate_post_match_info(&mut copied_initial_ratings, &mut result);
-    model::calculate_player_adjustments(&ratings, &copied_initial_ratings);
+    // let mut copied_initial_ratings = ratings.clone();
+    //
+    // model::calculate_player_adjustments(&ratings, &copied_initial_ratings);
 
     // println!("{:?} ratings processed", result.base_ratings.len());
     // println!("{:?}", mcs);
+
+    // Print top 100 players
+    let mut sorted_ratings = result.base_ratings.clone();
+    sorted_ratings.sort_by(|a, b| b.rating.mu.partial_cmp(&a.rating.mu).unwrap());
+
+    for (i, player) in sorted_ratings.iter().take(100).enumerate() {
+        println!("{}: {} - {}", i + 1, player.player_id, player.rating);
+    }
 }
