@@ -28,6 +28,7 @@ pub fn apply_mod_multipliers(matches: &mut Vec<Match>) {
 
         bar.inc(1);
     }
+    bar.finish();
 }
 
 #[cfg(test)]

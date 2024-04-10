@@ -183,19 +183,21 @@ impl OtrApiClient {
             api_root, client_id, client_secret
         );
 
-        let mut response: OAuthResponse = client
+        let response = client
             .post(link)
             .header(CONTENT_TYPE, "application/json")
             .send()
-            .await?
-            .json()
             .await?;
+
+        dbg!(response.status());
+
+        let mut json: OAuthResponse = response.json().await?;
 
         // Putting `Bearer` just to save allocations
         // on every request made
-        response.token.insert_str(0, "Bearer ");
+        json.token.insert_str(0, "Bearer ");
 
-        Ok(response)
+        Ok(json)
     }
 
     /// Wrapper to make authorized requests without body
@@ -205,8 +207,10 @@ impl OtrApiClient {
     /// # Examples
     /// 1. Fetch some endpoint
     /// ```
-    /// let api = OtrApiClient::new("MYSECRET", "example.com/api");
-    /// api.make_request(Method::GET, "/fetch_something");
+    /// use reqwest::Method;
+    /// use otr_processor::api::OtrApiClient;
+    /// let api = OtrApiClient::new("example.com/api/v1", "CLIENT_ID", "CLIENT_SECRET");
+    /// // api.make_request(Method::GET, "/fetch_something");
     /// ```
     async fn make_request<T>(&self, method: Method, partial_url: &str) -> Result<T, Error>
     where
@@ -235,9 +239,11 @@ impl OtrApiClient {
     /// # Examples
     /// 1. Make request to some endpoint with `Vec<32>` as body
     /// ```
-    /// let api = OtrApiClient::new("MYSECRET", "example.com/api");
-    /// let my_numbers: Vec<32> = vec![1, 2, 3, 4, 5];
-    /// api.make_request_with_body(Method::GET, "/fetch_something", Some(&my_numbers));
+    /// use reqwest::Method;
+    /// use otr_processor::api::OtrApiClient;
+    /// let api = OtrApiClient::new("example.com/api/v1", "CLIENT_ID", "CLIENT_SECRET");
+    /// let my_numbers: Vec<i32> = vec![1, 2, 3, 4, 5];
+    /// // api.make_request_with_body(Method::GET, "/fetch_something", Some(&my_numbers));
     /// ```
     async fn make_request_with_body<T, B>(&self, method: Method, partial_url: &str, body: Option<B>) -> Result<T, Error>
     where
@@ -258,13 +264,17 @@ impl OtrApiClient {
 
         let lock = &self.body.token.read().await;
 
-        request
+        let resp = request
             .header(AUTHORIZATION, &lock.token)
             .header(CONTENT_TYPE, "application/json")
             .send()
-            .await?
-            .json()
-            .await
+            .await?;
+
+        if resp.status() != 200 {
+            dbg!(resp.status());
+        }
+
+        resp.json().await
     }
 
     /// Get ids of matches
@@ -302,6 +312,7 @@ impl OtrApiClient {
             data.extend(response);
             bar.inc(chunk.len() as u64);
         }
+        bar.finish();
 
         Ok(data)
     }
@@ -399,11 +410,11 @@ mod api_client_tests {
 
         let match_ids = api.get_match_ids(Some(10)).await.unwrap();
 
-        assert!(match_ids.len() == 10);
+        assert_eq!(match_ids.len(), 10);
 
         let result = api.get_matches(&match_ids, 250).await.unwrap();
 
-        assert!(result.len() == match_ids.len())
+        assert_eq!(result.len(), match_ids.len())
     }
 
     #[tokio::test]
@@ -428,9 +439,9 @@ mod api_client_tests {
         let second_token = manually_refresh_token!(api);
         let third_token = manually_refresh_token!(api);
 
-        assert!(initial_token != first_token);
-        assert!(first_token != second_token);
-        assert!(second_token != third_token);
+        assert_ne!(initial_token, first_token);
+        assert_ne!(first_token, second_token);
+        assert_ne!(second_token, third_token);
     }
 
     #[tokio::test]
