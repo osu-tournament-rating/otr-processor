@@ -173,11 +173,9 @@ pub fn calculate_post_match_info(
                 }
             })
             .for_each(|x| res.push(x));
-        bar2.finish();
     }
 
-    // Since `initial_ratings` now contains new ratings
-
+    bar2.finish();
     res
 }
 
