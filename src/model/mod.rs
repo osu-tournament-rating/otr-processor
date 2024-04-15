@@ -1,25 +1,6 @@
-/// The flow of processor
-///
+use std::{cmp::Ordering, collections::{HashMap, HashSet}};
 
-mod constants;
-mod data_processing;
-mod decay;
-mod recalc_helpers;
-pub mod structures;
-
-use crate::{
-    api::api_structs::{Game, Match, MatchRatingStats, MatchScore, Player, PlayerCountryMapping, RatingAdjustment},
-    model::{
-        constants::BLUE_TEAM_ID,
-        decay::{is_decay_possible, DecayTracker},
-        structures::{
-            match_cost::MatchCost, mode::Mode, player_rating::PlayerRating,
-            processing::RatingCalculationResult, team_type::TeamType
-        }
-    },
-    utils::progress_utils::progress_bar
-};
-use chrono::{Local, Utc};
+use chrono::Utc;
 use openskill::{
     model::{model::Model, plackett_luce::PlackettLuce},
     rating::{default_gamma, Rating}
@@ -28,9 +9,30 @@ use statrs::{
     distribution::{ContinuousCDF, Normal},
     statistics::Statistics
 };
-use std::{cmp::Ordering, collections::{HashMap, HashSet}};
 
-use self::structures::processing::{ProcessedMatchData, PlayerMatchData};
+use crate::{
+    api::api_structs::{Game, Match, MatchRatingStats, MatchScore, Player, PlayerCountryMapping, RatingAdjustment},
+    model::{
+        constants::BLUE_TEAM_ID,
+        decay::{DecayTracker, is_decay_possible},
+        structures::{
+            match_cost::MatchCost, mode::Mode, player_rating::PlayerRating,
+            processing::RatingCalculationResult, team_type::TeamType
+        }
+    },
+    utils::progress_utils::progress_bar
+};
+
+use self::structures::processing::{PlayerMatchData, ProcessedMatchData};
+
+/// The flow of processor
+///
+
+mod constants;
+mod data_processing;
+mod decay;
+mod recalc_helpers;
+pub mod structures;
 
 pub fn create_model() -> PlackettLuce {
     PlackettLuce::new(constants::BETA, constants::KAPPA, default_gamma)
@@ -391,7 +393,7 @@ pub fn calculate_ratings(
 ) -> RatingCalculationResult {
     let mut copied_ratings = initial_ratings.clone();
 
-    let mut result = calculate_processed_match_data(&mut copied_ratings, &matches, model);
+    let mut result = calculate_processed_match_data(&copied_ratings, matches, model);
 
     let match_info = calculate_post_match_info(&mut copied_ratings, &mut result);
     let rating_adjustments = calculate_player_adjustments(&initial_ratings, &copied_ratings);
@@ -441,7 +443,7 @@ pub fn calculate_processed_match_data(
         // Obtain all player match costs
         // Skip the match if there are no valid match costs
         let mut match_costs = match match_costs(&curr_match.games) {
-            Some(mc) if mc.len() >= 1 => mc,
+            Some(mc) if !mc.is_empty() => mc,
             _ => {
                 bar.inc(1);
                 continue;
@@ -465,7 +467,7 @@ pub fn calculate_processed_match_data(
 
         for match_cost in &match_costs {
             // If user has no prior activity, store the first one
-            if let None = decay_tracker.get_activity(match_cost.player_id, curr_match.mode) {
+            if decay_tracker.get_activity(match_cost.player_id, curr_match.mode).is_none() {
                 decay_tracker.record_activity(match_cost.player_id, curr_match.mode, start_time);
             }
 
@@ -484,13 +486,10 @@ pub fn calculate_processed_match_data(
                     rating_prior.rating.sigma,
                     start_time
                 );
-                match adjustment {
-                    Some(adj) => {
-                        rating_prior.rating.mu = adj[adj.len() - 1].rating_after;
-                        rating_prior.rating.sigma = adj[adj.len() - 1].volatility_after;
-                    }
-                    None => ()
-                }
+                if let Some(adj) = adjustment {
+                    rating_prior.rating.mu = adj[adj.len() - 1].rating_after;
+                    rating_prior.rating.sigma = adj[adj.len() - 1].volatility_after;
+                };
             }
             to_rate.push(rating_prior.clone());
 
@@ -513,7 +512,7 @@ pub fn calculate_processed_match_data(
             }
 
             let team_based = if team_based_count == single_count {
-                &curr_match.games[curr_match.games.len() - 1].team_type != &TeamType::HeadToHead
+                curr_match.games[curr_match.games.len() - 1].team_type != TeamType::HeadToHead
             } else {
                 team_based_count > single_count
             };
@@ -543,8 +542,7 @@ pub fn calculate_processed_match_data(
                 let (teammate_list, opponent_list): (Vec<MatchScore>, Vec<MatchScore>) = curr_match
                     .games
                     .iter()
-                    .map(|f| f.match_scores.clone())
-                    .flatten()
+                    .flat_map(|f| f.match_scores.clone())
                     .partition(|score| score.team == curr_player_team);
 
                 let mut teammate_list: Vec<i32> = teammate_list.iter().map(|player| player.player_id).collect();
@@ -828,7 +826,10 @@ pub fn mu_for_rank(rank: i32) -> f64 {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, iter::zip};
+    use std::collections::HashMap;
+
+    use chrono::{FixedOffset, Utc};
+    use openskill::{model::model::Model, rating::Rating};
 
     use crate::{
         api::api_structs::{Beatmap, Game, Match, MatchScore, Player, PlayerCountryMapping},
@@ -840,8 +841,6 @@ mod tests {
         },
         utils::test_utils
     };
-    use chrono::{FixedOffset, Utc};
-    use openskill::{model::model::Model, rating::Rating};
 
     use super::{calculate_global_ranks, calculate_player_adjustments, calculate_processed_match_data, create_initial_ratings, create_model, hash_country_mappings};
 
@@ -1690,7 +1689,7 @@ mod tests {
     #[test]
     fn test_multiple_gamemodes_calculation_minimal() {
         // Two 1v1 matches of same players but in different gamemodes
-        let mut initial_ratings = vec![
+        let initial_ratings = vec![
             PlayerRating { 
                 player_id: 1, 
                 mode: Mode::Osu, 

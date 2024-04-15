@@ -8,7 +8,7 @@ fn get_mod_multipliers() -> ModMultipliers {
     ModMultipliers { ez: 1.75 }
 }
 
-pub fn apply_mod_multipliers(matches: &mut Vec<Match>) {
+pub fn apply_mod_multipliers(matches: &mut [Match]) {
     let multipliers = get_mod_multipliers();
 
     let bar = progress_bar_spinner(matches.len() as u64);

@@ -33,7 +33,7 @@ async fn main() {
     // Filling PlayerRating with their country
     for player_rating in ratings.iter_mut() {
         if let Some(Some(country)) = country_hash.get(&player_rating.player_id) {
-            if player_rating.country.len() == 0 {
+            if player_rating.country.is_empty() {
                 player_rating.country.push_str(country)
             } else {
                 panic!("WTF!@#$!@");
