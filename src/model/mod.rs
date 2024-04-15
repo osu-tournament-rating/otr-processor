@@ -391,8 +391,9 @@ pub fn calculate_ratings(
 ) -> RatingCalculationResult {
     let mut copied_ratings = initial_ratings.clone();
 
-    let mut result = calculate_processed_match_data(&copied_ratings, &matches, model);
+    let mut result = calculate_processed_match_data(&mut copied_ratings, &matches, model);
     let match_info = calculate_post_match_info(&mut copied_ratings, &mut result);
+    let rating_adjustments = calculate_player_adjustments(&initial_ratings, &copied_ratings);
 
     RatingCalculationResult {
         base_ratings: copied_ratings,
@@ -1725,7 +1726,6 @@ mod tests {
 
         // Osu match: player 2 is winner
         // Taiko match: player 1 is winner
-
         let matches = vec![
             // Osu match
             Match{ 
@@ -1821,15 +1821,17 @@ mod tests {
         ];
         
 
+        let mut copied = initial_ratings.clone();
+
         let plackett_luce = create_model();
         let mut processed_match_data = calculate_processed_match_data(
-            &initial_ratings, 
+            &copied, 
             &matches, 
             &plackett_luce
         );
 
         let match_info = calculate_post_match_info(
-            &mut initial_ratings, &mut processed_match_data
+            &mut copied, &mut processed_match_data
         );
         
         // Sanity checks to make sure there are no weird 
@@ -1842,7 +1844,33 @@ mod tests {
             assert!((1..=2).contains(&m.country_rank_before));
         };
 
-        // TODO
+        let result = calculate_ratings(
+            initial_ratings,
+            &matches,
+            &plackett_luce
+        );
+        
+        // Same sanity check as above
+        for m in &result.rating_stats {
+            assert!((1..=2).contains(&m.global_rank_before));
+            assert!((1..=2).contains(&m.global_rank_after));
+            assert!((1..=2).contains(&m.country_rank_after));
+            assert!((1..=2).contains(&m.country_rank_before));
+        };
+
+        assert_eq!(result.base_ratings.len(), 4);
+
+        let p1_osu = result.base_ratings.iter().find(|x| x.player_id == 1 && x.mode == Mode::Osu).unwrap();
+        let p2_osu = result.base_ratings.iter().find(|x| x.player_id == 2 && x.mode == Mode::Osu).unwrap();
+
+        let p1_taiko = result.base_ratings.iter().find(|x| x.player_id == 1 && x.mode == Mode::Taiko).unwrap();
+        let p2_taiko = result.base_ratings.iter().find(|x| x.player_id == 2 && x.mode == Mode::Taiko).unwrap();
+
+        assert_eq!(p2_taiko.global_ranking, 1);
+        assert_eq!(p1_taiko.global_ranking, 2);
+
+        assert_eq!(p1_osu.global_ranking, 1);
+        assert_eq!(p2_osu.global_ranking, 2);
     }
 
     #[test]
