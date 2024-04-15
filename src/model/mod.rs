@@ -19,7 +19,7 @@ use crate::{
     },
     utils::progress_utils::progress_bar
 };
-use chrono::Local;
+use chrono::{Local, Utc};
 use openskill::{
     model::{model::Model, plackett_luce::PlackettLuce},
     rating::{default_gamma, Rating}
@@ -74,7 +74,7 @@ pub fn calculate_player_adjustments(
             volatility_before,
             volatility_after,
             rating_adjustment_type: 0,
-            timestamp: Local::now().into()
+            timestamp: Utc::now().into()
         })
     }
 
@@ -392,13 +392,14 @@ pub fn calculate_ratings(
     let mut copied_ratings = initial_ratings.clone();
 
     let mut result = calculate_processed_match_data(&mut copied_ratings, &matches, model);
+
     let match_info = calculate_post_match_info(&mut copied_ratings, &mut result);
     let rating_adjustments = calculate_player_adjustments(&initial_ratings, &copied_ratings);
 
     RatingCalculationResult {
         base_ratings: copied_ratings,
         rating_stats: match_info,
-        adjustments: Vec::new()
+        adjustments: rating_adjustments
     }
 }
 
