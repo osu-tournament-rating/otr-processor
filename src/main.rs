@@ -41,7 +41,7 @@ async fn main() {
         }
     }
 
-    let result = model::calculate_ratings(ratings, &country_mappings, &matches, &plackett_luce);
+    let result = model::calculate_ratings(ratings, &matches, &plackett_luce);
 
     // let mut copied_initial_ratings = ratings.clone();
     //

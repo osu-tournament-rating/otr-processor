@@ -5,8 +5,12 @@ use crate::{
     model::structures::player_rating::PlayerRating
 };
 
+use super::mode::Mode;
+
 #[derive(Debug)]
 pub struct RatingCalculationResult {
+    /// List of Players (leaderboard in some sense) with applied
+    /// all matches changes
     pub base_ratings: Vec<PlayerRating>,
     pub rating_stats: Vec<MatchRatingStats>,
     pub adjustments: Vec<RatingAdjustment>
@@ -34,6 +38,7 @@ pub struct PlayerMatchData {
 #[derive(Clone, Debug, Default)]
 pub struct ProcessedMatchData {
     pub match_id: i32,
+    pub mode: Mode,
     pub players_stats: Vec<PlayerMatchData>
 }
 

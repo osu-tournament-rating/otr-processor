@@ -189,8 +189,6 @@ impl OtrApiClient {
             .send()
             .await?;
 
-        dbg!(response.status());
-
         let mut json: OAuthResponse = response.json().await?;
 
         // Putting `Bearer` just to save allocations
@@ -271,7 +269,6 @@ impl OtrApiClient {
             .await?;
 
         if resp.status() != 200 {
-            dbg!(resp.status());
         }
 
         resp.json().await
