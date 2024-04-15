@@ -41,4 +41,3 @@ pub struct ProcessedMatchData {
     pub mode: Mode,
     pub players_stats: Vec<PlayerMatchData>
 }
-

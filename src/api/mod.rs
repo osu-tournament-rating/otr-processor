@@ -268,8 +268,7 @@ impl OtrApiClient {
             .send()
             .await?;
 
-        if resp.status() != 200 {
-        }
+        if resp.status() != 200 {}
 
         resp.json().await
     }

@@ -1,4 +1,7 @@
-use std::{cmp::Ordering, collections::{HashMap, HashSet}};
+use std::{
+    cmp::Ordering,
+    collections::{HashMap, HashSet}
+};
 
 use chrono::Utc;
 use openskill::{
@@ -14,10 +17,10 @@ use crate::{
     api::api_structs::{Game, Match, MatchRatingStats, MatchScore, Player, PlayerCountryMapping, RatingAdjustment},
     model::{
         constants::BLUE_TEAM_ID,
-        decay::{DecayTracker, is_decay_possible},
+        decay::{is_decay_possible, DecayTracker},
         structures::{
-            match_cost::MatchCost, mode::Mode, player_rating::PlayerRating,
-            processing::RatingCalculationResult, team_type::TeamType
+            match_cost::MatchCost, mode::Mode, player_rating::PlayerRating, processing::RatingCalculationResult,
+            team_type::TeamType
         }
     },
     utils::progress_utils::progress_bar
@@ -26,8 +29,6 @@ use crate::{
 use self::structures::processing::{PlayerMatchData, ProcessedMatchData};
 
 /// The flow of processor
-///
-
 mod constants;
 mod data_processing;
 mod decay;
@@ -92,7 +93,7 @@ pub fn calculate_post_match_info(
     println!("Calculating post match info...");
     let bar = progress_bar(match_adjs.len() as u64);
     let mut res = Vec::with_capacity(match_adjs.len());
-    
+
     // Calculating leadearboard for all modes
     calculate_global_ranks(initial_ratings, Mode::Osu);
     calculate_global_ranks(initial_ratings, Mode::Mania);
@@ -193,7 +194,7 @@ pub fn calculate_post_match_info(
 }
 
 /// Calculates global ranking based on [`PlayerRating::rating`] field
-/// 
+///
 /// # Notes
 /// Modifies and invalidate any existing sorting in [`PlayerRating`] slice
 pub fn calculate_global_ranks(existing_ratings: &mut [PlayerRating], mode: Mode) {
@@ -204,7 +205,7 @@ pub fn calculate_global_ranks(existing_ratings: &mut [PlayerRating], mode: Mode)
             Ordering::Greater
         }
     });
-    
+
     // According previous sorting we can make assumption that
     // first element is always start of current gamemode slice
     let gamemode_slice_start = 0;
@@ -216,24 +217,18 @@ pub fn calculate_global_ranks(existing_ratings: &mut [PlayerRating], mode: Mode)
 
     let gamemode_slice = &mut existing_ratings[gamemode_slice_start..gamemode_slice_end];
 
-    gamemode_slice.sort_by(|x, y| {
-        y.rating.mu.partial_cmp(&x.rating.mu).unwrap()
-    });
+    gamemode_slice.sort_by(|x, y| y.rating.mu.partial_cmp(&x.rating.mu).unwrap());
 
-    gamemode_slice
-        .iter_mut()
-        .enumerate()
-        .for_each(|(i, plr)| {
-            if plr.mode == mode {
-                plr.global_ranking = i as u32 + 1
-            }
-        });
+    gamemode_slice.iter_mut().enumerate().for_each(|(i, plr)| {
+        if plr.mode == mode {
+            plr.global_ranking = i as u32 + 1
+        }
+    });
 }
 
-
-/// Calculates country ranking for each individual player 
+/// Calculates country ranking for each individual player
 /// based on [`PlayerRating::rating`] field
-/// 
+///
 /// # Notes
 /// Modifies and invalidate any existing sorting in [`PlayerRating`] slice
 pub fn calculate_country_ranks(existing_ratings: &mut [PlayerRating], mode: Mode) {
@@ -244,23 +239,22 @@ pub fn calculate_country_ranks(existing_ratings: &mut [PlayerRating], mode: Mode
         countries.insert(x);
     });
 
-    existing_ratings
-        .sort_by(|x, y| {
-            if x.mode != mode {
-                Ordering::Less
-            } else {
-                Ordering::Greater
-            }
-        });
+    existing_ratings.sort_by(|x, y| {
+        if x.mode != mode {
+            Ordering::Less
+        } else {
+            Ordering::Greater
+        }
+    });
 
     // Finding gamemode slice
     let gamemode_start = match existing_ratings.iter().position(|x| x.mode == mode) {
         Some(v) => v,
-        None => return,
+        None => return
     };
 
     let gamemode_slice = &mut existing_ratings[gamemode_start..];
-    
+
     let gamemode_end = gamemode_slice
         .iter()
         .position(|x| x.mode != mode)
@@ -270,9 +264,7 @@ pub fn calculate_country_ranks(existing_ratings: &mut [PlayerRating], mode: Mode
 
     for country in countries {
         // TODO
-        let country_start = gamemode_slice.iter().position(|x| 
-            x.country == country
-        );
+        let country_start = gamemode_slice.iter().position(|x| x.country == country);
 
         if country_start.is_none() {
             continue;
@@ -288,7 +280,7 @@ pub fn calculate_country_ranks(existing_ratings: &mut [PlayerRating], mode: Mode
             .unwrap_or(country_slice.len());
 
         let country_slice = &mut country_slice[..country_end];
-        
+
         // Descending
         country_slice.sort_by(|x, y| y.rating.mu.partial_cmp(&x.rating.mu).unwrap());
 
@@ -415,7 +407,7 @@ pub fn calculate_processed_match_data(
     let bar = progress_bar(matches.len() as u64);
 
     let mut decay_tracker = DecayTracker::new();
-    
+
     let mut ratings_hash: HashMap<(i32, Mode), PlayerRating> = HashMap::with_capacity(initial_ratings.len());
 
     // Pointless cloning
@@ -467,7 +459,10 @@ pub fn calculate_processed_match_data(
 
         for match_cost in &match_costs {
             // If user has no prior activity, store the first one
-            if decay_tracker.get_activity(match_cost.player_id, curr_match.mode).is_none() {
+            if decay_tracker
+                .get_activity(match_cost.player_id, curr_match.mode)
+                .is_none()
+            {
                 decay_tracker.record_activity(match_cost.player_id, curr_match.mode, start_time);
             }
 
@@ -834,7 +829,8 @@ mod tests {
     use crate::{
         api::api_structs::{Beatmap, Game, Match, MatchScore, Player, PlayerCountryMapping},
         model::{
-            calc_percentile, calculate_country_ranks, calculate_post_match_info, calculate_ratings, mu_for_rank, structures::{
+            calc_percentile, calculate_country_ranks, calculate_post_match_info, calculate_ratings, mu_for_rank,
+            structures::{
                 match_cost::MatchCost, mode::Mode, player_rating::PlayerRating, scoring_type::ScoringType,
                 team_type::TeamType
             }
@@ -842,7 +838,10 @@ mod tests {
         utils::test_utils
     };
 
-    use super::{calculate_global_ranks, calculate_player_adjustments, calculate_processed_match_data, create_initial_ratings, create_model, hash_country_mappings};
+    use super::{
+        calculate_global_ranks, calculate_player_adjustments, calculate_processed_match_data, create_initial_ratings,
+        create_model, hash_country_mappings
+    };
 
     fn match_from_json(json: &str) -> Match {
         serde_json::from_str(json).unwrap()
@@ -939,7 +938,7 @@ mod tests {
         for i in 0..percentiles.len() {
             let expected_percentile = percentiles[i];
             let rank = ranks[i];
-            
+
             // 1.0 5
             let calculated_percentile = calc_percentile(rank, percentiles.len() as i32);
             assert_eq!(calculated_percentile, expected_percentile);
@@ -1239,7 +1238,6 @@ mod tests {
         let loser_expected_outcome = &expected_outcome[loser_id][0];
         let winner_expected_outcome = &expected_outcome[winner_id][0];
 
-
         let result = calculate_ratings(initial_ratings, &matches, &model);
 
         let loser_stats = result
@@ -1484,7 +1482,7 @@ mod tests {
         // PR = n/N
         // 0.5 = 1/2
         // 1.0 = 2/2
-        
+
         assert_eq!(
             loser_stats.percentile_before, 0.5,
             "Loser's percentile before is {}, should be {}",
@@ -1611,7 +1609,9 @@ mod tests {
         assert_eq!(standard_res.adjustments.len(), taiko_res.adjustments.len());
 
         for std in &standard_res.rating_stats {
-            let taiko = taiko_res.rating_stats.iter()
+            let taiko = taiko_res
+                .rating_stats
+                .iter()
                 .find(|x| x.player_id == std.player_id && x.match_id == std.match_id)
                 .unwrap();
 
@@ -1638,13 +1638,9 @@ mod tests {
         combined_initial_ratings.extend(initial_ratings.clone());
 
         let mut cloned_ratings = initial_ratings.clone();
-        cloned_ratings.iter_mut().for_each(|x| {
-            x.mode = Mode::Taiko
-        });
+        cloned_ratings.iter_mut().for_each(|x| x.mode = Mode::Taiko);
 
-        combined_initial_ratings.extend(
-            cloned_ratings
-        );
+        combined_initial_ratings.extend(cloned_ratings);
 
         // Calculating correct ranking placements after extending
         calculate_global_ranks(&mut combined_initial_ratings, Mode::Osu);
@@ -1658,7 +1654,9 @@ mod tests {
         assert_eq!(combined_res.rating_stats.len(), expected_match_results_len);
 
         for rating in &combined_res.rating_stats {
-            let occurences: Vec<usize> = combined_res.rating_stats.iter()
+            let occurences: Vec<usize> = combined_res
+                .rating_stats
+                .iter()
                 .enumerate()
                 .filter_map(|(i, x)| {
                     if x.player_id == rating.player_id && x.match_id == rating.match_id {
@@ -1666,10 +1664,11 @@ mod tests {
                     } else {
                         None
                     }
-                }).collect();
+                })
+                .collect();
 
             assert_eq!(occurences.len(), 2);
-            
+
             let first_idx = occurences[0];
             let second_idx = occurences[1];
 
@@ -1685,41 +1684,53 @@ mod tests {
             assert_eq!(first.country_rank_before, second.country_rank_before);
         }
     }
-    
+
     #[test]
     fn test_multiple_gamemodes_calculation_minimal() {
         // Two 1v1 matches of same players but in different gamemodes
         let initial_ratings = vec![
-            PlayerRating { 
-                player_id: 1, 
-                mode: Mode::Osu, 
-                rating: Rating { mu: 1500.0, sigma: 200.0 }, 
-                global_ranking: 1, 
-                country_ranking: 1, 
+            PlayerRating {
+                player_id: 1,
+                mode: Mode::Osu,
+                rating: Rating {
+                    mu: 1500.0,
+                    sigma: 200.0
+                },
+                global_ranking: 1,
+                country_ranking: 1,
                 country: "US".to_owned()
             },
-            PlayerRating { 
-                player_id: 1, 
-                mode: Mode::Taiko, 
-                rating: Rating { mu: 800.0, sigma: 200.0 }, 
-                global_ranking: 2, 
-                country_ranking: 2, 
+            PlayerRating {
+                player_id: 1,
+                mode: Mode::Taiko,
+                rating: Rating {
+                    mu: 800.0,
+                    sigma: 200.0
+                },
+                global_ranking: 2,
+                country_ranking: 2,
                 country: "US".to_owned()
             },
-            PlayerRating { 
-                player_id: 2, 
-                mode: Mode::Taiko, 
-                rating: Rating { mu: 1500.0, sigma: 200.0 }, 
-                global_ranking: 1, 
-                country_ranking: 1, 
+            PlayerRating {
+                player_id: 2,
+                mode: Mode::Taiko,
+                rating: Rating {
+                    mu: 1500.0,
+                    sigma: 200.0
+                },
+                global_ranking: 1,
+                country_ranking: 1,
                 country: "US".to_owned()
             },
-            PlayerRating { 
-                player_id: 2, 
-                mode: Mode::Osu, 
-                rating: Rating { mu: 800.0, sigma: 200.0 }, 
-                global_ranking: 2, 
-                country_ranking: 2, 
+            PlayerRating {
+                player_id: 2,
+                mode: Mode::Osu,
+                rating: Rating {
+                    mu: 800.0,
+                    sigma: 200.0
+                },
+                global_ranking: 2,
+                country_ranking: 2,
                 country: "US".to_owned()
             },
         ];
@@ -1728,113 +1739,102 @@ mod tests {
         // Taiko match: player 1 is winner
         let matches = vec![
             // Osu match
-            Match{ 
-                id: 1, 
-                match_id: 123, 
-                name: Some("Osu game".to_owned()), 
-                mode: Mode::Osu, 
-                start_time: Some(Utc::now().with_timezone(&FixedOffset::east_opt(0).unwrap())), 
-                end_time: None, 
-                games: vec![
-                    Game { 
-                        id: 123, 
-                        play_mode: Mode::Osu, 
-                        scoring_type: ScoringType::Score, 
-                        team_type: TeamType::TeamVs, 
-                        mods: 0, 
-                        game_id: 456, 
-                        start_time: Utc::now().with_timezone(&FixedOffset::east_opt(0).unwrap()), 
-                        end_time: None,
-                        beatmap: None, 
-                        match_scores: vec![
-                            MatchScore { 
-                                player_id: 1, 
-                                team: 1, 
-                                score: 100000, 
-                                enabled_mods: Some(0), 
-                                misses: 1, 
-                                accuracy_standard: 100.0, 
-                                accuracy_taiko: 100.0, 
-                                accuracy_catch: 100.0, 
-                                accuracy_mania: 100.0
-                            },
-                            MatchScore { 
-                                player_id: 2, 
-                                team: 2, 
-                                score: 1000000, 
-                                enabled_mods: Some(0), 
-                                misses: 0, 
-                                accuracy_standard: 100.0, 
-                                accuracy_taiko: 100.0, 
-                                accuracy_catch: 100.0, 
-                                accuracy_mania: 100.0
-                            },
-                        ]
-                    }
-                ]
+            Match {
+                id: 1,
+                match_id: 123,
+                name: Some("Osu game".to_owned()),
+                mode: Mode::Osu,
+                start_time: Some(Utc::now().with_timezone(&FixedOffset::east_opt(0).unwrap())),
+                end_time: None,
+                games: vec![Game {
+                    id: 123,
+                    play_mode: Mode::Osu,
+                    scoring_type: ScoringType::Score,
+                    team_type: TeamType::TeamVs,
+                    mods: 0,
+                    game_id: 456,
+                    start_time: Utc::now().with_timezone(&FixedOffset::east_opt(0).unwrap()),
+                    end_time: None,
+                    beatmap: None,
+                    match_scores: vec![
+                        MatchScore {
+                            player_id: 1,
+                            team: 1,
+                            score: 100000,
+                            enabled_mods: Some(0),
+                            misses: 1,
+                            accuracy_standard: 100.0,
+                            accuracy_taiko: 100.0,
+                            accuracy_catch: 100.0,
+                            accuracy_mania: 100.0
+                        },
+                        MatchScore {
+                            player_id: 2,
+                            team: 2,
+                            score: 1000000,
+                            enabled_mods: Some(0),
+                            misses: 0,
+                            accuracy_standard: 100.0,
+                            accuracy_taiko: 100.0,
+                            accuracy_catch: 100.0,
+                            accuracy_mania: 100.0
+                        },
+                    ]
+                }]
             },
-            Match{ 
-                id: 2, 
-                match_id: 124, 
-                name: Some("Taiko game".to_owned()), 
-                mode: Mode::Taiko, 
-                start_time: Some(Utc::now().with_timezone(&FixedOffset::east_opt(0).unwrap())), 
-                end_time: None, 
-                games: vec![
-                    Game { 
-                        id: 123, 
-                        play_mode: Mode::Taiko, 
-                        scoring_type: ScoringType::Score, 
-                        team_type: TeamType::TeamVs, 
-                        mods: 0, 
-                        game_id: 456, 
-                        start_time: Utc::now().with_timezone(&FixedOffset::east_opt(0).unwrap()), 
-                        end_time: None,
-                        beatmap: None, 
-                        match_scores: vec![
-                            MatchScore { 
-                                player_id: 1, 
-                                team: 1, 
-                                score: 1_000_000, 
-                                enabled_mods: Some(0), 
-                                misses: 1, 
-                                accuracy_standard: 100.0, 
-                                accuracy_taiko: 100.0, 
-                                accuracy_catch: 100.0, 
-                                accuracy_mania: 100.0
-                            },
-                            MatchScore { 
-                                player_id: 2, 
-                                team: 2, 
-                                score: 1000, 
-                                enabled_mods: Some(0), 
-                                misses: 0, 
-                                accuracy_standard: 100.0, 
-                                accuracy_taiko: 100.0, 
-                                accuracy_catch: 100.0, 
-                                accuracy_mania: 100.0
-                            },
-                        ]
-                    }
-                ]
+            Match {
+                id: 2,
+                match_id: 124,
+                name: Some("Taiko game".to_owned()),
+                mode: Mode::Taiko,
+                start_time: Some(Utc::now().with_timezone(&FixedOffset::east_opt(0).unwrap())),
+                end_time: None,
+                games: vec![Game {
+                    id: 123,
+                    play_mode: Mode::Taiko,
+                    scoring_type: ScoringType::Score,
+                    team_type: TeamType::TeamVs,
+                    mods: 0,
+                    game_id: 456,
+                    start_time: Utc::now().with_timezone(&FixedOffset::east_opt(0).unwrap()),
+                    end_time: None,
+                    beatmap: None,
+                    match_scores: vec![
+                        MatchScore {
+                            player_id: 1,
+                            team: 1,
+                            score: 1_000_000,
+                            enabled_mods: Some(0),
+                            misses: 1,
+                            accuracy_standard: 100.0,
+                            accuracy_taiko: 100.0,
+                            accuracy_catch: 100.0,
+                            accuracy_mania: 100.0
+                        },
+                        MatchScore {
+                            player_id: 2,
+                            team: 2,
+                            score: 1000,
+                            enabled_mods: Some(0),
+                            misses: 0,
+                            accuracy_standard: 100.0,
+                            accuracy_taiko: 100.0,
+                            accuracy_catch: 100.0,
+                            accuracy_mania: 100.0
+                        },
+                    ]
+                }]
             },
         ];
-        
 
         let mut copied = initial_ratings.clone();
 
         let plackett_luce = create_model();
-        let mut processed_match_data = calculate_processed_match_data(
-            &copied, 
-            &matches, 
-            &plackett_luce
-        );
+        let mut processed_match_data = calculate_processed_match_data(&copied, &matches, &plackett_luce);
 
-        let match_info = calculate_post_match_info(
-            &mut copied, &mut processed_match_data
-        );
-        
-        // Sanity checks to make sure there are no weird 
+        let match_info = calculate_post_match_info(&mut copied, &mut processed_match_data);
+
+        // Sanity checks to make sure there are no weird
         // global/country ranks assinged
         // In this particular tests there should be only 1's and 2's
         for m in &match_info {
@@ -1842,29 +1842,41 @@ mod tests {
             assert!((1..=2).contains(&m.global_rank_after));
             assert!((1..=2).contains(&m.country_rank_after));
             assert!((1..=2).contains(&m.country_rank_before));
-        };
+        }
 
-        let result = calculate_ratings(
-            initial_ratings,
-            &matches,
-            &plackett_luce
-        );
-        
+        let result = calculate_ratings(initial_ratings, &matches, &plackett_luce);
+
         // Same sanity check as above
         for m in &result.rating_stats {
             assert!((1..=2).contains(&m.global_rank_before));
             assert!((1..=2).contains(&m.global_rank_after));
             assert!((1..=2).contains(&m.country_rank_after));
             assert!((1..=2).contains(&m.country_rank_before));
-        };
+        }
 
         assert_eq!(result.base_ratings.len(), 4);
 
-        let p1_osu = result.base_ratings.iter().find(|x| x.player_id == 1 && x.mode == Mode::Osu).unwrap();
-        let p2_osu = result.base_ratings.iter().find(|x| x.player_id == 2 && x.mode == Mode::Osu).unwrap();
+        let p1_osu = result
+            .base_ratings
+            .iter()
+            .find(|x| x.player_id == 1 && x.mode == Mode::Osu)
+            .unwrap();
+        let p2_osu = result
+            .base_ratings
+            .iter()
+            .find(|x| x.player_id == 2 && x.mode == Mode::Osu)
+            .unwrap();
 
-        let p1_taiko = result.base_ratings.iter().find(|x| x.player_id == 1 && x.mode == Mode::Taiko).unwrap();
-        let p2_taiko = result.base_ratings.iter().find(|x| x.player_id == 2 && x.mode == Mode::Taiko).unwrap();
+        let p1_taiko = result
+            .base_ratings
+            .iter()
+            .find(|x| x.player_id == 1 && x.mode == Mode::Taiko)
+            .unwrap();
+        let p2_taiko = result
+            .base_ratings
+            .iter()
+            .find(|x| x.player_id == 2 && x.mode == Mode::Taiko)
+            .unwrap();
 
         assert_eq!(p2_taiko.global_ranking, 1);
         assert_eq!(p1_taiko.global_ranking, 2);
@@ -1876,64 +1888,90 @@ mod tests {
     #[test]
     fn test_global_ranking_calculation_different_gamemodes2() {
         let mut players = vec![
-            PlayerRating { 
-                player_id: 1, 
-                mode: Mode::Osu, 
-                rating: Rating { mu: 1500.0, sigma: 200.0 }, 
-                global_ranking: 1, 
-                country_ranking: 1, 
+            PlayerRating {
+                player_id: 1,
+                mode: Mode::Osu,
+                rating: Rating {
+                    mu: 1500.0,
+                    sigma: 200.0
+                },
+                global_ranking: 1,
+                country_ranking: 1,
                 country: "US".to_owned()
             },
-            PlayerRating { 
-                player_id: 1, 
-                mode: Mode::Taiko, 
-                rating: Rating { mu: 800.0, sigma: 200.0 }, 
-                global_ranking: 2, 
-                country_ranking: 2, 
+            PlayerRating {
+                player_id: 1,
+                mode: Mode::Taiko,
+                rating: Rating {
+                    mu: 800.0,
+                    sigma: 200.0
+                },
+                global_ranking: 2,
+                country_ranking: 2,
                 country: "US".to_owned()
             },
-            PlayerRating { 
-                player_id: 2, 
-                mode: Mode::Taiko, 
-                rating: Rating { mu: 1500.0, sigma: 200.0 }, 
-                global_ranking: 1, 
-                country_ranking: 1, 
+            PlayerRating {
+                player_id: 2,
+                mode: Mode::Taiko,
+                rating: Rating {
+                    mu: 1500.0,
+                    sigma: 200.0
+                },
+                global_ranking: 1,
+                country_ranking: 1,
                 country: "US".to_owned()
             },
-            PlayerRating { 
-                player_id: 2, 
-                mode: Mode::Osu, 
-                rating: Rating { mu: 800.0, sigma: 200.0 }, 
-                global_ranking: 2, 
-                country_ranking: 2, 
+            PlayerRating {
+                player_id: 2,
+                mode: Mode::Osu,
+                rating: Rating {
+                    mu: 800.0,
+                    sigma: 200.0
+                },
+                global_ranking: 2,
+                country_ranking: 2,
                 country: "US".to_owned()
             },
         ];
-
 
         calculate_global_ranks(&mut players, Mode::Osu);
         calculate_global_ranks(&mut players, Mode::Taiko);
         calculate_global_ranks(&mut players, Mode::Mania);
         calculate_global_ranks(&mut players, Mode::Catch);
 
-
         assert_eq!(
-            players.iter().find(|x| x.player_id == 1 && x.mode == Mode::Osu).unwrap().global_ranking,
+            players
+                .iter()
+                .find(|x| x.player_id == 1 && x.mode == Mode::Osu)
+                .unwrap()
+                .global_ranking,
             1
         );
 
         assert_eq!(
-            players.iter().find(|x| x.player_id == 1 && x.mode == Mode::Taiko).unwrap().global_ranking,
+            players
+                .iter()
+                .find(|x| x.player_id == 1 && x.mode == Mode::Taiko)
+                .unwrap()
+                .global_ranking,
             2
         );
 
         assert_eq!(
-            players.iter().find(|x| x.player_id == 2 && x.mode == Mode::Osu).unwrap().global_ranking,
+            players
+                .iter()
+                .find(|x| x.player_id == 2 && x.mode == Mode::Osu)
+                .unwrap()
+                .global_ranking,
             2
         );
 
         assert_eq!(
-            players.iter().find(|x| x.player_id == 2 && x.mode == Mode::Taiko).unwrap().global_ranking,
+            players
+                .iter()
+                .find(|x| x.player_id == 2 && x.mode == Mode::Taiko)
+                .unwrap()
+                .global_ranking,
             1
         );
     }
@@ -1941,158 +1979,160 @@ mod tests {
     #[test]
     fn test_global_ranking_calculation_different_gamemodes() {
         let mut players = vec![
-            PlayerRating { 
-                player_id: 200, 
-                mode: Mode::Osu, 
-                rating: Rating { mu: 1500.0, sigma: 200.0 }, 
-                global_ranking: 0, 
-                country_ranking: 0, 
-                country: "RU" .to_string(),
+            PlayerRating {
+                player_id: 200,
+                mode: Mode::Osu,
+                rating: Rating {
+                    mu: 1500.0,
+                    sigma: 200.0
+                },
+                global_ranking: 0,
+                country_ranking: 0,
+                country: "RU".to_string()
             },
-            PlayerRating { 
-                player_id: 100, 
-                mode: Mode::Taiko, 
-                rating: Rating { mu: 1500.0, sigma: 200.0 }, 
-                global_ranking: 0, 
-                country_ranking: 0, 
-                country: "RU" .to_string(),
+            PlayerRating {
+                player_id: 100,
+                mode: Mode::Taiko,
+                rating: Rating {
+                    mu: 1500.0,
+                    sigma: 200.0
+                },
+                global_ranking: 0,
+                country_ranking: 0,
+                country: "RU".to_string()
             },
-            PlayerRating { 
-                player_id: 102, 
-                mode: Mode::Taiko, 
-                rating: Rating { mu: 1000.0, sigma: 200.0 }, 
-                global_ranking: 0, 
-                country_ranking: 0, 
-                country: "RU" .to_string(),
+            PlayerRating {
+                player_id: 102,
+                mode: Mode::Taiko,
+                rating: Rating {
+                    mu: 1000.0,
+                    sigma: 200.0
+                },
+                global_ranking: 0,
+                country_ranking: 0,
+                country: "RU".to_string()
             },
-            PlayerRating { 
-                player_id: 101, 
-                mode: Mode::Taiko, 
-                rating: Rating { mu: 1499.0, sigma: 200.0 }, 
-                global_ranking: 0, 
-                country_ranking: 0, 
-                country: "RU" .to_string(),
+            PlayerRating {
+                player_id: 101,
+                mode: Mode::Taiko,
+                rating: Rating {
+                    mu: 1499.0,
+                    sigma: 200.0
+                },
+                global_ranking: 0,
+                country_ranking: 0,
+                country: "RU".to_string()
             },
-            PlayerRating { 
-                player_id: 202, 
-                mode: Mode::Osu, 
-                rating: Rating { mu: 700.0, sigma: 200.0 }, 
-                global_ranking: 0, 
-                country_ranking: 0, 
-                country: "RU" .to_string(),
+            PlayerRating {
+                player_id: 202,
+                mode: Mode::Osu,
+                rating: Rating {
+                    mu: 700.0,
+                    sigma: 200.0
+                },
+                global_ranking: 0,
+                country_ranking: 0,
+                country: "RU".to_string()
             },
-            PlayerRating { 
-                player_id: 201, 
-                mode: Mode::Osu, 
-                rating: Rating { mu: 899.0, sigma: 200.0 }, 
-                global_ranking: 0, 
-                country_ranking: 0, 
-                country: "RU" .to_string(),
+            PlayerRating {
+                player_id: 201,
+                mode: Mode::Osu,
+                rating: Rating {
+                    mu: 899.0,
+                    sigma: 200.0
+                },
+                global_ranking: 0,
+                country_ranking: 0,
+                country: "RU".to_string()
             },
         ];
 
         calculate_global_ranks(&mut players, Mode::Osu);
         calculate_global_ranks(&mut players, Mode::Taiko);
 
-        assert_eq!(
-            players.iter().find(|x| x.player_id == 200).unwrap().global_ranking,
-            1
-        );
+        assert_eq!(players.iter().find(|x| x.player_id == 200).unwrap().global_ranking, 1);
 
-        assert_eq!(
-            players.iter().find(|x| x.player_id == 201).unwrap().global_ranking,
-            2
-        );
+        assert_eq!(players.iter().find(|x| x.player_id == 201).unwrap().global_ranking, 2);
 
-        assert_eq!(
-            players.iter().find(|x| x.player_id == 202).unwrap().global_ranking,
-            3
-        );
+        assert_eq!(players.iter().find(|x| x.player_id == 202).unwrap().global_ranking, 3);
 
-        assert_eq!(
-            players.iter().find(|x| x.player_id == 100).unwrap().global_ranking,
-            1
-        );
+        assert_eq!(players.iter().find(|x| x.player_id == 100).unwrap().global_ranking, 1);
 
-        assert_eq!(
-            players.iter().find(|x| x.player_id == 101).unwrap().global_ranking,
-            2
-        );
+        assert_eq!(players.iter().find(|x| x.player_id == 101).unwrap().global_ranking, 2);
 
-        assert_eq!(
-            players.iter().find(|x| x.player_id == 102).unwrap().global_ranking,
-            3
-        );
+        assert_eq!(players.iter().find(|x| x.player_id == 102).unwrap().global_ranking, 3);
     }
-
 
     #[test]
     fn test_country_ranking_calculation_different_gamemodes() {
         let mut players = vec![
-            PlayerRating { 
-                player_id: 200, 
-                mode: Mode::Osu, 
-                rating: Rating { mu: 1500.0, sigma: 200.0 }, 
-                global_ranking: 0, 
-                country_ranking: 0, 
-                country: "RU" .to_string(),
+            PlayerRating {
+                player_id: 200,
+                mode: Mode::Osu,
+                rating: Rating {
+                    mu: 1500.0,
+                    sigma: 200.0
+                },
+                global_ranking: 0,
+                country_ranking: 0,
+                country: "RU".to_string()
             },
-            PlayerRating { 
-                player_id: 101, 
-                mode: Mode::Taiko, 
-                rating: Rating { mu: 1000.0, sigma: 200.0 }, 
-                global_ranking: 0, 
-                country_ranking: 0, 
-                country: "RU" .to_string(),
+            PlayerRating {
+                player_id: 101,
+                mode: Mode::Taiko,
+                rating: Rating {
+                    mu: 1000.0,
+                    sigma: 200.0
+                },
+                global_ranking: 0,
+                country_ranking: 0,
+                country: "RU".to_string()
             },
-            PlayerRating { 
-                player_id: 201, 
-                mode: Mode::Osu, 
-                rating: Rating { mu: 1449.0, sigma: 200.0 }, 
-                global_ranking: 0, 
-                country_ranking: 0, 
-                country: "RU" .to_string(),
+            PlayerRating {
+                player_id: 201,
+                mode: Mode::Osu,
+                rating: Rating {
+                    mu: 1449.0,
+                    sigma: 200.0
+                },
+                global_ranking: 0,
+                country_ranking: 0,
+                country: "RU".to_string()
             },
-            PlayerRating { 
-                player_id: 102, 
-                mode: Mode::Taiko, 
-                rating: Rating { mu: 900.0, sigma: 200.0 }, 
-                global_ranking: 0, 
-                country_ranking: 0, 
-                country: "RU" .to_string(),
+            PlayerRating {
+                player_id: 102,
+                mode: Mode::Taiko,
+                rating: Rating {
+                    mu: 900.0,
+                    sigma: 200.0
+                },
+                global_ranking: 0,
+                country_ranking: 0,
+                country: "RU".to_string()
             },
-            PlayerRating { 
-                player_id: 100, 
-                mode: Mode::Taiko, 
-                rating: Rating { mu: 1500.0, sigma: 200.0 }, 
-                global_ranking: 0, 
-                country_ranking: 0, 
-                country: "RU" .to_string(),
+            PlayerRating {
+                player_id: 100,
+                mode: Mode::Taiko,
+                rating: Rating {
+                    mu: 1500.0,
+                    sigma: 200.0
+                },
+                global_ranking: 0,
+                country_ranking: 0,
+                country: "RU".to_string()
             },
         ];
 
         calculate_country_ranks(&mut players, Mode::Osu);
         calculate_country_ranks(&mut players, Mode::Taiko);
 
-        assert_eq!(
-            players.iter().find(|x| x.player_id == 100).unwrap().country_ranking,
-            1
-        );
+        assert_eq!(players.iter().find(|x| x.player_id == 100).unwrap().country_ranking, 1);
 
-        assert_eq!(
-            players.iter().find(|x| x.player_id == 200).unwrap().country_ranking,
-            1
-        );
+        assert_eq!(players.iter().find(|x| x.player_id == 200).unwrap().country_ranking, 1);
 
-        assert_eq!(
-            players.iter().find(|x| x.player_id == 101).unwrap().country_ranking,
-            2
-        );
+        assert_eq!(players.iter().find(|x| x.player_id == 101).unwrap().country_ranking, 2);
 
-        assert_eq!(
-            players.iter().find(|x| x.player_id == 102).unwrap().country_ranking,
-            3
-        );
+        assert_eq!(players.iter().find(|x| x.player_id == 102).unwrap().country_ranking, 3);
     }
 
     fn test_beatmap() -> Beatmap {
