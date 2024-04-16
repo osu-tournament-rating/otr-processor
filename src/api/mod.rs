@@ -388,7 +388,7 @@ mod api_client_tests {
 
         let result = api.get_match_ids(Some(10)).await.unwrap();
 
-        assert!(result.len() == 10);
+        assert_eq!(result.len(), 10);
     }
 
     #[tokio::test]
