@@ -9,7 +9,7 @@
     "games": [
       {
         "id": 350343,
-        "playMode": 0,
+        "ruleset": 0,
         "scoringType": 3,
         "teamType": 2,
         "mods": 0,
@@ -126,7 +126,7 @@
       },
       {
         "id": 350344,
-        "playMode": 0,
+        "ruleset": 0,
         "scoringType": 3,
         "teamType": 2,
         "mods": 1,
@@ -243,7 +243,7 @@
       },
       {
         "id": 350345,
-        "playMode": 0,
+        "ruleset": 0,
         "scoringType": 3,
         "teamType": 2,
         "mods": 17,
@@ -360,7 +360,7 @@
       },
       {
         "id": 350346,
-        "playMode": 0,
+        "ruleset": 0,
         "scoringType": 3,
         "teamType": 2,
         "mods": 0,
@@ -477,7 +477,7 @@
       },
       {
         "id": 350347,
-        "playMode": 0,
+        "ruleset": 0,
         "scoringType": 3,
         "teamType": 2,
         "mods": 0,
@@ -594,7 +594,7 @@
       },
       {
         "id": 350348,
-        "playMode": 0,
+        "ruleset": 0,
         "scoringType": 3,
         "teamType": 2,
         "mods": 0,
@@ -711,7 +711,7 @@
       },
       {
         "id": 350349,
-        "playMode": 0,
+        "ruleset": 0,
         "scoringType": 3,
         "teamType": 2,
         "mods": 65,
@@ -828,7 +828,7 @@
       },
       {
         "id": 350350,
-        "playMode": 0,
+        "ruleset": 0,
         "scoringType": 3,
         "teamType": 2,
         "mods": 17,
@@ -945,7 +945,7 @@
       },
       {
         "id": 350351,
-        "playMode": 0,
+        "ruleset": 0,
         "scoringType": 3,
         "teamType": 2,
         "mods": 0,
@@ -1095,7 +1095,7 @@
     "games": [
       {
         "id": 350352,
-        "playMode": 0,
+        "ruleset": 0,
         "scoringType": 3,
         "teamType": 2,
         "mods": 0,
@@ -1212,7 +1212,7 @@
       },
       {
         "id": 350353,
-        "playMode": 0,
+        "ruleset": 0,
         "scoringType": 3,
         "teamType": 2,
         "mods": 65,
@@ -1329,7 +1329,7 @@
       },
       {
         "id": 350354,
-        "playMode": 0,
+        "ruleset": 0,
         "scoringType": 3,
         "teamType": 2,
         "mods": 9,
@@ -1446,7 +1446,7 @@
       },
       {
         "id": 350355,
-        "playMode": 0,
+        "ruleset": 0,
         "scoringType": 3,
         "teamType": 2,
         "mods": 0,
@@ -1563,7 +1563,7 @@
       },
       {
         "id": 350356,
-        "playMode": 0,
+        "ruleset": 0,
         "scoringType": 3,
         "teamType": 2,
         "mods": 9,
@@ -1680,7 +1680,7 @@
       },
       {
         "id": 350357,
-        "playMode": 0,
+        "ruleset": 0,
         "scoringType": 3,
         "teamType": 2,
         "mods": 65,
@@ -1797,7 +1797,7 @@
       },
       {
         "id": 350358,
-        "playMode": 0,
+        "ruleset": 0,
         "scoringType": 3,
         "teamType": 2,
         "mods": 17,
@@ -1825,7 +1825,7 @@
       },
       {
         "id": 350359,
-        "playMode": 0,
+        "ruleset": 0,
         "scoringType": 3,
         "teamType": 2,
         "mods": 17,
@@ -1853,7 +1853,7 @@
       },
       {
         "id": 350360,
-        "playMode": 0,
+        "ruleset": 0,
         "scoringType": 3,
         "teamType": 2,
         "mods": 17,
@@ -1970,7 +1970,7 @@
       },
       {
         "id": 350361,
-        "playMode": 0,
+        "ruleset": 0,
         "scoringType": 3,
         "teamType": 2,
         "mods": 17,
@@ -2087,7 +2087,7 @@
       },
       {
         "id": 350362,
-        "playMode": 0,
+        "ruleset": 0,
         "scoringType": 3,
         "teamType": 2,
         "mods": 0,
@@ -2204,7 +2204,7 @@
       },
       {
         "id": 350363,
-        "playMode": 0,
+        "ruleset": 0,
         "scoringType": 3,
         "teamType": 2,
         "mods": 17,
@@ -2321,7 +2321,7 @@
       },
       {
         "id": 350364,
-        "playMode": 0,
+        "ruleset": 0,
         "scoringType": 3,
         "teamType": 2,
         "mods": 1,
@@ -2438,7 +2438,7 @@
       },
       {
         "id": 350365,
-        "playMode": 0,
+        "ruleset": 0,
         "scoringType": 3,
         "teamType": 2,
         "mods": 0,
@@ -2566,7 +2566,7 @@
     "games": [
       {
         "id": 350366,
-        "playMode": 0,
+        "ruleset": 0,
         "scoringType": 3,
         "teamType": 2,
         "mods": 65,
@@ -2683,7 +2683,7 @@
       },
       {
         "id": 350367,
-        "playMode": 0,
+        "ruleset": 0,
         "scoringType": 3,
         "teamType": 2,
         "mods": 65,
@@ -2800,7 +2800,7 @@
       },
       {
         "id": 350368,
-        "playMode": 0,
+        "ruleset": 0,
         "scoringType": 3,
         "teamType": 2,
         "mods": 9,
@@ -2917,7 +2917,7 @@
       },
       {
         "id": 350369,
-        "playMode": 0,
+        "ruleset": 0,
         "scoringType": 3,
         "teamType": 2,
         "mods": 1,
@@ -3034,7 +3034,7 @@
       },
       {
         "id": 350370,
-        "playMode": 0,
+        "ruleset": 0,
         "scoringType": 3,
         "teamType": 2,
         "mods": 9,
@@ -3151,7 +3151,7 @@
       },
       {
         "id": 350371,
-        "playMode": 0,
+        "ruleset": 0,
         "scoringType": 3,
         "teamType": 2,
         "mods": 0,
@@ -3268,7 +3268,7 @@
       },
       {
         "id": 350372,
-        "playMode": 0,
+        "ruleset": 0,
         "scoringType": 3,
         "teamType": 2,
         "mods": 17,
@@ -3385,7 +3385,7 @@
       },
       {
         "id": 350373,
-        "playMode": 0,
+        "ruleset": 0,
         "scoringType": 3,
         "teamType": 2,
         "mods": 0,
@@ -3502,7 +3502,7 @@
       },
       {
         "id": 350374,
-        "playMode": 0,
+        "ruleset": 0,
         "scoringType": 3,
         "teamType": 2,
         "mods": 17,
@@ -3619,7 +3619,7 @@
       },
       {
         "id": 350375,
-        "playMode": 0,
+        "ruleset": 0,
         "scoringType": 3,
         "teamType": 2,
         "mods": 0,
@@ -3736,7 +3736,7 @@
       },
       {
         "id": 350376,
-        "playMode": 0,
+        "ruleset": 0,
         "scoringType": 3,
         "teamType": 2,
         "mods": 9,
@@ -3853,7 +3853,7 @@
       },
       {
         "id": 350377,
-        "playMode": 0,
+        "ruleset": 0,
         "scoringType": 3,
         "teamType": 2,
         "mods": 0,
@@ -3970,7 +3970,7 @@
       },
       {
         "id": 350378,
-        "playMode": 0,
+        "ruleset": 0,
         "scoringType": 3,
         "teamType": 2,
         "mods": 0,

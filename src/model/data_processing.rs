@@ -67,7 +67,7 @@ mod tests {
 
         let game = Game {
             id: 0,
-            play_mode: Mode::Osu,
+            ruleset: Mode::Osu,
             scoring_type: ScoringType::ScoreV2,
             team_type: TeamType::TeamVs,
             mods: 0,

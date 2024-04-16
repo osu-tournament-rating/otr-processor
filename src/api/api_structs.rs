@@ -140,7 +140,7 @@ pub struct PlayerCountryMapping {
 #[serde(rename_all = "camelCase")]
 pub struct Game {
     pub id: i32,
-    pub play_mode: Mode,
+    pub ruleset: Mode,
     pub scoring_type: ScoringType,
     pub team_type: TeamType,
     pub mods: i32,

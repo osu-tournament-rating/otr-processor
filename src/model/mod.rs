@@ -310,7 +310,7 @@ pub fn create_initial_ratings(matches: &Vec<Match>, players: &Vec<Player>) -> Ve
 
     for m in matches {
         for game in &m.games {
-            let mode = game.play_mode;
+            let mode = game.ruleset;
 
             for score in &game.match_scores {
                 // Check if the player_id and enum_mode combination is already in created_ratings
@@ -428,7 +428,7 @@ pub fn calculate_processed_match_data(
             players_stats: Vec::new()
         };
 
-        if curr_match.games.iter().any(|game| game.play_mode != curr_match.mode) {
+        if curr_match.games.iter().any(|game| game.ruleset != curr_match.mode) {
             bar.inc(1);
             continue;
         }
@@ -1206,7 +1206,7 @@ mod tests {
         let game = Game {
             id: 0,
             game_id: 0,
-            play_mode: Mode::Osu,
+            ruleset: Mode::Osu,
             scoring_type: ScoringType::ScoreV2,
             team_type: TeamType::HeadToHead,
             start_time,
@@ -1594,7 +1594,7 @@ mod tests {
             m.mode = Mode::Taiko;
 
             for g in &mut m.games {
-                g.play_mode = Mode::Taiko;
+                g.ruleset = Mode::Taiko;
             }
         }
 
@@ -1762,7 +1762,7 @@ mod tests {
                 end_time: None,
                 games: vec![Game {
                     id: 123,
-                    play_mode: Mode::Osu,
+                    ruleset: Mode::Osu,
                     scoring_type: ScoringType::Score,
                     team_type: TeamType::TeamVs,
                     mods: 0,
@@ -1805,7 +1805,7 @@ mod tests {
                 end_time: None,
                 games: vec![Game {
                     id: 123,
-                    play_mode: Mode::Taiko,
+                    ruleset: Mode::Taiko,
                     scoring_type: ScoringType::Score,
                     team_type: TeamType::TeamVs,
                     mods: 0,
