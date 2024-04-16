@@ -88,11 +88,11 @@ pub fn calculate_player_adjustments(
 /// and match adjustments
 pub fn calculate_post_match_info(
     initial_ratings: &mut [PlayerRating],
-    match_adjs: &mut [ProcessedMatchData]
+    match_data: &mut [ProcessedMatchData]
 ) -> Vec<MatchRatingStats> {
     println!("Calculating post match info...");
-    let bar = progress_bar(match_adjs.len() as u64);
-    let mut res = Vec::with_capacity(match_adjs.len());
+    let bar = progress_bar(match_data.len() as u64);
+    let mut res = Vec::with_capacity(match_data.len());
 
     // Calculating leadearboard for all modes
     calculate_global_ranks(initial_ratings, Mode::Osu);
@@ -105,7 +105,7 @@ pub fn calculate_post_match_info(
     calculate_country_ranks(initial_ratings, Mode::Taiko);
     calculate_country_ranks(initial_ratings, Mode::Catch);
 
-    for match_info in match_adjs.iter_mut() {
+    for match_info in match_data.iter_mut() {
         // Preparing initial_ratings with new rating
         // and extracting old country/global ranking placements
         for player_info in &mut match_info.players_stats {
@@ -152,9 +152,9 @@ pub fn calculate_post_match_info(
     bar.finish();
 
     println!("Calculating rating stats...");
-    let bar2 = progress_bar(match_adjs.len() as u64);
+    let bar2 = progress_bar(match_data.len() as u64);
     // Casting it to MatchRatingStats since we have all neccessary data
-    for match_info in match_adjs.iter() {
+    for match_info in match_data.iter() {
         match_info
             .players_stats
             .iter()
@@ -206,7 +206,7 @@ pub fn calculate_global_ranks(existing_ratings: &mut [PlayerRating], mode: Mode)
         }
     });
 
-    // According previous sorting we can make assumption that
+    // According to previous sorting we can make the assumption that
     // first element is always start of current gamemode slice
     let gamemode_slice_start = 0;
 
