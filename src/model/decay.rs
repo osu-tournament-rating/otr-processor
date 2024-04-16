@@ -35,7 +35,7 @@ impl DecayTracker {
     ///
     /// # Rules
     /// - User must be inactive for at least 4 months before decay begins.
-    /// - Beginning after 4 months of inactivity, apply decay once weekly.
+    /// - Beginning after 4 months of inactivity, apply decay once weekly up to time D.
     ///
     /// If the user does not need to decay, return None.
     pub fn decay(
