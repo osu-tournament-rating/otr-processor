@@ -485,6 +485,10 @@ pub fn calculate_processed_match_data(
                 if let Some(adj) = adjustment {
                     rating_prior.rating.mu = adj[adj.len() - 1].rating_after;
                     rating_prior.rating.sigma = adj[adj.len() - 1].volatility_after;
+
+                    for a in adj {
+                        decays.push(a);
+                    }
                 };
             }
             to_rate.push(rating_prior.clone());
