@@ -3,7 +3,7 @@ use std::{
     collections::{HashMap, HashSet}
 };
 
-use chrono::Utc;
+use chrono::{FixedOffset, Utc};
 use openskill::{
     model::{model::Model, plackett_luce::PlackettLuce},
     rating::{default_gamma, Rating}
@@ -385,15 +385,15 @@ pub fn calculate_ratings(
 ) -> RatingCalculationResult {
     let mut copied_ratings = initial_ratings.clone();
 
-    let mut result = calculate_processed_match_data(&copied_ratings, matches, model);
+    let (mut result, adj) = calculate_processed_match_data(&copied_ratings, matches, model);
 
     let match_info = calculate_post_match_info(&mut copied_ratings, &mut result);
-    let rating_adjustments = calculate_player_adjustments(&initial_ratings, &copied_ratings);
+    // let rating_adjustments = calculate_player_adjustments(&initial_ratings, &copied_ratings);
 
     RatingCalculationResult {
         base_ratings: copied_ratings,
         rating_stats: match_info,
-        adjustments: rating_adjustments
+        adjustments: adj
     }
 }
 
@@ -402,7 +402,7 @@ pub fn calculate_processed_match_data(
     initial_ratings: &[PlayerRating],
     matches: &[Match],
     model: &PlackettLuce
-) -> Vec<ProcessedMatchData> {
+) -> (Vec<ProcessedMatchData>, Vec<RatingAdjustment>){
     println!("Calculating processed match data...");
     let bar = progress_bar(matches.len() as u64);
 
@@ -419,6 +419,7 @@ pub fn calculate_processed_match_data(
     let mut to_rate = Vec::with_capacity(10);
 
     let mut matches_stats = Vec::new();
+    let mut decays = Vec::new();
 
     for curr_match in matches {
         let mut current_match_stats = ProcessedMatchData {
@@ -617,7 +618,16 @@ pub fn calculate_processed_match_data(
     }
     bar.finish();
 
-    matches_stats
+    for i in matches_stats.iter() {
+        for j in &i.players_stats {
+            let (id, mode, mu, sigma) = (j.player_id, i.mode, j.new_rating.mu, j.new_rating.sigma);
+            if let Some(mut decay_list) = decay_tracker.decay(id, mode, mu, sigma, Utc::now().fixed_offset()) {
+                decays.append(&mut decay_list)
+            }
+        }
+    }
+
+    (matches_stats, decays)
 }
 
 fn calc_percentile(rank: i32, player_count: i32) -> f64 {
@@ -1523,7 +1533,7 @@ mod tests {
 
         let mut copied_initial_ratings = initial_ratings.clone();
 
-        let match_rating_stats = calculate_post_match_info(&mut copied_initial_ratings, &mut processed_match_data);
+        let match_rating_stats = calculate_post_match_info(&mut copied_initial_ratings, &mut processed_match_data.0);
         let adjustments = calculate_player_adjustments(&initial_ratings, &copied_initial_ratings);
 
         // The amount of players that participated in the matches
@@ -1550,7 +1560,7 @@ mod tests {
         // Ensure the length of match rating stats matches the
         // total count of unique players in each match
         assert_eq!(match_rating_stats.len(), players_count);
-        assert_eq!(processed_match_data.len(), match_data.len());
+        assert_eq!(processed_match_data.0.len(), match_data.len());
     }
 
     #[test]
@@ -1830,7 +1840,7 @@ mod tests {
         let mut copied = initial_ratings.clone();
 
         let plackett_luce = create_model();
-        let mut processed_match_data = calculate_processed_match_data(&copied, &matches, &plackett_luce);
+        let (mut processed_match_data, adjustments) = calculate_processed_match_data(&copied, &matches, &plackett_luce);
 
         let match_info = calculate_post_match_info(&mut copied, &mut processed_match_data);
 
