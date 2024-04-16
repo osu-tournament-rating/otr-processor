@@ -1,9 +1,10 @@
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::convert::TryFrom;
 
-#[derive(Deserialize_repr, Serialize_repr, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Deserialize_repr, Serialize_repr, Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 #[repr(u8)]
 pub enum Mode {
+    #[default]
     Osu = 0,
     Taiko = 1,
     Catch = 2,

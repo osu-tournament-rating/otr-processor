@@ -9,3 +9,9 @@ impl TestConstants {
         }
     }
 }
+
+impl Default for TestConstants {
+    fn default() -> Self {
+        Self::new()
+    }
+}
