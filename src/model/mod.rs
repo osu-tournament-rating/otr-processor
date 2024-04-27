@@ -121,12 +121,6 @@ pub fn calculate_post_match_info(
 
             let player = &mut initial_ratings[player_idx];
             
-            if player.player_id == 4285 {
-                println!(
-                    "calculate_post_match_info: match {}: {} -> {}", 
-                    match_info.match_id, player.rating.mu, player_info.new_rating.mu
-                );
-            }
             player.rating = player_info.new_rating.clone();
             player_info.old_global_ranking = player.global_ranking;
             player_info.old_country_ranking = player.country_ranking;
@@ -336,12 +330,6 @@ pub fn create_initial_ratings(matches: &Vec<Match>, players: &Vec<Player>) -> Ve
                     Mode::Mania => player.earliest_mania_global_rank.or(player.rank_mania)
                 };
 
-                if player.id == 4285 {
-                    dbg!(player);
-                    dbg!(rank);
-                }
-
-
                 let mu;
                 let sigma;
                 match rank {
@@ -368,12 +356,7 @@ pub fn create_initial_ratings(matches: &Vec<Match>, players: &Vec<Player>) -> Ve
                     country: player.country.clone().unwrap_or(String::with_capacity(2))
                 };
 
-                if player.id == 4285 {
-                    dbg!(&player_rating);
-                }
-
                 ratings.push(player_rating);
-
                 stored_lookup_log.insert((score.player_id, mode));
             }
         }
@@ -499,11 +482,6 @@ pub fn calculate_processed_match_data(
                     start_time
                 );
                 if let Some(adj) = adjustments {
-                    if rating_prior.player_id == 4285 {
-                        println!("calculate_processed_match_data: Doing decay for {}: {} -> {} \
-                        (across {} adjustments) (mode: {:?})", rating_prior.player_id,
-                                 rating_prior.rating.mu, adj[adj.len() - 1].rating_after, adj.len(), curr_match.mode);
-                    }
                     rating_prior.rating.mu = adj[adj.len() - 1].rating_after;
                     rating_prior.rating.sigma = adj[adj.len() - 1].volatility_after;
 
@@ -636,16 +614,8 @@ pub fn calculate_processed_match_data(
                 .find(|x| x.player_id == rate.player_id)
                 .unwrap();
 
-            // TODO
             ratings_hash.entry((player_match_stats.player_id, curr_match.mode))
                 .and_modify(|x| x.rating = rate.rating.clone());
-
-            if player_match_stats.player_id == 4285 {
-                println!(
-                    "calculate_processed_match_data: calculated new rating for some match: {} -> {} (mode: {:?})",
-                    player_match_stats.old_rating.mu, rate.rating.mu, curr_match.mode
-                );
-            }
 
             player_match_stats.new_rating = rate.rating.clone();
         }
