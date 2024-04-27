@@ -1,53 +1,74 @@
-#[macro_use]
-extern crate lazy_static;
+use std::collections::HashMap;
 
-mod api;
-mod env;
-mod model;
-mod utils;
-
-use indicatif::ProgressBar;
-
-use crate::model::{match_costs, structures::match_cost::MatchCost};
+use otr_processor::{
+    api,
+    model::{self, hash_country_mappings}
+};
 
 #[tokio::main]
 async fn main() {
     dotenv::dotenv().unwrap();
 
-    let api = api::OtrApiClient::new_from_env()
-        .await
-        .expect("Failed to intialize otr api");
+    println!("Gettings otr client");
+    let api = api::OtrApiClient::new_from_env().await.unwrap();
+    
 
+    println!("Gettings match id's");
     let match_ids = api
-        .get_match_ids(Some(100))
+        .get_match_ids(None)
         .await
         .expect("Match ids must be valid before proceeding");
 
+    println!("Getting matches");
     let matches = api
         .get_matches(&match_ids, 250)
         .await
         .expect("Matches need to be loaded before continuing");
 
-    // let players = api.get_players().await.expect("Ranks must be identified");
+    println!("Getting players");
+    let players = api.get_players().await.expect("Ranks must be identified");
+    let country_mappings = api
+        .get_player_country_mapping()
+        .await
+        .expect("Country mappings must be identified");
+
+    //let worst = players.iter().find(|x| x.id == 6666).unwrap();
 
     // Model
-    // let ratings = model::model::create_initial_ratings(matches, players);
+    let plackett_luce = model::create_model();
+    let country_hash = hash_country_mappings(&country_mappings);
+    let mut ratings = model::create_initial_ratings(&matches, &players);
+    
+    /*
+    let mut counter = HashMap::new();
 
-    let bar = ProgressBar::new(matches.len() as u64);
+    for rating in &ratings {
+        counter.entry(rating.rating.mu as u32).and_modify(|x| *x += 1).or_insert(1);
+    }
+    */
 
-    let mut mcs: Vec<Vec<MatchCost>> = Vec::new();
-    for m in matches {
-        let mc = match_costs(&m.games);
+    //dbg!(counter);
 
-        bar.inc(1);
 
-        match mc {
-            Some(match_costs) => mcs.push(match_costs),
-            None => continue
+
+    // Filling PlayerRating with their country
+    for player_rating in ratings.iter_mut() {
+        if let Some(Some(country)) = country_hash.get(&player_rating.player_id) {
+            if player_rating.country.is_empty() {
+                player_rating.country.push_str(country)
+            } else {
+                panic!("WTF!@#$!@");
+            }
         }
     }
 
-    bar.finish();
+    let mut result = model::calculate_ratings(ratings, &matches, &plackett_luce);
 
-    // println!("{:?}", mcs)
+    // Print top 100 players
+    result.base_ratings.sort_by(|a, b| b.rating.mu.partial_cmp(&a.rating.mu).unwrap());
+    
+    println!("top 100");
+    for (i, player) in result.base_ratings.iter().take(100).enumerate() {
+        println!("{}: {} - {} (mode: {:?})", i + 1, player.player_id, player.rating, player.mode);
+    }
 }

@@ -1,10 +1,12 @@
-use crate::{api::api_structs::RatingAdjustment, model::constants};
+use crate::{
+    api::api_structs::RatingAdjustment,
+    model::{constants, structures::mode::Mode}
+};
 use chrono::{DateTime, FixedOffset};
 use std::collections::HashMap;
-
 /// Tracks decay activity for players
 pub struct DecayTracker {
-    last_play_time: HashMap<i32, DateTime<FixedOffset>>
+    last_play_time: HashMap<(i32, Mode), DateTime<FixedOffset>>
 }
 
 impl DecayTracker {
@@ -13,8 +15,12 @@ impl DecayTracker {
             last_play_time: HashMap::new()
         }
     }
-    pub fn record_activity(&mut self, player_id: i32, time: DateTime<FixedOffset>) {
-        self.last_play_time.insert(player_id, time);
+    pub fn record_activity(&mut self, player_id: i32, mode: Mode, time: DateTime<FixedOffset>) {
+        self.last_play_time.insert((player_id, mode), time);
+    }
+
+    pub fn get_activity(&mut self, player_id: i32, mode: Mode) -> Option<&DateTime<FixedOffset>> {
+        self.last_play_time.get(&(player_id, mode))
     }
 
     /// Returns a [`Vec<RatingAdjustment>`] for each decay application for this user.
@@ -29,18 +35,28 @@ impl DecayTracker {
     ///
     /// # Rules
     /// - User must be inactive for at least 4 months before decay begins.
-    /// - Beginning after 4 months of inactivity, apply decay once weekly.
+    /// - Beginning after 4 months of inactivity, apply decay once weekly up to time D.
     ///
     /// If the user does not need to decay, return None.
     pub fn decay(
         &self,
         player_id: i32,
+        mode: Mode,
         mu: f64,
         sigma: f64,
         d: DateTime<FixedOffset>
     ) -> Option<Vec<RatingAdjustment>> {
-        let last_play_time = self.last_play_time.get(&player_id).unwrap();
-        let decay_weeks = Self::n_decay(d, *last_play_time);
+        let last_play_time = self.last_play_time.get(&(player_id, mode));
+        match last_play_time {
+            None => return None,
+            Some(t) => {
+                if d < *t {
+                    return None;
+                }
+            }
+        }
+
+        let decay_weeks = Self::n_decay(d, *last_play_time.unwrap());
 
         if decay_weeks < 1 {
             return None;
@@ -52,13 +68,13 @@ impl DecayTracker {
 
         for i in 0..decay_weeks {
             // Increment time by 7 days for each decay application (this is for accurate timestamps)
-            let now = last_play_time.fixed_offset() + chrono::Duration::days(i * 7);
+            let now = last_play_time.unwrap().fixed_offset() + chrono::Duration::days(i * 7);
             new_mu = decay_mu(new_mu);
             new_sigma = decay_sigma(new_sigma);
 
             let adjustment = RatingAdjustment {
                 player_id,
-                mode: 0,
+                mode,
                 rating_adjustment_amount: new_mu - mu,
                 volatility_adjustment_amount: new_sigma - sigma,
                 rating_before: mu,
@@ -116,7 +132,8 @@ mod tests {
     use crate::model::{
         constants,
         constants::MULTIPLIER,
-        decay::{decay_mu, decay_sigma, is_decay_possible, DecayTracker}
+        decay::{decay_mu, decay_sigma, is_decay_possible, DecayTracker},
+        structures::mode::Mode
     };
     use chrono::DateTime;
     use std::ops::Add;
@@ -124,6 +141,7 @@ mod tests {
     #[test]
     fn test_decay() {
         let id = 1;
+        let mode = Mode::Osu;
         let mu = 1000.0;
         let sigma = 200.0;
 
@@ -148,9 +166,9 @@ mod tests {
             expected_sigma = decay_sigma(expected_sigma);
         }
 
-        tracker.record_activity(id, t);
+        tracker.record_activity(id, mode, t);
 
-        let adjustments = tracker.decay(id, mu, sigma, d).unwrap();
+        let adjustments = tracker.decay(id, mode, mu, sigma, d).unwrap();
 
         assert_eq!(adjustments.len() as i64, n_decay);
 

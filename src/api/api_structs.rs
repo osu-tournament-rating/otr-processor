@@ -17,11 +17,11 @@ pub struct OAuthResponse {
     pub expire_in: u64
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RatingAdjustment {
     pub player_id: i32,
-    pub mode: i32,
+    pub mode: Mode,
     pub rating_adjustment_amount: f64,
     pub volatility_adjustment_amount: f64,
     pub rating_before: f64,
@@ -131,9 +131,16 @@ pub struct MatchIdMapping {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct PlayerCountryMapping {
+    pub player_id: i32,
+    pub country: Option<String>
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Game {
     pub id: i32,
-    pub play_mode: Mode,
+    pub ruleset: Mode,
     pub scoring_type: ScoringType,
     pub team_type: TeamType,
     pub mods: i32,
@@ -144,7 +151,7 @@ pub struct Game {
     pub match_scores: Vec<MatchScore>
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MatchScore {
     pub player_id: i32,
@@ -158,7 +165,7 @@ pub struct MatchScore {
     pub accuracy_mania: f64
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Beatmap {
     pub artist: String,
@@ -182,6 +189,8 @@ pub struct Beatmap {
 pub struct Player {
     pub id: i32,
     pub osu_id: i64,
+    pub username: Option<String>,
+    pub country: Option<String>,
     pub rank_standard: Option<i32>,
     pub rank_taiko: Option<i32>,
     pub rank_catch: Option<i32>,
@@ -193,7 +202,5 @@ pub struct Player {
     pub earliest_catch_global_rank: Option<i32>,
     pub earliest_catch_global_rank_date: Option<DateTime<FixedOffset>>,
     pub earliest_mania_global_rank: Option<i32>,
-    pub earliest_mania_global_rank_date: Option<DateTime<FixedOffset>>,
-    pub username: Option<String>,
-    pub country: Option<String>
+    pub earliest_mania_global_rank_date: Option<DateTime<FixedOffset>>
 }
