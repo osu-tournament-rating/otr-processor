@@ -500,11 +500,11 @@ pub fn calculate_processed_match_data(
                 );
                 if let Some(adj) = adjustment {
                     if rating_prior.player_id == 4285 {
-                        println!("calculate_processed_match_data: Doing decay: {} -> {}", rating_prior.rating.mu, adj[adj.len() - 1].rating_after);
+                        println!("calculate_processed_match_data: Doing decay for {}: {} -> {}", rating_prior.player_id,
+                                 rating_prior.rating.mu, adj[adj.len() - 1].rating_after);
                     }
                     rating_prior.rating.mu = adj[adj.len() - 1].rating_after;
                     rating_prior.rating.sigma = adj[adj.len() - 1].volatility_after;
-
 
                     for a in adj {
                         decays.push(a);
@@ -513,16 +513,16 @@ pub fn calculate_processed_match_data(
             }
             to_rate.push(rating_prior.clone());
 
-            let prior_mu = rating_prior.rating.mu;
-            let prior_sigma = rating_prior.rating.sigma;
+            // let prior_mu = rating_prior.rating.mu;
+            // let prior_sigma = rating_prior.rating.sigma;
 
             // Updating rank for tracking base stats
-            ratings_hash
-                .entry((match_cost.player_id, curr_match.mode))
-                .and_modify(|f| {
-                    f.rating.mu = prior_mu;
-                    f.rating.sigma = prior_sigma;
-                });
+            // ratings_hash
+            //     .entry((match_cost.player_id, curr_match.mode))
+            //     .and_modify(|f| {
+            //         f.rating.mu = prior_mu;
+            //         f.rating.sigma = prior_sigma;
+            //     });
 
             // Count all games with H2H vs non-H2H team types
             let mut team_based_count = 0;
