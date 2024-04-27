@@ -483,7 +483,7 @@ pub fn calculate_processed_match_data(
                 decay_tracker.record_activity(match_cost.player_id, curr_match.mode, start_time);
             }
 
-            // Get user's current rating
+            // Get user's current rating to use for decay
             let mut rating_prior = match ratings_hash.get_mut(&(match_cost.player_id, curr_match.mode)) {
                 None => panic!("No rating found?"),
                 Some(rate) => rate.clone()
@@ -491,21 +491,23 @@ pub fn calculate_processed_match_data(
 
             // If decay is possible, apply it to rating_prior
             if is_decay_possible(rating_prior.rating.mu) {
-                let adjustment = decay_tracker.decay(
+                let adjustments = decay_tracker.decay(
                     match_cost.player_id,
                     curr_match.mode,
                     rating_prior.rating.mu,
                     rating_prior.rating.sigma,
                     start_time
                 );
-                if let Some(adj) = adjustment {
+                if let Some(adj) = adjustments {
                     if rating_prior.player_id == 4285 {
-                        println!("calculate_processed_match_data: Doing decay for {}: {} -> {}", rating_prior.player_id,
-                                 rating_prior.rating.mu, adj[adj.len() - 1].rating_after);
+                        println!("calculate_processed_match_data: Doing decay for {}: {} -> {} \
+                        (across {} adjustments) (mode: {:?})", rating_prior.player_id,
+                                 rating_prior.rating.mu, adj[adj.len() - 1].rating_after, adj.len(), curr_match.mode);
                     }
                     rating_prior.rating.mu = adj[adj.len() - 1].rating_after;
                     rating_prior.rating.sigma = adj[adj.len() - 1].volatility_after;
 
+                    // Update the hashmap with the new decay.
                     for a in adj {
                         decays.push(a);
                     }
@@ -513,16 +515,12 @@ pub fn calculate_processed_match_data(
             }
             to_rate.push(rating_prior.clone());
 
-            // let prior_mu = rating_prior.rating.mu;
-            // let prior_sigma = rating_prior.rating.sigma;
-
-            // Updating rank for tracking base stats
-            // ratings_hash
-            //     .entry((match_cost.player_id, curr_match.mode))
-            //     .and_modify(|f| {
-            //         f.rating.mu = prior_mu;
-            //         f.rating.sigma = prior_sigma;
-            //     });
+            // Update hashmap with decay values, if any.
+            ratings_hash
+                .entry((match_cost.player_id, curr_match.mode))
+                .and_modify(|f| {
+                    f.rating = rating_prior.rating.clone();
+                });
 
             // Count all games with H2H vs non-H2H team types
             let mut team_based_count = 0;
@@ -644,8 +642,8 @@ pub fn calculate_processed_match_data(
 
             if player_match_stats.player_id == 4285 {
                 println!(
-                    "calculate_processed_match_data: calculated new rating for some match: {} -> {}", 
-                    player_match_stats.old_rating.mu, rate.rating.mu
+                    "calculate_processed_match_data: calculated new rating for some match: {} -> {} (mode: {:?})",
+                    player_match_stats.old_rating.mu, rate.rating.mu, curr_match.mode
                 );
             }
 

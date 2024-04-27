@@ -69,6 +69,6 @@ async fn main() {
     
     println!("top 100");
     for (i, player) in result.base_ratings.iter().take(100).enumerate() {
-        println!("{}: {} - {}", i + 1, player.player_id, player.rating);
+        println!("{}: {} - {} (mode: {:?})", i + 1, player.player_id, player.rating, player.mode);
     }
 }
