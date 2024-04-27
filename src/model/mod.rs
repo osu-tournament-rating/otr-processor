@@ -120,7 +120,13 @@ pub fn calculate_post_match_info(
             let player_idx = player_idx.unwrap();
 
             let player = &mut initial_ratings[player_idx];
-
+            
+            if player.player_id == 4285 {
+                println!(
+                    "calculate_post_match_info: match {}: {} -> {}", 
+                    match_info.match_id, player.rating.mu, player_info.new_rating.mu
+                );
+            }
             player.rating = player_info.new_rating.clone();
             player_info.old_global_ranking = player.global_ranking;
             player_info.old_country_ranking = player.country_ranking;
@@ -330,6 +336,12 @@ pub fn create_initial_ratings(matches: &Vec<Match>, players: &Vec<Player>) -> Ve
                     Mode::Mania => player.earliest_mania_global_rank.or(player.rank_mania)
                 };
 
+                if player.id == 4285 {
+                    dbg!(player);
+                    dbg!(rank);
+                }
+
+
                 let mu;
                 let sigma;
                 match rank {
@@ -355,6 +367,11 @@ pub fn create_initial_ratings(matches: &Vec<Match>, players: &Vec<Player>) -> Ve
                     country_ranking: 0,
                     country: player.country.clone().unwrap_or(String::with_capacity(2))
                 };
+
+                if player.id == 4285 {
+                    dbg!(&player_rating);
+                }
+
                 ratings.push(player_rating);
 
                 stored_lookup_log.insert((score.player_id, mode));
@@ -388,7 +405,6 @@ pub fn calculate_ratings(
     let (mut result, adj) = calculate_processed_match_data(&copied_ratings, matches, model);
 
     let match_info = calculate_post_match_info(&mut copied_ratings, &mut result);
-    // let rating_adjustments = calculate_player_adjustments(&initial_ratings, &copied_ratings);
 
     RatingCalculationResult {
         base_ratings: copied_ratings,
@@ -483,8 +499,12 @@ pub fn calculate_processed_match_data(
                     start_time
                 );
                 if let Some(adj) = adjustment {
+                    if rating_prior.player_id == 4285 {
+                        println!("calculate_processed_match_data: Doing decay: {} -> {}", rating_prior.rating.mu, adj[adj.len() - 1].rating_after);
+                    }
                     rating_prior.rating.mu = adj[adj.len() - 1].rating_after;
                     rating_prior.rating.sigma = adj[adj.len() - 1].volatility_after;
+
 
                     for a in adj {
                         decays.push(a);
@@ -494,10 +514,15 @@ pub fn calculate_processed_match_data(
             to_rate.push(rating_prior.clone());
 
             let prior_mu = rating_prior.rating.mu;
+            let prior_sigma = rating_prior.rating.sigma;
+
             // Updating rank for tracking base stats
             ratings_hash
                 .entry((match_cost.player_id, curr_match.mode))
-                .and_modify(|f| f.rating.mu = prior_mu);
+                .and_modify(|f| {
+                    f.rating.mu = prior_mu;
+                    f.rating.sigma = prior_sigma;
+                });
 
             // Count all games with H2H vs non-H2H team types
             let mut team_based_count = 0;
@@ -612,6 +637,17 @@ pub fn calculate_processed_match_data(
                 .iter_mut()
                 .find(|x| x.player_id == rate.player_id)
                 .unwrap();
+
+            // TODO
+            ratings_hash.entry((player_match_stats.player_id, curr_match.mode))
+                .and_modify(|x| x.rating = rate.rating.clone());
+
+            if player_match_stats.player_id == 4285 {
+                println!(
+                    "calculate_processed_match_data: calculated new rating for some match: {} -> {}", 
+                    player_match_stats.old_rating.mu, rate.rating.mu
+                );
+            }
 
             player_match_stats.new_rating = rate.rating.clone();
         }
@@ -804,7 +840,7 @@ pub fn match_costs(games: &[Game]) -> Option<Vec<MatchCost>> {
         };
 
         if result.is_nan() {
-            panic!("Match cost cannot be NaN");
+            panic!("Match cost cannot be NaN. {}", result);
         }
 
         let mc = MatchCost {

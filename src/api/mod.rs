@@ -129,7 +129,9 @@ impl Drop for OtrApiClient {
 impl OtrApiClient {
     /// Constructs API client based on provided token
     pub async fn new(api_root: &str, client_id: &str, client_secret: &str) -> Result<Self, Error> {
-        let client = ClientBuilder::new().build()?;
+        let client = ClientBuilder::new()
+            .timeout(Duration::from_secs(10))
+            .build()?;
 
         let token_response = Self::login(&client, api_root, client_id, client_secret).await?;
 
