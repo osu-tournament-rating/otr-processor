@@ -826,7 +826,7 @@ pub fn match_costs(games: &[Game]) -> Option<Vec<MatchCost>> {
 
 fn game_win_record(game: &Game) -> GameWinRecord {
     let game_id = game.id;
-    let (winners, losers, winner_team, loser_team) = identify_winners_losers(game);
+    let (winners, losers, winner_team, loser_team) = identify_game_winners_losers(game);
 
     GameWinRecord {
         game_id,
@@ -839,8 +839,12 @@ fn game_win_record(game: &Game) -> GameWinRecord {
 
 /// Identifies the winners and losers of a game.
 /// Return format is tuple of (winner ids, loser ids, winner team, loser team)
-fn identify_winners_losers(game: &Game) -> (Vec<i32>, Vec<i32>, i32, i32) {
-    if game.match_scores.len() == 2 {
+fn identify_game_winners_losers(game: &Game) -> (Vec<i32>, Vec<i32>, i32, i32) {
+    if game.team_type == TeamType::HeadToHead {
+        if game.match_scores.len() != 2 {
+            panic!("Head to head game must have 2 players: {:?}", game);
+        }
+
         // Head to head
         let score_0 = game.match_scores.index(0);
         let score_1 = game.match_scores.index(1);
@@ -862,6 +866,10 @@ fn identify_winners_losers(game: &Game) -> (Vec<i32>, Vec<i32>, i32, i32) {
 
             return (winners, losers, 0, 0);
         }
+    }
+
+    if game.team_type != TeamType::TeamVs {
+        panic!("Invalid team type: {:?}", game);
     }
 
     let mut red_players = vec![];
@@ -2245,13 +2253,13 @@ mod tests {
         }
     }
 
-    fn test_game_win_record() {
+    fn test_game_win_record_team_vs() {
         let game = Game {
             id: 14,
             game_id: 0,
             ruleset: Mode::Osu,
             scoring_type: ScoringType::ScoreV2,
-            team_type: TeamType::HeadToHead,
+            team_type: TeamType::TeamVs,
             start_time: Utc::now().fixed_offset(),
             end_time: Some(Utc::now().fixed_offset()),
             beatmap: Some(test_beatmap()),
@@ -2269,7 +2277,79 @@ mod tests {
                 },
                 MatchScore {
                     player_id: 1,
+                    team: 1,
+                    score: 525000,
+                    enabled_mods: None,
+                    misses: 0,
+                    accuracy_standard: 100.0,
+                    accuracy_taiko: 0.0,
+                    accuracy_catch: 0.0,
+                    accuracy_mania: 0.0
+                },
+                MatchScore {
+                    player_id: 2,
                     team: 2,
+                    score: 525000,
+                    enabled_mods: None,
+                    misses: 0,
+                    accuracy_standard: 100.0,
+                    accuracy_taiko: 0.0,
+                    accuracy_catch: 0.0,
+                    accuracy_mania: 0.0
+                },
+                MatchScore {
+                    player_id: 3,
+                    team: 2,
+                    score: 625000,
+                    enabled_mods: None,
+                    misses: 0,
+                    accuracy_standard: 100.0,
+                    accuracy_taiko: 0.0,
+                    accuracy_catch: 0.0,
+                    accuracy_mania: 0.0
+                }
+            ],
+            mods: 0
+        };
+
+        let expected = GameWinRecord {
+            game_id: 14,
+            winners: vec![2, 3],
+            losers: vec![0, 1],
+            winner_team: 2,
+            loser_team: 1,
+        };
+
+        let result = game_win_record(&game);
+
+        assert_eq!(result, expected);
+    }
+
+    fn test_game_win_record_1v1() {
+        let game = Game {
+            id: 14,
+            game_id: 0,
+            ruleset: Mode::Osu,
+            scoring_type: ScoringType::ScoreV2,
+            team_type: TeamType::HeadToHead,
+            start_time: Utc::now().fixed_offset(),
+            end_time: Some(Utc::now().fixed_offset()),
+            beatmap: Some(test_beatmap()),
+            match_scores: vec![
+                MatchScore {
+                    player_id: 0,
+                    team: 0,
+                    score: 525000,
+                    enabled_mods: None,
+                    misses: 0,
+                    accuracy_standard: 100.0,
+                    accuracy_taiko: 0.0,
+                    accuracy_catch: 0.0,
+                    accuracy_mania: 0.0
+                },
+                MatchScore {
+                    player_id: 1,
+                    team: 0,
                     score: 625000,
                     enabled_mods: None,
                     misses: 0,
