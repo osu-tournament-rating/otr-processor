@@ -1,31 +1,32 @@
-use std::ops::Index;
 use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet},
+    ops::Index
 };
 
 use chrono::Utc;
 use openskill::{
     model::{model::Model, plackett_luce::PlackettLuce},
-    rating::{default_gamma, Rating},
+    rating::{default_gamma, Rating}
 };
 use statrs::{
     distribution::{ContinuousCDF, Normal},
-    statistics::Statistics,
+    statistics::Statistics
 };
 
-use crate::api::api_structs::GameWinRecord;
 use crate::{
-    api::api_structs::{Game, Match, MatchRatingStats, MatchScore, Player, PlayerCountryMapping, RatingAdjustment},
+    api::api_structs::{
+        Game, GameWinRecord, Match, MatchRatingStats, MatchScore, Player, PlayerCountryMapping, RatingAdjustment
+    },
     model::{
         constants::BLUE_TEAM_ID,
         decay::{is_decay_possible, DecayTracker},
         structures::{
             match_cost::MatchCost, mode::Mode, player_rating::PlayerRating, processing::RatingCalculationResult,
-            team_type::TeamType,
-        },
+            team_type::TeamType
+        }
     },
-    utils::progress_utils::progress_bar,
+    utils::progress_utils::progress_bar
 };
 
 use self::structures::processing::{PlayerMatchData, ProcessedMatchData};
@@ -45,7 +46,7 @@ pub fn create_model() -> PlackettLuce {
 /// and new ratings (after all match changes applied)
 pub fn calculate_player_adjustments(
     initial_ratings: &[PlayerRating],
-    new_ratings: &[PlayerRating],
+    new_ratings: &[PlayerRating]
 ) -> Vec<RatingAdjustment> {
     let mut buff = Vec::with_capacity(new_ratings.len());
 
@@ -79,7 +80,7 @@ pub fn calculate_player_adjustments(
             volatility_before,
             volatility_after,
             rating_adjustment_type: 0,
-            timestamp: Utc::now().into(),
+            timestamp: Utc::now().into()
         })
     }
 
@@ -90,7 +91,7 @@ pub fn calculate_player_adjustments(
 /// and match adjustments
 pub fn calculate_post_match_info(
     initial_ratings: &mut [PlayerRating],
-    match_data: &mut [ProcessedMatchData],
+    match_data: &mut [ProcessedMatchData]
 ) -> Vec<MatchRatingStats> {
     println!("Calculating post match info...");
     let bar = progress_bar(match_data.len() as u64);
@@ -185,7 +186,7 @@ pub fn calculate_post_match_info(
                     percentile_after: p_after,
                     percentile_change: p_after - p_before,
                     average_teammate_rating: x.average_teammate_rating,
-                    average_opponent_rating: x.average_opponent_rating,
+                    average_opponent_rating: x.average_opponent_rating
                 }
             })
             .for_each(|x| res.push(x));
@@ -252,7 +253,7 @@ pub fn calculate_country_ranks(existing_ratings: &mut [PlayerRating], mode: Mode
     // Finding gamemode slice
     let gamemode_start = match existing_ratings.iter().position(|x| x.mode == mode) {
         Some(v) => v,
-        None => return,
+        None => return
     };
 
     let gamemode_slice = &mut existing_ratings[gamemode_start..];
@@ -329,7 +330,7 @@ pub fn create_initial_ratings(matches: &Vec<Match>, players: &Vec<Player>) -> Ve
                     Mode::Osu => player.earliest_osu_global_rank.or(player.rank_standard),
                     Mode::Taiko => player.earliest_taiko_global_rank.or(player.rank_taiko),
                     Mode::Catch => player.earliest_catch_global_rank.or(player.rank_catch),
-                    Mode::Mania => player.earliest_mania_global_rank.or(player.rank_mania),
+                    Mode::Mania => player.earliest_mania_global_rank.or(player.rank_mania)
                 };
 
                 let mu;
@@ -355,7 +356,7 @@ pub fn create_initial_ratings(matches: &Vec<Match>, players: &Vec<Player>) -> Ve
                     rating,
                     global_ranking: 0,
                     country_ranking: 0,
-                    country: player.country.clone().unwrap_or(String::with_capacity(2)),
+                    country: player.country.clone().unwrap_or(String::with_capacity(2))
                 };
 
                 ratings.push(player_rating);
@@ -383,7 +384,7 @@ pub fn hash_country_mappings(country_mappings: &[PlayerCountryMapping]) -> HashM
 pub fn calculate_ratings(
     initial_ratings: Vec<PlayerRating>,
     matches: &[Match],
-    model: &PlackettLuce,
+    model: &PlackettLuce
 ) -> RatingCalculationResult {
     let mut copied_ratings = initial_ratings.clone();
 
@@ -403,7 +404,7 @@ pub fn calculate_ratings(
 pub fn calculate_processed_match_data(
     initial_ratings: &[PlayerRating],
     matches: &[Match],
-    model: &PlackettLuce,
+    model: &PlackettLuce
 ) -> (Vec<ProcessedMatchData>, Vec<RatingAdjustment>) {
     println!("Calculating processed match data...");
     let bar = progress_bar(matches.len() as u64);
@@ -427,7 +428,7 @@ pub fn calculate_processed_match_data(
         let mut current_match_stats = ProcessedMatchData {
             mode: curr_match.mode,
             match_id: curr_match.id,
-            players_stats: Vec::new(),
+            players_stats: Vec::new()
         };
 
         if curr_match.games.iter().any(|game| game.ruleset != curr_match.mode) {
@@ -472,7 +473,7 @@ pub fn calculate_processed_match_data(
             // Get user's current rating to use for decay
             let mut rating_prior = match ratings_hash.get_mut(&(match_cost.player_id, curr_match.mode)) {
                 None => panic!("No rating found?"),
-                Some(rate) => rate.clone(),
+                Some(rate) => rate.clone()
             };
 
             // If decay is possible, apply it to rating_prior
@@ -482,7 +483,7 @@ pub fn calculate_processed_match_data(
                     curr_match.mode,
                     rating_prior.rating.mu,
                     rating_prior.rating.sigma,
-                    start_time,
+                    start_time
                 );
                 if let Some(adj) = adjustments {
                     rating_prior.rating.mu = adj[adj.len() - 1].rating_after;
@@ -538,7 +539,7 @@ pub fn calculate_processed_match_data(
                             curr_player_team = g.team;
                             break;
                         }
-                        None => continue,
+                        None => continue
                     }
                 }
 
@@ -589,7 +590,7 @@ pub fn calculate_processed_match_data(
                 old_country_ranking: 0,
                 new_country_ranking: 0,
                 average_opponent_rating: average_o_rating,
-                average_teammate_rating: average_t_rating,
+                average_teammate_rating: average_t_rating
             })
         }
 
@@ -650,7 +651,7 @@ pub fn get_country_rank(
     mu: &f64,
     player_id: &i32,
     country_mappings_hash: &HashMap<i32, Option<String>>,
-    existing_ratings: &[PlayerRating],
+    existing_ratings: &[PlayerRating]
 ) -> i32 {
     let mut ratings: Vec<f64> = existing_ratings
         .iter()
@@ -720,14 +721,14 @@ fn push_team_rating(
     ratings_hash: &mut HashMap<(i32, Mode), PlayerRating>,
     curr_match: &Match,
     teammate_list: Vec<i32>,
-    teammate: &mut Vec<f64>,
+    teammate: &mut Vec<f64>
 ) {
     for id in teammate_list {
         let teammate_id = id;
         let mode = curr_match.mode;
         let rating = match ratings_hash.get(&(teammate_id, mode)) {
             Some(r) => r.rating.mu,
-            None => todo!("This player is not in the hashmap"),
+            None => todo!("This player is not in the hashmap")
         };
         teammate.push(rating)
     }
@@ -817,7 +818,7 @@ pub fn match_costs(games: &[Game]) -> Option<Vec<MatchCost>> {
 
         let mc = MatchCost {
             player_id,
-            match_cost: result,
+            match_cost: result
         };
 
         match_costs.push(mc);
@@ -835,7 +836,7 @@ fn game_win_record(game: &Game) -> GameWinRecord {
         winners,
         losers,
         winner_team,
-        loser_team,
+        loser_team
     }
 }
 
@@ -926,22 +927,21 @@ mod tests {
     use chrono::{FixedOffset, Utc};
     use openskill::{model::model::Model, rating::Rating};
 
-    use crate::api::api_structs::GameWinRecord;
     use crate::{
-        api::api_structs::{Beatmap, Game, Match, MatchScore, Player, PlayerCountryMapping},
+        api::api_structs::{Beatmap, Game, GameWinRecord, Match, MatchScore, Player, PlayerCountryMapping},
         model::{
             calc_percentile, calculate_country_ranks, calculate_post_match_info, calculate_ratings, mu_for_rank,
             structures::{
                 match_cost::MatchCost, mode::Mode, player_rating::PlayerRating, scoring_type::ScoringType,
-                team_type::TeamType,
-            },
+                team_type::TeamType
+            }
         },
-        utils::test_utils,
+        utils::test_utils
     };
 
     use super::{
         calculate_global_ranks, calculate_player_adjustments, calculate_processed_match_data, create_initial_ratings,
-        create_model, game_win_record, hash_country_mappings,
+        create_model, game_win_record, hash_country_mappings
     };
 
     fn match_from_json(json: &str) -> Match {
@@ -965,23 +965,23 @@ mod tests {
         let match_costs = vec![
             MatchCost {
                 player_id: 1,
-                match_cost: 0.5,
+                match_cost: 0.5
             },
             MatchCost {
                 player_id: 2,
-                match_cost: 0.2,
+                match_cost: 0.2
             },
             MatchCost {
                 player_id: 3,
-                match_cost: 0.7,
+                match_cost: 0.7
             },
             MatchCost {
                 player_id: 4,
-                match_cost: 0.3,
+                match_cost: 0.3
             },
             MatchCost {
                 player_id: 5,
-                match_cost: 2.1,
+                match_cost: 2.1
             },
         ];
 
@@ -1069,15 +1069,15 @@ mod tests {
                 mode: Mode::Osu,
                 rating: Rating {
                     mu: 1500.0 + offset,
-                    sigma: 200.0,
+                    sigma: 200.0
                 },
                 global_ranking: 0,
                 country_ranking: 0,
-                country: "US".to_string(),
+                country: "US".to_string()
             });
             country_mappings.push(PlayerCountryMapping {
                 player_id: id,
-                country: Some("US".to_string()),
+                country: Some("US".to_string())
             });
 
             offset += 1.0;
@@ -1165,7 +1165,7 @@ mod tests {
                 &expected_starting_mu,
                 &player_id,
                 &country_mappings_hash,
-                &initial_ratings,
+                &initial_ratings
             );
             let expected_percentile_before =
                 super::calc_percentile(expected_global_rank_before, initial_ratings.len() as i32);
@@ -1175,7 +1175,7 @@ mod tests {
                 &expected_after_mu,
                 &player_id,
                 &country_mappings_hash,
-                &result.base_ratings,
+                &result.base_ratings
             );
             let expected_percentile_after =
                 super::calc_percentile(expected_global_rank_after, result.base_ratings.len() as i32);
@@ -1233,7 +1233,7 @@ mod tests {
         for i in 0..2 {
             country_mappings.push(PlayerCountryMapping {
                 player_id: i,
-                country: Some("US".to_string()),
+                country: Some("US".to_string())
             });
 
             initial_ratings.push(PlayerRating {
@@ -1246,11 +1246,11 @@ mod tests {
                     // but player 1 wins. Thus, we simulate an upset and
                     // associated stat changes
                     mu: 1500.0 - i as f64,
-                    sigma: 200.0,
+                    sigma: 200.0
                 },
                 global_ranking: 0,
                 country_ranking: 0,
-                country: "US".to_string(),
+                country: "US".to_string()
             })
         }
 
@@ -1275,7 +1275,7 @@ mod tests {
                 accuracy_standard: 100.0,
                 accuracy_taiko: 0.0,
                 accuracy_catch: 0.0,
-                accuracy_mania: 0.0,
+                accuracy_mania: 0.0
             },
             MatchScore {
                 player_id: 1,
@@ -1286,7 +1286,7 @@ mod tests {
                 accuracy_standard: 100.0,
                 accuracy_taiko: 0.0,
                 accuracy_catch: 0.0,
-                accuracy_mania: 0.0,
+                accuracy_mania: 0.0
             },
         ];
 
@@ -1300,7 +1300,7 @@ mod tests {
             end_time,
             beatmap: Some(beatmap),
             match_scores,
-            mods: 0,
+            mods: 0
         };
 
         let games = vec![game];
@@ -1312,7 +1312,7 @@ mod tests {
             mode: Mode::Osu,
             start_time: Some(start_time),
             end_time: None,
-            games,
+            games
         };
 
         let matches = vec![match_instance];
@@ -1325,14 +1325,14 @@ mod tests {
             vec![
                 vec![Rating {
                     mu: 1500.0,
-                    sigma: 200.0,
+                    sigma: 200.0
                 }],
                 vec![Rating {
                     mu: 1499.0,
-                    sigma: 200.0,
+                    sigma: 200.0
                 }],
             ],
-            vec![winner_id, loser_id],
+            vec![winner_id, loser_id]
         );
 
         let loser_expected_outcome = &expected_outcome[loser_id][0];
@@ -1794,44 +1794,44 @@ mod tests {
                 mode: Mode::Osu,
                 rating: Rating {
                     mu: 1500.0,
-                    sigma: 200.0,
+                    sigma: 200.0
                 },
                 global_ranking: 1,
                 country_ranking: 1,
-                country: "US".to_owned(),
+                country: "US".to_owned()
             },
             PlayerRating {
                 player_id: 1,
                 mode: Mode::Taiko,
                 rating: Rating {
                     mu: 800.0,
-                    sigma: 200.0,
+                    sigma: 200.0
                 },
                 global_ranking: 2,
                 country_ranking: 2,
-                country: "US".to_owned(),
+                country: "US".to_owned()
             },
             PlayerRating {
                 player_id: 2,
                 mode: Mode::Taiko,
                 rating: Rating {
                     mu: 1500.0,
-                    sigma: 200.0,
+                    sigma: 200.0
                 },
                 global_ranking: 1,
                 country_ranking: 1,
-                country: "US".to_owned(),
+                country: "US".to_owned()
             },
             PlayerRating {
                 player_id: 2,
                 mode: Mode::Osu,
                 rating: Rating {
                     mu: 800.0,
-                    sigma: 200.0,
+                    sigma: 200.0
                 },
                 global_ranking: 2,
                 country_ranking: 2,
-                country: "US".to_owned(),
+                country: "US".to_owned()
             },
         ];
 
@@ -1866,7 +1866,7 @@ mod tests {
                             accuracy_standard: 100.0,
                             accuracy_taiko: 100.0,
                             accuracy_catch: 100.0,
-                            accuracy_mania: 100.0,
+                            accuracy_mania: 100.0
                         },
                         MatchScore {
                             player_id: 2,
@@ -1877,10 +1877,10 @@ mod tests {
                             accuracy_standard: 100.0,
                             accuracy_taiko: 100.0,
                             accuracy_catch: 100.0,
-                            accuracy_mania: 100.0,
+                            accuracy_mania: 100.0
                         },
-                    ],
-                }],
+                    ]
+                }]
             },
             Match {
                 id: 2,
@@ -1909,7 +1909,7 @@ mod tests {
                             accuracy_standard: 100.0,
                             accuracy_taiko: 100.0,
                             accuracy_catch: 100.0,
-                            accuracy_mania: 100.0,
+                            accuracy_mania: 100.0
                         },
                         MatchScore {
                             player_id: 2,
@@ -1920,10 +1920,10 @@ mod tests {
                             accuracy_standard: 100.0,
                             accuracy_taiko: 100.0,
                             accuracy_catch: 100.0,
-                            accuracy_mania: 100.0,
+                            accuracy_mania: 100.0
                         },
-                    ],
-                }],
+                    ]
+                }]
             },
         ];
 
@@ -1993,44 +1993,44 @@ mod tests {
                 mode: Mode::Osu,
                 rating: Rating {
                     mu: 1500.0,
-                    sigma: 200.0,
+                    sigma: 200.0
                 },
                 global_ranking: 1,
                 country_ranking: 1,
-                country: "US".to_owned(),
+                country: "US".to_owned()
             },
             PlayerRating {
                 player_id: 1,
                 mode: Mode::Taiko,
                 rating: Rating {
                     mu: 800.0,
-                    sigma: 200.0,
+                    sigma: 200.0
                 },
                 global_ranking: 2,
                 country_ranking: 2,
-                country: "US".to_owned(),
+                country: "US".to_owned()
             },
             PlayerRating {
                 player_id: 2,
                 mode: Mode::Taiko,
                 rating: Rating {
                     mu: 1500.0,
-                    sigma: 200.0,
+                    sigma: 200.0
                 },
                 global_ranking: 1,
                 country_ranking: 1,
-                country: "US".to_owned(),
+                country: "US".to_owned()
             },
             PlayerRating {
                 player_id: 2,
                 mode: Mode::Osu,
                 rating: Rating {
                     mu: 800.0,
-                    sigma: 200.0,
+                    sigma: 200.0
                 },
                 global_ranking: 2,
                 country_ranking: 2,
-                country: "US".to_owned(),
+                country: "US".to_owned()
             },
         ];
 
@@ -2084,66 +2084,66 @@ mod tests {
                 mode: Mode::Osu,
                 rating: Rating {
                     mu: 1500.0,
-                    sigma: 200.0,
+                    sigma: 200.0
                 },
                 global_ranking: 0,
                 country_ranking: 0,
-                country: "RU".to_string(),
+                country: "RU".to_string()
             },
             PlayerRating {
                 player_id: 100,
                 mode: Mode::Taiko,
                 rating: Rating {
                     mu: 1500.0,
-                    sigma: 200.0,
+                    sigma: 200.0
                 },
                 global_ranking: 0,
                 country_ranking: 0,
-                country: "RU".to_string(),
+                country: "RU".to_string()
             },
             PlayerRating {
                 player_id: 102,
                 mode: Mode::Taiko,
                 rating: Rating {
                     mu: 1000.0,
-                    sigma: 200.0,
+                    sigma: 200.0
                 },
                 global_ranking: 0,
                 country_ranking: 0,
-                country: "RU".to_string(),
+                country: "RU".to_string()
             },
             PlayerRating {
                 player_id: 101,
                 mode: Mode::Taiko,
                 rating: Rating {
                     mu: 1499.0,
-                    sigma: 200.0,
+                    sigma: 200.0
                 },
                 global_ranking: 0,
                 country_ranking: 0,
-                country: "RU".to_string(),
+                country: "RU".to_string()
             },
             PlayerRating {
                 player_id: 202,
                 mode: Mode::Osu,
                 rating: Rating {
                     mu: 700.0,
-                    sigma: 200.0,
+                    sigma: 200.0
                 },
                 global_ranking: 0,
                 country_ranking: 0,
-                country: "RU".to_string(),
+                country: "RU".to_string()
             },
             PlayerRating {
                 player_id: 201,
                 mode: Mode::Osu,
                 rating: Rating {
                     mu: 899.0,
-                    sigma: 200.0,
+                    sigma: 200.0
                 },
                 global_ranking: 0,
                 country_ranking: 0,
-                country: "RU".to_string(),
+                country: "RU".to_string()
             },
         ];
 
@@ -2171,55 +2171,55 @@ mod tests {
                 mode: Mode::Osu,
                 rating: Rating {
                     mu: 1500.0,
-                    sigma: 200.0,
+                    sigma: 200.0
                 },
                 global_ranking: 0,
                 country_ranking: 0,
-                country: "RU".to_string(),
+                country: "RU".to_string()
             },
             PlayerRating {
                 player_id: 101,
                 mode: Mode::Taiko,
                 rating: Rating {
                     mu: 1000.0,
-                    sigma: 200.0,
+                    sigma: 200.0
                 },
                 global_ranking: 0,
                 country_ranking: 0,
-                country: "RU".to_string(),
+                country: "RU".to_string()
             },
             PlayerRating {
                 player_id: 201,
                 mode: Mode::Osu,
                 rating: Rating {
                     mu: 1449.0,
-                    sigma: 200.0,
+                    sigma: 200.0
                 },
                 global_ranking: 0,
                 country_ranking: 0,
-                country: "RU".to_string(),
+                country: "RU".to_string()
             },
             PlayerRating {
                 player_id: 102,
                 mode: Mode::Taiko,
                 rating: Rating {
                     mu: 900.0,
-                    sigma: 200.0,
+                    sigma: 200.0
                 },
                 global_ranking: 0,
                 country_ranking: 0,
-                country: "RU".to_string(),
+                country: "RU".to_string()
             },
             PlayerRating {
                 player_id: 100,
                 mode: Mode::Taiko,
                 rating: Rating {
                     mu: 1500.0,
-                    sigma: 200.0,
+                    sigma: 200.0
                 },
                 global_ranking: 0,
                 country_ranking: 0,
-                country: "RU".to_string(),
+                country: "RU".to_string()
             },
         ];
 
@@ -2250,7 +2250,7 @@ mod tests {
             drain_time: 160.0,
             length: 165.0,
             title: "Testing".to_string(),
-            diff_name: Some("Testing".to_string()),
+            diff_name: Some("Testing".to_string())
         }
     }
 
@@ -2274,7 +2274,7 @@ mod tests {
                     accuracy_standard: 100.0,
                     accuracy_taiko: 0.0,
                     accuracy_catch: 0.0,
-                    accuracy_mania: 0.0,
+                    accuracy_mania: 0.0
                 },
                 MatchScore {
                     player_id: 1,
@@ -2285,7 +2285,7 @@ mod tests {
                     accuracy_standard: 100.0,
                     accuracy_taiko: 0.0,
                     accuracy_catch: 0.0,
-                    accuracy_mania: 0.0,
+                    accuracy_mania: 0.0
                 },
                 MatchScore {
                     player_id: 2,
@@ -2296,7 +2296,7 @@ mod tests {
                     accuracy_standard: 100.0,
                     accuracy_taiko: 0.0,
                     accuracy_catch: 0.0,
-                    accuracy_mania: 0.0,
+                    accuracy_mania: 0.0
                 },
                 MatchScore {
                     player_id: 3,
@@ -2307,10 +2307,10 @@ mod tests {
                     accuracy_standard: 100.0,
                     accuracy_taiko: 0.0,
                     accuracy_catch: 0.0,
-                    accuracy_mania: 0.0,
+                    accuracy_mania: 0.0
                 },
             ],
-            mods: 0,
+            mods: 0
         };
 
         let expected = GameWinRecord {
@@ -2318,7 +2318,7 @@ mod tests {
             winners: vec![2, 3],
             losers: vec![0, 1],
             winner_team: 2,
-            loser_team: 1,
+            loser_team: 1
         };
 
         let result = game_win_record(&game);
@@ -2346,7 +2346,7 @@ mod tests {
                     accuracy_standard: 100.0,
                     accuracy_taiko: 0.0,
                     accuracy_catch: 0.0,
-                    accuracy_mania: 0.0,
+                    accuracy_mania: 0.0
                 },
                 MatchScore {
                     player_id: 1,
@@ -2357,10 +2357,10 @@ mod tests {
                     accuracy_standard: 100.0,
                     accuracy_taiko: 0.0,
                     accuracy_catch: 0.0,
-                    accuracy_mania: 0.0,
+                    accuracy_mania: 0.0
                 },
             ],
-            mods: 0,
+            mods: 0
         };
 
         let expected = GameWinRecord {
@@ -2368,7 +2368,7 @@ mod tests {
             winners: vec![1],
             losers: vec![0],
             winner_team: 2,
-            loser_team: 1,
+            loser_team: 1
         };
 
         let result = game_win_record(&game);

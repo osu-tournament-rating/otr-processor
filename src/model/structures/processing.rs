@@ -2,7 +2,7 @@ use openskill::rating::Rating;
 
 use crate::{
     api::api_structs::{MatchRatingStats, RatingAdjustment},
-    model::structures::player_rating::PlayerRating,
+    model::structures::player_rating::PlayerRating
 };
 
 use super::mode::Mode;
@@ -33,12 +33,12 @@ pub struct PlayerMatchData {
     pub new_global_ranking: u32,
 
     pub old_country_ranking: u32,
-    pub new_country_ranking: u32,
+    pub new_country_ranking: u32
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct ProcessedMatchData {
     pub match_id: i32,
     pub mode: Mode,
-    pub players_stats: Vec<PlayerMatchData>,
+    pub players_stats: Vec<PlayerMatchData>
 }

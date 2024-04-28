@@ -1,18 +1,15 @@
 use std::fmt::Display;
 
-use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use openskill::rating::Rating;
 
 use otr_processor::{
     api::api_structs::{Match, PlayerCountryMapping},
     model::{
-        create_model, match_costs,
-        ranks_from_match_costs,
-        structures::{mode::Mode, player_rating::PlayerRating},
-    },
+        calculate_post_match_info, calculate_ratings, create_model, match_costs, ranks_from_match_costs,
+        structures::{mode::Mode, player_rating::PlayerRating, processing::ProcessedMatchData}
+    }
 };
-use otr_processor::model::{calculate_post_match_info, calculate_ratings};
-use otr_processor::model::structures::processing::ProcessedMatchData;
 
 fn match_from_json(json: &str) -> Match {
     serde_json::from_str(json).unwrap()
@@ -21,7 +18,7 @@ fn match_from_json(json: &str) -> Match {
 #[derive(Debug, Clone)]
 struct TestInput {
     initial_ratings: Vec<PlayerRating>,
-    data: Vec<ProcessedMatchData>,
+    data: Vec<ProcessedMatchData>
 }
 
 impl Display for TestInput {
@@ -50,15 +47,15 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             mode: Mode::Osu,
             rating: Rating {
                 mu: 1500.0 + offset,
-                sigma: 200.0,
+                sigma: 200.0
             },
             global_ranking: 0,
             country_ranking: 0,
-            country: "US".to_string(),
+            country: "US".to_string()
         });
         country_mappings.push(PlayerCountryMapping {
             player_id: id,
-            country: Some("US".to_string()),
+            country: Some("US".to_string())
         });
 
         offset += 1.0;
