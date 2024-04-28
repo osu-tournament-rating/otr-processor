@@ -2,7 +2,7 @@ use dotenv::dotenv;
 
 pub struct EnvironmentVariables {
     pub api_root: String,
-    pub privileged_secret: String
+    pub privileged_secret: String,
 }
 
 pub fn get_env() -> EnvironmentVariables {
@@ -13,6 +13,6 @@ pub fn get_env() -> EnvironmentVariables {
 
     EnvironmentVariables {
         api_root,
-        privileged_secret
+        privileged_secret,
     }
 }

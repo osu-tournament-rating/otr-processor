@@ -8,5 +8,5 @@ pub struct PlayerRating {
     pub rating: Rating,
     pub global_ranking: u32,
     pub country_ranking: u32,
-    pub country: String
+    pub country: String,
 }

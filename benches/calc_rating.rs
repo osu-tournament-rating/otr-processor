@@ -1,16 +1,18 @@
 use std::fmt::Display;
 
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use openskill::rating::Rating;
+
 use otr_processor::{
     api::api_structs::{Match, PlayerCountryMapping},
     model::{
-        calc_post_match_info, calc_ratings_v2, create_model, hash_country_mappings, match_costs,
+        create_model, match_costs,
         ranks_from_match_costs,
         structures::{mode::Mode, player_rating::PlayerRating},
-        ProcessedMatchData
-    }
+    },
 };
+use otr_processor::model::{calculate_post_match_info, calculate_ratings};
+use otr_processor::model::structures::processing::ProcessedMatchData;
 
 fn match_from_json(json: &str) -> Match {
     serde_json::from_str(json).unwrap()
@@ -19,7 +21,7 @@ fn match_from_json(json: &str) -> Match {
 #[derive(Debug, Clone)]
 struct TestInput {
     initial_ratings: Vec<PlayerRating>,
-    match_adjs: Vec<ProcessedMatchData>
+    data: Vec<ProcessedMatchData>,
 }
 
 impl Display for TestInput {
@@ -48,35 +50,34 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             mode: Mode::Osu,
             rating: Rating {
                 mu: 1500.0 + offset,
-                sigma: 200.0
+                sigma: 200.0,
             },
             global_ranking: 0,
             country_ranking: 0,
-            country: "US".to_string()
+            country: "US".to_string(),
         });
         country_mappings.push(PlayerCountryMapping {
             player_id: id,
-            country: Some("US".to_string())
+            country: Some("US".to_string()),
         });
 
         offset += 1.0;
     }
 
-    let country_mappings_hash = hash_country_mappings(&country_mappings);
     let model = create_model();
 
-    let match_adjs = calc_ratings_v2(&initial_ratings, &[match_data], &model);
+    let result = calculate_ratings(initial_ratings.clone(), &[match_data], &model);
 
     let input = TestInput {
         initial_ratings,
-        match_adjs
+        data: result.processed_data
     };
 
     // model::calc_post_match_info(&mut ratings, &mut result);
 
     c.bench_with_input(BenchmarkId::new("calc_post_match", input.clone()), &input, |b, s| {
         let mut input = input.clone();
-        b.iter(|| calc_post_match_info(&mut input.initial_ratings, &mut input.match_adjs));
+        b.iter(|| calculate_post_match_info(&mut input.initial_ratings, &mut input.data));
     });
     // c.bench_with_input(BenchmarkId::new("calc_rankings_old", input.clone()), &input, |b, s| {
     // let mut input = input.clone();

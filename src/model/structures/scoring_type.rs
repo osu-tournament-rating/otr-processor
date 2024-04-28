@@ -7,5 +7,5 @@ pub enum ScoringType {
     Score = 0,
     Accuracy = 1,
     Combo = 2,
-    ScoreV2 = 3
+    ScoreV2 = 3,
 }

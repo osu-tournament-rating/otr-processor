@@ -1,24 +1,21 @@
 use std::{
     collections::{HashMap, HashSet},
-    fmt::Display
+    fmt::Display,
 };
 
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use openskill::rating::Rating;
-use otr_processor::model::{
-    calc_rankings, get_country_rank, get_global_rank,
-    structures::{mode::Mode, player_rating::PlayerRating}
-};
 use rand::{
     distributions::{Alphanumeric, DistString},
-    prelude::*
+    prelude::*,
 };
+
+use otr_processor::model::{calculate_country_ranks, get_country_rank, get_global_rank, structures::{mode::Mode, player_rating::PlayerRating}};
 
 #[derive(Debug, Clone)]
 struct TestInput {
     ratings: Vec<PlayerRating>,
-    country_hash: HashMap<i32, Option<String>>
+    country_hash: HashMap<i32, Option<String>>,
 }
 
 impl Display for TestInput {
@@ -29,9 +26,9 @@ impl Display for TestInput {
 
 pub fn calc_rankings_old(existing_ratings: &mut [PlayerRating], country_hash: &HashMap<i32, Option<String>>) {
     for player in existing_ratings.iter() {
-        let _global_rank = get_global_rank(&player.rating.mu, &player.player_id, &existing_ratings);
+        let _global_rank = get_global_rank(&player.rating.mu, &player.player_id, existing_ratings);
 
-        let _country_rank = get_country_rank(&player.rating.mu, &player.player_id, &country_hash, &existing_ratings);
+        let _country_rank = get_country_rank(&player.rating.mu, &player.player_id, country_hash, existing_ratings);
     }
 }
 
@@ -59,11 +56,11 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                 mode: Mode::Osu,
                 rating: Rating {
                     mu: rng.gen_range(0.0..2000.0),
-                    sigma: 200.0
+                    sigma: 200.0,
                 },
                 global_ranking: 0,
                 country_ranking: 0,
-                country: country.clone()
+                country: country.clone(),
             })
         }
     }
@@ -79,7 +76,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
     c.bench_with_input(BenchmarkId::new("calc_rankings_new", input.clone()), &input, |b, s| {
         let mut input = input.clone();
-        b.iter(|| calc_rankings(&mut input.ratings));
+        b.iter(|| calculate_country_ranks(&mut input.ratings, Mode::Osu));
     });
 
     c.bench_with_input(BenchmarkId::new("calc_rankings_old", input.clone()), &input, |b, s| {
