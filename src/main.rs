@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use otr_processor::{
     api,
     model::{self, hash_country_mappings}

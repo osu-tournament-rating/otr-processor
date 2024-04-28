@@ -4,7 +4,7 @@ use std::{
 };
 use std::ops::Index;
 
-use chrono::{FixedOffset, Utc};
+use chrono::Utc;
 use openskill::{
     model::{model::Model, plackett_luce::PlackettLuce},
     rating::{default_gamma, Rating}
@@ -18,7 +18,7 @@ use crate::{
     api::api_structs::{Game, Match, MatchRatingStats, MatchScore, Player, PlayerCountryMapping, RatingAdjustment},
     model::{
         constants::BLUE_TEAM_ID,
-        decay::{is_decay_possible, DecayTracker},
+        decay::{DecayTracker, is_decay_possible},
         structures::{
             match_cost::MatchCost, mode::Mode, player_rating::PlayerRating, processing::RatingCalculationResult,
             team_type::TeamType
@@ -852,8 +852,8 @@ fn identify_game_winners_losers(game: &Game) -> (Vec<i32>, Vec<i32>, i32, i32) {
         let head_to_head = score_0.team == 0 && score_1.team == 1;
 
         if head_to_head {
-            let mut winners = Vec::new();
-            let mut losers = Vec::new();
+            let winners;
+            let losers;
 
             if score_0.score > score_1.score {
                 winners = vec![score_0.player_id];
@@ -898,7 +898,7 @@ fn identify_game_winners_losers(game: &Game) -> (Vec<i32>, Vec<i32>, i32, i32) {
     let red_score: i64 = red_scores.iter().sum();
     let blue_score: i64 = blue_scores.iter().sum();
 
-    return if red_score > blue_score {
+    if red_score > blue_score {
         (red_players, blue_players, red, blue)
     } else {
         (blue_players, red_players, blue, red)

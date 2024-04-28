@@ -107,9 +107,9 @@ pub struct OtrApiClient {
     /// reference, and because of this, we encounter a compile error
     /// indicating the variable has been moved.
     /// The workaround is pretty simple:
-    /// 	Wrap the [`Sender`] inside an `Option`, so we can use [`std::mem::take`]
-    /// 	to replace our sender with a default value (in our case, [`None`])
-    /// 	and allow the sender to consume itself peacefully.
+    ///     Wrap the [`Sender`] inside an `Option`, so we can use [`std::mem::take`]
+    ///     to replace our sender with a default value (in our case, [`None`])
+    ///     and allow the sender to consume itself peacefully.
     refresh_tx: Option<Sender<()>>
 }
 
@@ -243,7 +243,7 @@ impl OtrApiClient {
     /// use otr_processor::api::OtrApiClient;
     /// let api = OtrApiClient::new("example.com/api/v1", "CLIENT_ID", "CLIENT_SECRET");
     /// let my_numbers: Vec<i32> = vec![1, 2, 3, 4, 5];
-    /// // api.make_request_with_body(Method::GET, "/fetch_something", Some(&my_numbers));
+    /// let result = api.make_request_with_body(Method::GET, "/fetch_something", Some(&my_numbers));
     /// ```
     async fn make_request_with_body<T, B>(&self, method: Method, partial_url: &str, body: Option<B>) -> Result<T, Error>
     where
@@ -269,8 +269,6 @@ impl OtrApiClient {
             .header(CONTENT_TYPE, "application/json")
             .send()
             .await?;
-
-        if resp.status() != 200 {}
 
         resp.json().await
     }
