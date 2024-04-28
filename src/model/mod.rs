@@ -860,7 +860,7 @@ fn identify_winners_losers(game: &Game) -> (Vec<i32>, Vec<i32>, i32, i32) {
                 losers = vec![score_0.player_id];
             }
 
-            return (winners, losers);
+            return (winners, losers, 0, 0);
         }
     }
 
@@ -873,7 +873,7 @@ fn identify_winners_losers(game: &Game) -> (Vec<i32>, Vec<i32>, i32, i32) {
     let red = 2;
     let blue = 1;
 
-    for score in game.match_scores {
+    for score in &game.match_scores {
         if score.team == red {
             red_players.push(score.player_id);
             red_scores.push(score.score);
@@ -891,9 +891,9 @@ fn identify_winners_losers(game: &Game) -> (Vec<i32>, Vec<i32>, i32, i32) {
     let blue_score: i64 = blue_scores.iter().sum();
 
     return if red_score > blue_score {
-        (red_players, blue_players)
+        (red_players, blue_players, red, blue)
     } else {
-        (blue_players, red_players)
+        (blue_players, red_players, blue, red)
     }
 }
 
