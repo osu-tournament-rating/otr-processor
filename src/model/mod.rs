@@ -2,6 +2,7 @@ use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet}
 };
+use std::ops::Index;
 
 use chrono::{FixedOffset, Utc};
 use openskill::{
@@ -25,6 +26,7 @@ use crate::{
     },
     utils::progress_utils::progress_bar
 };
+use crate::api::api_structs::GameWinRecord;
 
 use self::structures::processing::{PlayerMatchData, ProcessedMatchData};
 
@@ -820,6 +822,79 @@ pub fn match_costs(games: &[Game]) -> Option<Vec<MatchCost>> {
     }
 
     Some(match_costs)
+}
+
+fn game_win_record(game: &Game) -> GameWinRecord {
+    let game_id = game.id;
+    let (winners, losers, winner_team, loser_team) = identify_winners_losers(game);
+
+    GameWinRecord {
+        game_id,
+        winners,
+        losers,
+        winner_team,
+        loser_team
+    }
+}
+
+/// Identifies the winners and losers of a game.
+/// Return format is tuple of (winner ids, loser ids, winner team, loser team)
+fn identify_winners_losers(game: &Game) -> (Vec<i32>, Vec<i32>, i32, i32) {
+    if game.match_scores.len() == 2 {
+        // Head to head
+        let score_0 = game.match_scores.index(0);
+        let score_1 = game.match_scores.index(1);
+
+        let head_to_head = score_0.team == 0 && score_1.team == 1;
+
+        if head_to_head {
+            let mut winners = Vec::new();
+            let mut losers = Vec::new();
+
+            if score_0.score > score_1.score {
+                winners = vec![score_0.player_id];
+                losers = vec![score_1.player_id];
+            }
+            else {
+                winners = vec![score_1.player_id];
+                losers = vec![score_0.player_id];
+            }
+
+            return (winners, losers);
+        }
+    }
+
+    let mut red_players = vec![];
+    let mut blue_players = vec![];
+
+    let mut red_scores: Vec<i64> = vec![];
+    let mut blue_scores: Vec<i64> = vec![];
+
+    let red = 2;
+    let blue = 1;
+
+    for score in game.match_scores {
+        if score.team == red {
+            red_players.push(score.player_id);
+            red_scores.push(score.score);
+        }
+        else if score.team == blue {
+            blue_players.push(score.player_id);
+            blue_scores.push(score.score);
+        }
+        else {
+            panic!("Invalid team type");
+        }
+    }
+
+    let red_score: i64 = red_scores.iter().sum();
+    let blue_score: i64 = blue_scores.iter().sum();
+
+    return if red_score > blue_score {
+        (red_players, blue_players)
+    } else {
+        (blue_players, red_players)
+    }
 }
 
 pub fn mu_for_rank(rank: i32) -> f64 {
