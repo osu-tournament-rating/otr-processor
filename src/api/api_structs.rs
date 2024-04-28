@@ -87,7 +87,7 @@ pub struct BaseStatsPost {
     pub country_rank: i32
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct GameWinRecord {
     pub game_id: i32,

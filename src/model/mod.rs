@@ -930,11 +930,9 @@ mod tests {
         },
         utils::test_utils
     };
+    use crate::api::api_structs::GameWinRecord;
 
-    use super::{
-        calculate_global_ranks, calculate_player_adjustments, calculate_processed_match_data, create_initial_ratings,
-        create_model, hash_country_mappings
-    };
+    use super::{calculate_global_ranks, calculate_player_adjustments, calculate_processed_match_data, create_initial_ratings, create_model, game_win_record, hash_country_mappings};
 
     fn match_from_json(json: &str) -> Match {
         serde_json::from_str(json).unwrap()
@@ -2245,5 +2243,55 @@ mod tests {
             title: "Testing".to_string(),
             diff_name: Some("Testing".to_string())
         }
+    }
+
+    fn test_game_win_record() {
+        let game = Game {
+            id: 14,
+            game_id: 0,
+            ruleset: Mode::Osu,
+            scoring_type: ScoringType::ScoreV2,
+            team_type: TeamType::HeadToHead,
+            start_time: Utc::now().fixed_offset(),
+            end_time: Some(Utc::now().fixed_offset()),
+            beatmap: Some(test_beatmap()),
+            match_scores: vec![
+                MatchScore {
+                    player_id: 0,
+                    team: 1,
+                    score: 525000,
+                    enabled_mods: None,
+                    misses: 0,
+                    accuracy_standard: 100.0,
+                    accuracy_taiko: 0.0,
+                    accuracy_catch: 0.0,
+                    accuracy_mania: 0.0
+                },
+                MatchScore {
+                    player_id: 1,
+                    team: 2,
+                    score: 625000,
+                    enabled_mods: None,
+                    misses: 0,
+                    accuracy_standard: 100.0,
+                    accuracy_taiko: 0.0,
+                    accuracy_catch: 0.0,
+                    accuracy_mania: 0.0
+                }
+            ],
+            mods: 0
+        };
+
+        let expected = GameWinRecord {
+            game_id: 14,
+            winners: vec![1],
+            losers: vec![0],
+            winner_team: 2,
+            loser_team: 1,
+        };
+
+        let result = game_win_record(&game);
+
+        assert_eq!(result, expected);
     }
 }
