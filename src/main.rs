@@ -11,7 +11,6 @@ async fn main() {
 
     println!("Gettings otr client");
     let api = api::OtrApiClient::new_from_env().await.unwrap();
-    
 
     println!("Gettings match id's");
     let match_ids = api
@@ -32,24 +31,20 @@ async fn main() {
         .await
         .expect("Country mappings must be identified");
 
-    //let worst = players.iter().find(|x| x.id == 6666).unwrap();
+    // let worst = players.iter().find(|x| x.id == 6666).unwrap();
 
     // Model
     let plackett_luce = model::create_model();
     let country_hash = hash_country_mappings(&country_mappings);
     let mut ratings = model::create_initial_ratings(&matches, &players);
-    
-    /*
-    let mut counter = HashMap::new();
 
-    for rating in &ratings {
-        counter.entry(rating.rating.mu as u32).and_modify(|x| *x += 1).or_insert(1);
-    }
-    */
+    // let mut counter = HashMap::new();
+    //
+    // for rating in &ratings {
+    // counter.entry(rating.rating.mu as u32).and_modify(|x| *x += 1).or_insert(1);
+    // }
 
-    //dbg!(counter);
-
-
+    // dbg!(counter);
 
     // Filling PlayerRating with their country
     for player_rating in ratings.iter_mut() {
@@ -65,10 +60,18 @@ async fn main() {
     let mut result = model::calculate_ratings(ratings, &matches, &plackett_luce);
 
     // Print top 100 players
-    result.base_ratings.sort_by(|a, b| b.rating.mu.partial_cmp(&a.rating.mu).unwrap());
-    
+    result
+        .base_ratings
+        .sort_by(|a, b| b.rating.mu.partial_cmp(&a.rating.mu).unwrap());
+
     println!("top 100");
     for (i, player) in result.base_ratings.iter().take(100).enumerate() {
-        println!("{}: {} - {} (mode: {:?})", i + 1, player.player_id, player.rating, player.mode);
+        println!(
+            "{}: {} - {} (mode: {:?})",
+            i + 1,
+            player.player_id,
+            player.rating,
+            player.mode
+        );
     }
 }
