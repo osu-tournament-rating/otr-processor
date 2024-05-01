@@ -120,7 +120,7 @@ pub fn calculate_post_match_info(
             let player_idx = player_idx.unwrap();
 
             let player = &mut initial_ratings[player_idx];
-            
+
             player.rating = player_info.new_rating.clone();
             player_info.old_global_ranking = player.global_ranking;
             player_info.old_country_ranking = player.country_ranking;
@@ -401,7 +401,7 @@ pub fn calculate_processed_match_data(
     initial_ratings: &[PlayerRating],
     matches: &[Match],
     model: &PlackettLuce
-) -> (Vec<ProcessedMatchData>, Vec<RatingAdjustment>){
+) -> (Vec<ProcessedMatchData>, Vec<RatingAdjustment>) {
     println!("Calculating processed match data...");
     let bar = progress_bar(matches.len() as u64);
 
@@ -614,7 +614,8 @@ pub fn calculate_processed_match_data(
                 .find(|x| x.player_id == rate.player_id)
                 .unwrap();
 
-            ratings_hash.entry((player_match_stats.player_id, curr_match.mode))
+            ratings_hash
+                .entry((player_match_stats.player_id, curr_match.mode))
                 .and_modify(|x| x.rating = rate.rating.clone());
 
             player_match_stats.new_rating = rate.rating.clone();
@@ -1122,21 +1123,21 @@ mod tests {
             let actual_country_rank_change = stat.country_rank_change;
             let actual_percentile_change = stat.percentile_change;
 
-            assert_eq!(expected_starting_mu, actual_starting_mu);
-            assert_eq!(expected_starting_sigma, actual_starting_sigma);
-            assert_eq!(expected_after_mu, actual_after_mu);
-            assert_eq!(expected_after_sigma, actual_after_sigma);
-            assert_eq!(expected_mu_change, actual_mu_change);
-            assert_eq!(expected_sigma_change, actual_sigma_change);
+            assert!((expected_starting_mu - actual_starting_mu).abs() < f64::EPSILON);
+            assert!((expected_starting_sigma - actual_starting_sigma).abs() < f64::EPSILON);
+            assert!((expected_after_mu - actual_after_mu).abs() < f64::EPSILON);
+            assert!((expected_after_sigma - actual_after_sigma).abs() < f64::EPSILON);
+            assert!((expected_mu_change - actual_mu_change).abs() < f64::EPSILON);
+            assert!((expected_sigma_change - actual_sigma_change).abs() < f64::EPSILON);
             assert_eq!(expected_global_rank_before, actual_global_rank_before);
             assert_eq!(expected_country_rank_before, actual_country_rank_before);
-            assert_eq!(expected_percentile_before, actual_percentile_before);
+            assert!((expected_percentile_before - actual_percentile_before).abs() < f64::EPSILON);
             assert_eq!(expected_global_rank_after, actual_global_rank_after);
             assert_eq!(expected_country_rank_after, actual_country_rank_after);
-            assert_eq!(expected_percentile_after, actual_percentile_after);
+            assert!((expected_percentile_after - actual_percentile_after).abs() < f64::EPSILON);
             assert_eq!(expected_global_rank_change, actual_global_rank_change);
             assert_eq!(expected_country_rank_change, actual_country_rank_change);
-            assert_eq!(expected_percentile_change, actual_percentile_change);
+            assert!((expected_percentile_change - actual_percentile_change).abs() < f64::EPSILON);
         }
     }
 
