@@ -846,8 +846,9 @@ fn identify_game_winners_losers(game: &Game) -> (Vec<i32>, Vec<i32>, i32, i32) {
         }
 
         // Head to head
-        let score_0 = game.match_scores.index(0);
-        let score_1 = game.match_scores.index(1);
+        let [ref score_0, ref score_1] = game.match_scores[0..2] else {
+            panic!("Head to head game needs at least two scores!")
+        };
 
         let head_to_head = score_0.team == 0 && score_1.team == 1;
 
