@@ -29,7 +29,10 @@ use crate::{
     utils::progress_utils::progress_bar
 };
 
-use self::{constants::RED_TEAM_ID, structures::processing::{PlayerMatchData, ProcessedMatchData}};
+use self::{
+    constants::RED_TEAM_ID,
+    structures::processing::{PlayerMatchData, ProcessedMatchData}
+};
 
 /// The flow of processor
 mod constants;
@@ -388,14 +391,15 @@ pub fn calculate_ratings(
 ) -> RatingCalculationResult {
     let mut copied_ratings = initial_ratings.clone();
 
-    let (mut result, adj) = calculate_processed_match_data(&copied_ratings, matches, model);
+    let (mut match_data, adj) = calculate_processed_match_data(&copied_ratings, matches, model);
 
-    let match_info = calculate_post_match_info(&mut copied_ratings, &mut result);
+    let match_info = calculate_post_match_info(&mut copied_ratings, &mut match_data);
 
     RatingCalculationResult {
         base_ratings: copied_ratings,
         rating_stats: match_info,
-        adjustments: adj
+        adjustments: adj,
+        processed_data: match_data
     }
 }
 
@@ -878,11 +882,11 @@ fn identify_game_winners_losers(game: &Game) -> (Vec<i32>, Vec<i32>, i32, i32) {
                     i if i == BLUE_TEAM_ID => {
                         blue_players.push(score.player_id);
                         blue_scores.push(score.score);
-                    },
+                    }
                     i if i == RED_TEAM_ID => {
                         red_players.push(score.player_id);
                         red_scores.push(score.score);
-                    },
+                    }
                     _ => panic!("Invalid team type")
                 }
             }
@@ -1028,8 +1032,8 @@ mod tests {
 
     #[test]
     fn test_percentile() {
-        let percentiles = vec![0.2, 0.4, 0.6, 0.8, 1.0];
-        let ranks = vec![1, 2, 3, 4, 5];
+        let percentiles = [0.2, 0.4, 0.6, 0.8, 1.0];
+        let ranks = [1, 2, 3, 4, 5];
 
         for i in 0..percentiles.len() {
             let expected_percentile = percentiles[i];
@@ -1088,14 +1092,14 @@ mod tests {
         println!("Input rankings: {:?}", &ranks);
         let expected = model.rate(model_ratings, ranks);
 
-        let result = super::calculate_ratings(initial_ratings.clone(), &vec![match_data], &model);
+        let result = super::calculate_ratings(initial_ratings.clone(), &[match_data], &model);
 
         println!("Expected outcome:");
         for i in 0..expected.len() {
             let team = expected.get(i).unwrap();
 
             let mc = match_costs.get(i).unwrap();
-            let expected_rating = team.get(0).unwrap();
+            let expected_rating = team.first().unwrap();
             let actual_rating = result
                 .base_ratings
                 .iter()
@@ -1142,7 +1146,7 @@ mod tests {
                             .mu
                 })
                 .unwrap()
-                .get(0)
+                .first()
                 .unwrap();
 
             let expected_starting_mu = expected_starting_rating.rating.mu;
@@ -1155,22 +1159,22 @@ mod tests {
             let expected_sigma_change = expected_after_sigma - expected_starting_sigma;
 
             let expected_global_rank_before =
-                super::get_global_rank(&expected_starting_mu, &player_id, &&initial_ratings);
+                super::get_global_rank(&expected_starting_mu, &player_id, &initial_ratings);
             let expected_country_rank_before = super::get_country_rank(
                 &expected_starting_mu,
                 &player_id,
-                &&country_mappings_hash,
-                &&initial_ratings
+                &country_mappings_hash,
+                &initial_ratings
             );
             let expected_percentile_before =
                 super::calc_percentile(expected_global_rank_before, initial_ratings.len() as i32);
             let expected_global_rank_after =
-                super::get_global_rank(&expected_after_mu, &player_id, &&result.base_ratings);
+                super::get_global_rank(&expected_after_mu, &player_id, &result.base_ratings);
             let expected_country_rank_after = super::get_country_rank(
                 &expected_after_mu,
                 &player_id,
-                &&country_mappings_hash,
-                &&result.base_ratings
+                &country_mappings_hash,
+                &result.base_ratings
             );
             let expected_percentile_after =
                 super::calc_percentile(expected_global_rank_after, result.base_ratings.len() as i32);
@@ -1254,36 +1258,36 @@ mod tests {
         // - Game
         // - MatchScore (Player 0, Team 1, Score 525000)
         // - MatchScore (Player 1, Team 2, Score 525001)
-        let mut matches = Vec::new();
 
         let start_time = chrono::offset::Utc::now().fixed_offset();
         let end_time = Some(start_time); // Assuming end_time is the same as start_time for demonstration
 
         let beatmap = test_beatmap();
 
-        let mut match_scores = Vec::new();
-        match_scores.push(MatchScore {
-            player_id: 0,
-            team: 1, // Blue
-            score: 525000,
-            enabled_mods: None,
-            misses: 0,
-            accuracy_standard: 100.0,
-            accuracy_taiko: 0.0,
-            accuracy_catch: 0.0,
-            accuracy_mania: 0.0
-        });
-        match_scores.push(MatchScore {
-            player_id: 1,
-            team: 2,       // Red
-            score: 525001, // +1 score from blue. Should be the winner.
-            enabled_mods: None,
-            misses: 0,
-            accuracy_standard: 100.0,
-            accuracy_taiko: 0.0,
-            accuracy_catch: 0.0,
-            accuracy_mania: 0.0
-        });
+        let match_scores = vec![
+            MatchScore {
+                player_id: 0,
+                team: 1, // Blue
+                score: 525000,
+                enabled_mods: None,
+                misses: 0,
+                accuracy_standard: 100.0,
+                accuracy_taiko: 0.0,
+                accuracy_catch: 0.0,
+                accuracy_mania: 0.0
+            },
+            MatchScore {
+                player_id: 1,
+                team: 2,       // Red
+                score: 525001, // +1 score from blue. Should be the winner.
+                enabled_mods: None,
+                misses: 0,
+                accuracy_standard: 100.0,
+                accuracy_taiko: 0.0,
+                accuracy_catch: 0.0,
+                accuracy_mania: 0.0
+            },
+        ];
 
         let game = Game {
             id: 0,
@@ -1298,8 +1302,7 @@ mod tests {
             mods: 0
         };
 
-        let mut games = Vec::new();
-        games.push(game);
+        let games = vec![game];
 
         let match_instance = Match {
             id: 0,
@@ -1311,7 +1314,7 @@ mod tests {
             games
         };
 
-        matches.push(match_instance);
+        let matches = vec![match_instance];
 
         let loser_id = 0;
         let winner_id = 1;

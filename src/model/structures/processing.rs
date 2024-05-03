@@ -13,7 +13,8 @@ pub struct RatingCalculationResult {
     /// all matches changes
     pub base_ratings: Vec<PlayerRating>,
     pub rating_stats: Vec<MatchRatingStats>,
-    pub adjustments: Vec<RatingAdjustment>
+    pub adjustments: Vec<RatingAdjustment>,
+    pub processed_data: Vec<ProcessedMatchData>
 }
 
 /// User data after one match
