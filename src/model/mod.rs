@@ -850,7 +850,7 @@ fn identify_game_winners_losers(game: &Game) -> (Vec<i32>, Vec<i32>, i32, i32) {
             panic!("Head to head game needs at least two scores!")
         };
 
-        let head_to_head = score_0.team == 0 && score_1.team == 1;
+        let head_to_head = score_0.team == 0 && score_1.team == 0;
 
         if head_to_head {
             let winners;
