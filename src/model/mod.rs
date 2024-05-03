@@ -29,7 +29,7 @@ use crate::{
     utils::progress_utils::progress_bar
 };
 
-use self::structures::processing::{PlayerMatchData, ProcessedMatchData};
+use self::{constants::RED_TEAM_ID, structures::processing::{PlayerMatchData, ProcessedMatchData}};
 
 /// The flow of processor
 mod constants;
@@ -873,14 +873,11 @@ fn identify_game_winners_losers(game: &Game) -> (Vec<i32>, Vec<i32>, i32, i32) {
             let mut red_scores: Vec<i64> = vec![];
             let mut blue_scores: Vec<i64> = vec![];
 
-            let red = 2;
-            let blue = 1;
-
             for score in &game.match_scores {
-                if score.team == red {
+                if score.team == RED_TEAM_ID {
                     red_players.push(score.player_id);
                     red_scores.push(score.score);
-                } else if score.team == blue {
+                } else if score.team == BLUE_TEAM_ID {
                     blue_players.push(score.player_id);
                     blue_scores.push(score.score);
                 } else {
@@ -892,9 +889,9 @@ fn identify_game_winners_losers(game: &Game) -> (Vec<i32>, Vec<i32>, i32, i32) {
             let blue_score: i64 = blue_scores.iter().sum();
 
             if red_score > blue_score {
-                (red_players, blue_players, red, blue)
+                (red_players, blue_players, RED_TEAM_ID, BLUE_TEAM_ID)
             } else {
-                (blue_players, red_players, blue, red)
+                (blue_players, red_players, BLUE_TEAM_ID, RED_TEAM_ID)
             }
         }
         _ => panic!("Invalid team type")
