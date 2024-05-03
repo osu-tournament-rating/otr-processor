@@ -29,7 +29,7 @@ use crate::{
     utils::progress_utils::progress_bar
 };
 
-use self::structures::processing::{PlayerMatchData, ProcessedMatchData};
+use self::{constants::RED_TEAM_ID, structures::processing::{PlayerMatchData, ProcessedMatchData}};
 
 /// The flow of processor
 mod constants;
@@ -843,18 +843,17 @@ fn game_win_record(game: &Game) -> GameWinRecord {
 /// Identifies the winners and losers of a game.
 /// Return format is tuple of (winner ids, loser ids, winner team, loser team)
 fn identify_game_winners_losers(game: &Game) -> (Vec<i32>, Vec<i32>, i32, i32) {
-    if game.team_type == TeamType::HeadToHead {
-        if game.match_scores.len() != 2 {
-            panic!("Head to head game must have 2 players: {:?}", game);
-        }
+    match game.team_type {
+        TeamType::HeadToHead => {
+            if game.match_scores.len() != 2 {
+                println!("Head to head game must have 2 players: {:?}", game);
+            }
 
-        // Head to head
-        let score_0 = game.match_scores.index(0);
-        let score_1 = game.match_scores.index(1);
+            // Head to head
+            let [ref score_0, ref score_1] = game.match_scores[0..2] else {
+                panic!("Head to head game needs at least two scores!")
+            };
 
-        let head_to_head = score_0.team == 0 && score_1.team == 1;
-
-        if head_to_head {
             let winners;
             let losers;
 
@@ -868,40 +867,37 @@ fn identify_game_winners_losers(game: &Game) -> (Vec<i32>, Vec<i32>, i32, i32) {
 
             return (winners, losers, 0, 0);
         }
-    }
+        TeamType::TeamVs => {
+            let mut red_players = vec![];
+            let mut blue_players = vec![];
 
-    if game.team_type != TeamType::TeamVs {
-        panic!("Invalid team type: {:?}", game);
-    }
+            let mut red_scores: Vec<i64> = vec![];
+            let mut blue_scores: Vec<i64> = vec![];
 
-    let mut red_players = vec![];
-    let mut blue_players = vec![];
+            for score in &game.match_scores {
+                match score.team {
+                    i if i == BLUE_TEAM_ID => {
+                        blue_players.push(score.player_id);
+                        blue_scores.push(score.score);
+                    },
+                    i if i == RED_TEAM_ID => {
+                        red_players.push(score.player_id);
+                        red_scores.push(score.score);
+                    },
+                    _ => panic!("Invalid team type")
+                }
+            }
 
-    let mut red_scores: Vec<i64> = vec![];
-    let mut blue_scores: Vec<i64> = vec![];
+            let red_score: i64 = red_scores.iter().sum();
+            let blue_score: i64 = blue_scores.iter().sum();
 
-    let red = 2;
-    let blue = 1;
-
-    for score in &game.match_scores {
-        if score.team == red {
-            red_players.push(score.player_id);
-            red_scores.push(score.score);
-        } else if score.team == blue {
-            blue_players.push(score.player_id);
-            blue_scores.push(score.score);
-        } else {
-            panic!("Invalid team type");
+            if red_score > blue_score {
+                (red_players, blue_players, RED_TEAM_ID, BLUE_TEAM_ID)
+            } else {
+                (blue_players, red_players, BLUE_TEAM_ID, RED_TEAM_ID)
+            }
         }
-    }
-
-    let red_score: i64 = red_scores.iter().sum();
-    let blue_score: i64 = blue_scores.iter().sum();
-
-    if red_score > blue_score {
-        (red_players, blue_players, red, blue)
-    } else {
-        (blue_players, red_players, blue, red)
+        _ => panic!("Invalid team type")
     }
 }
 
@@ -1205,21 +1201,21 @@ mod tests {
             let actual_country_rank_change = stat.country_rank_change;
             let actual_percentile_change = stat.percentile_change;
 
-            assert_eq!(expected_starting_mu, actual_starting_mu);
-            assert_eq!(expected_starting_sigma, actual_starting_sigma);
-            assert_eq!(expected_after_mu, actual_after_mu);
-            assert_eq!(expected_after_sigma, actual_after_sigma);
-            assert_eq!(expected_mu_change, actual_mu_change);
-            assert_eq!(expected_sigma_change, actual_sigma_change);
+            assert!((expected_starting_mu - actual_starting_mu).abs() < f64::EPSILON);
+            assert!((expected_starting_sigma - actual_starting_sigma).abs() < f64::EPSILON);
+            assert!((expected_after_mu - actual_after_mu).abs() < f64::EPSILON);
+            assert!((expected_after_sigma - actual_after_sigma).abs() < f64::EPSILON);
+            assert!((expected_mu_change - actual_mu_change).abs() < f64::EPSILON);
+            assert!((expected_sigma_change - actual_sigma_change).abs() < f64::EPSILON);
             assert_eq!(expected_global_rank_before, actual_global_rank_before);
             assert_eq!(expected_country_rank_before, actual_country_rank_before);
-            assert_eq!(expected_percentile_before, actual_percentile_before);
+            assert!((expected_percentile_before - actual_percentile_before).abs() < f64::EPSILON);
             assert_eq!(expected_global_rank_after, actual_global_rank_after);
             assert_eq!(expected_country_rank_after, actual_country_rank_after);
-            assert_eq!(expected_percentile_after, actual_percentile_after);
+            assert!((expected_percentile_after - actual_percentile_after).abs() < f64::EPSILON);
             assert_eq!(expected_global_rank_change, actual_global_rank_change);
             assert_eq!(expected_country_rank_change, actual_country_rank_change);
-            assert_eq!(expected_percentile_change, actual_percentile_change);
+            assert!((expected_percentile_change - actual_percentile_change).abs() < f64::EPSILON);
         }
     }
 

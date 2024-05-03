@@ -20,3 +20,4 @@ lazy_static! {
 }
 
 pub const BLUE_TEAM_ID: i32 = 1;
+pub const RED_TEAM_ID: i32 = 2;
