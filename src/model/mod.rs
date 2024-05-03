@@ -1,8 +1,8 @@
 use std::{
     cmp::Ordering,
-    collections::{HashMap, HashSet}
+    collections::{HashMap, HashSet},
+    ops::Index
 };
-use std::ops::Index;
 
 use chrono::Utc;
 use openskill::{
@@ -15,10 +15,12 @@ use statrs::{
 };
 
 use crate::{
-    api::api_structs::{Game, Match, MatchRatingStats, MatchScore, Player, PlayerCountryMapping, RatingAdjustment},
+    api::api_structs::{
+        Game, GameWinRecord, Match, MatchRatingStats, MatchScore, Player, PlayerCountryMapping, RatingAdjustment
+    },
     model::{
         constants::BLUE_TEAM_ID,
-        decay::{DecayTracker, is_decay_possible},
+        decay::{is_decay_possible, DecayTracker},
         structures::{
             match_cost::MatchCost, mode::Mode, player_rating::PlayerRating, processing::RatingCalculationResult,
             team_type::TeamType
@@ -26,7 +28,6 @@ use crate::{
     },
     utils::progress_utils::progress_bar
 };
-use crate::api::api_structs::GameWinRecord;
 
 use self::structures::processing::{PlayerMatchData, ProcessedMatchData};
 
@@ -122,7 +123,7 @@ pub fn calculate_post_match_info(
             let player_idx = player_idx.unwrap();
 
             let player = &mut initial_ratings[player_idx];
-            
+
             player.rating = player_info.new_rating.clone();
             player_info.old_global_ranking = player.global_ranking;
             player_info.old_country_ranking = player.country_ranking;
@@ -403,7 +404,7 @@ pub fn calculate_processed_match_data(
     initial_ratings: &[PlayerRating],
     matches: &[Match],
     model: &PlackettLuce
-) -> (Vec<ProcessedMatchData>, Vec<RatingAdjustment>){
+) -> (Vec<ProcessedMatchData>, Vec<RatingAdjustment>) {
     println!("Calculating processed match data...");
     let bar = progress_bar(matches.len() as u64);
 
@@ -616,7 +617,8 @@ pub fn calculate_processed_match_data(
                 .find(|x| x.player_id == rate.player_id)
                 .unwrap();
 
-            ratings_hash.entry((player_match_stats.player_id, curr_match.mode))
+            ratings_hash
+                .entry((player_match_stats.player_id, curr_match.mode))
                 .and_modify(|x| x.rating = rate.rating.clone());
 
             player_match_stats.new_rating = rate.rating.clone();
@@ -840,69 +842,62 @@ fn game_win_record(game: &Game) -> GameWinRecord {
 /// Identifies the winners and losers of a game.
 /// Return format is tuple of (winner ids, loser ids, winner team, loser team)
 fn identify_game_winners_losers(game: &Game) -> (Vec<i32>, Vec<i32>, i32, i32) {
-    if game.team_type == TeamType::HeadToHead {
-        if game.match_scores.len() != 2 {
-            println!("Head to head game must have 2 players: {:?}", game);
-        }
+    match game.team_type {
+        TeamType::HeadToHead => {
+            if game.match_scores.len() != 2 {
+                println!("Head to head game must have 2 players: {:?}", game);
+            }
 
-        // Head to head
-        let [ref score_0, ref score_1] = game.match_scores[0..2] else {
-            panic!("Head to head game needs at least two scores!")
-        };
+            // Head to head
+            let [ref score_0, ref score_1] = game.match_scores[0..2] else {
+                panic!("Head to head game needs at least two scores!")
+            };
 
-        let head_to_head = score_0.team == 0 && score_1.team == 0;
-
-        if head_to_head {
             let winners;
             let losers;
 
             if score_0.score > score_1.score {
                 winners = vec![score_0.player_id];
                 losers = vec![score_1.player_id];
-            }
-            else {
+            } else {
                 winners = vec![score_1.player_id];
                 losers = vec![score_0.player_id];
             }
 
             return (winners, losers, 0, 0);
         }
-    }
+        TeamType::TeamVs => {
+            let mut red_players = vec![];
+            let mut blue_players = vec![];
 
-    if game.team_type != TeamType::TeamVs {
-        panic!("Invalid team type: {:?}", game);
-    }
+            let mut red_scores: Vec<i64> = vec![];
+            let mut blue_scores: Vec<i64> = vec![];
 
-    let mut red_players = vec![];
-    let mut blue_players = vec![];
+            let red = 2;
+            let blue = 1;
 
-    let mut red_scores: Vec<i64> = vec![];
-    let mut blue_scores: Vec<i64> = vec![];
+            for score in &game.match_scores {
+                if score.team == red {
+                    red_players.push(score.player_id);
+                    red_scores.push(score.score);
+                } else if score.team == blue {
+                    blue_players.push(score.player_id);
+                    blue_scores.push(score.score);
+                } else {
+                    panic!("Invalid team type");
+                }
+            }
 
-    let red = 2;
-    let blue = 1;
+            let red_score: i64 = red_scores.iter().sum();
+            let blue_score: i64 = blue_scores.iter().sum();
 
-    for score in &game.match_scores {
-        if score.team == red {
-            red_players.push(score.player_id);
-            red_scores.push(score.score);
+            if red_score > blue_score {
+                (red_players, blue_players, red, blue)
+            } else {
+                (blue_players, red_players, blue, red)
+            }
         }
-        else if score.team == blue {
-            blue_players.push(score.player_id);
-            blue_scores.push(score.score);
-        }
-        else {
-            panic!("Invalid team type");
-        }
-    }
-
-    let red_score: i64 = red_scores.iter().sum();
-    let blue_score: i64 = blue_scores.iter().sum();
-
-    if red_score > blue_score {
-        (red_players, blue_players, red, blue)
-    } else {
-        (blue_players, red_players, blue, red)
+        _ => panic!("Invalid team type")
     }
 }
 
@@ -929,7 +924,7 @@ mod tests {
     use openskill::{model::model::Model, rating::Rating};
 
     use crate::{
-        api::api_structs::{Beatmap, Game, Match, MatchScore, Player, PlayerCountryMapping},
+        api::api_structs::{Beatmap, Game, GameWinRecord, Match, MatchScore, Player, PlayerCountryMapping},
         model::{
             calc_percentile, calculate_country_ranks, calculate_post_match_info, calculate_ratings, mu_for_rank,
             structures::{
@@ -939,9 +934,11 @@ mod tests {
         },
         utils::test_utils
     };
-    use crate::api::api_structs::GameWinRecord;
 
-    use super::{calculate_global_ranks, calculate_player_adjustments, calculate_processed_match_data, create_initial_ratings, create_model, game_win_record, hash_country_mappings};
+    use super::{
+        calculate_global_ranks, calculate_player_adjustments, calculate_processed_match_data, create_initial_ratings,
+        create_model, game_win_record, hash_country_mappings
+    };
 
     fn match_from_json(json: &str) -> Match {
         serde_json::from_str(json).unwrap()
@@ -2308,7 +2305,7 @@ mod tests {
                     accuracy_taiko: 0.0,
                     accuracy_catch: 0.0,
                     accuracy_mania: 0.0
-                }
+                },
             ],
             mods: 0
         };
@@ -2318,7 +2315,7 @@ mod tests {
             winners: vec![2, 3],
             losers: vec![0, 1],
             winner_team: 2,
-            loser_team: 1,
+            loser_team: 1
         };
 
         let result = game_win_record(&game);
@@ -2358,7 +2355,7 @@ mod tests {
                     accuracy_taiko: 0.0,
                     accuracy_catch: 0.0,
                     accuracy_mania: 0.0
-                }
+                },
             ],
             mods: 0
         };
@@ -2368,7 +2365,7 @@ mod tests {
             winners: vec![1],
             losers: vec![0],
             winner_team: 2,
-            loser_team: 1,
+            loser_team: 1
         };
 
         let result = game_win_record(&game);
