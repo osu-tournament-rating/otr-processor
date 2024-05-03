@@ -29,7 +29,10 @@ use crate::{
     utils::progress_utils::progress_bar
 };
 
-use self::{constants::RED_TEAM_ID, structures::processing::{PlayerMatchData, ProcessedMatchData}};
+use self::{
+    constants::RED_TEAM_ID,
+    structures::processing::{PlayerMatchData, ProcessedMatchData}
+};
 
 /// The flow of processor
 mod constants;
@@ -879,11 +882,11 @@ fn identify_game_winners_losers(game: &Game) -> (Vec<i32>, Vec<i32>, i32, i32) {
                     i if i == BLUE_TEAM_ID => {
                         blue_players.push(score.player_id);
                         blue_scores.push(score.score);
-                    },
+                    }
                     i if i == RED_TEAM_ID => {
                         red_players.push(score.player_id);
                         red_scores.push(score.score);
-                    },
+                    }
                     _ => panic!("Invalid team type")
                 }
             }
