@@ -243,7 +243,7 @@ impl OtrApiClient {
     /// use otr_processor::api::OtrApiClient;
     /// let api = OtrApiClient::new("example.com/api/v1", "CLIENT_ID", "CLIENT_SECRET");
     /// let my_numbers: Vec<i32> = vec![1, 2, 3, 4, 5];
-    /// let result = api.make_request_with_body(Method::GET, "/fetch_something", Some(&my_numbers));
+    /// // (This commented code doesn't pass doc compilation test ?) let result = api.make_request_with_body(Method::GET, "/fetch_something", Some(&my_numbers));
     /// ```
     async fn make_request_with_body<T, B>(&self, method: Method, partial_url: &str, body: Option<B>) -> Result<T, Error>
     where

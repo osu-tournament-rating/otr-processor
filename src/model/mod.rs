@@ -874,14 +874,16 @@ fn identify_game_winners_losers(game: &Game) -> (Vec<i32>, Vec<i32>, i32, i32) {
             let mut blue_scores: Vec<i64> = vec![];
 
             for score in &game.match_scores {
-                if score.team == RED_TEAM_ID {
-                    red_players.push(score.player_id);
-                    red_scores.push(score.score);
-                } else if score.team == BLUE_TEAM_ID {
-                    blue_players.push(score.player_id);
-                    blue_scores.push(score.score);
-                } else {
-                    panic!("Invalid team type");
+                match score.team {
+                    i if i == BLUE_TEAM_ID => {
+                        blue_players.push(score.player_id);
+                        blue_scores.push(score.score);
+                    },
+                    i if i == RED_TEAM_ID => {
+                        red_players.push(score.player_id);
+                        red_scores.push(score.score);
+                    },
+                    _ => panic!("Invalid team type")
                 }
             }
 
