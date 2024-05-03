@@ -842,7 +842,7 @@ fn game_win_record(game: &Game) -> GameWinRecord {
 fn identify_game_winners_losers(game: &Game) -> (Vec<i32>, Vec<i32>, i32, i32) {
     if game.team_type == TeamType::HeadToHead {
         if game.match_scores.len() != 2 {
-            panic!("Head to head game must have 2 players: {:?}", game);
+            println!("Head to head game must have 2 players: {:?}", game);
         }
 
         // Head to head
