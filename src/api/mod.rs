@@ -3,7 +3,7 @@ pub mod api_structs;
 use std::{sync::Arc, time::Duration};
 
 use crate::{
-    api::api_structs::{Match, MatchIdMapping, OAuthResponse, Player, PlayerCountryMapping},
+    api::api_structs::{Match, MatchIdMapping, OAuthResponse, Player, PlayerCountryMapping, RatingAdjustment},
     utils::progress_utils::progress_bar
 };
 use reqwest::{
@@ -15,7 +15,6 @@ use tokio::sync::{
     oneshot::{Receiver, Sender},
     RwLock
 };
-use crate::api::api_structs::RatingAdjustment;
 
 /// A loop that automatically refreshes token
 pub async fn refresh_token_loop(api: Arc<OtrApiBody>) {
@@ -319,7 +318,8 @@ impl OtrApiClient {
     pub async fn post_adjustments(&self, adjustments: &[RatingAdjustment]) -> Result<(), Error> {
         let link = "/v1/stats/ratingadjustments";
 
-        self.make_request_with_body::<(), &[RatingAdjustment]>(Method::POST, link, Some(adjustments)).await
+        self.make_request_with_body::<(), &[RatingAdjustment]>(Method::POST, link, Some(adjustments))
+            .await
     }
 
     /// Get list of match id mappings
@@ -351,12 +351,11 @@ mod api_client_tests {
     use serde_json::json;
     use std::time::Duration;
 
+    use crate::api::api_structs::RatingAdjustment;
     use async_once_cell::OnceCell;
     use chrono::{FixedOffset, Utc};
-    use crate::api::api_structs::RatingAdjustment;
 
-    use crate::api::OtrApiClient;
-    use crate::model::structures::mode::Mode;
+    use crate::{api::OtrApiClient, model::structures::mode::Mode};
 
     static API_INSTANCE: OnceCell<OtrApiClient> = OnceCell::new();
 
@@ -428,7 +427,9 @@ mod api_client_tests {
             timestamp: Utc::now().with_timezone(&FixedOffset::east_opt(0).unwrap())
         }];
 
-        api.post_adjustments(&payload).await.expect("Failed to POST adjustments");
+        api.post_adjustments(&payload)
+            .await
+            .expect("Failed to POST adjustments");
     }
 
     #[tokio::test]
