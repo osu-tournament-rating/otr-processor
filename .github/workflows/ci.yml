@@ -49,9 +49,9 @@ jobs:
       - name: Create .env
         run: |
           touch .env
-          echo API_ROOT=${{ secrets.ENV_DEV__API_ROOT }} >> .env
-          echo CLIENT_ID=${{ secrets.ENV_DEV__OAUTH_CLIENT_ID }} >> .env
-          echo CLIENT_SECRET=${{ secrets.ENV_DEV__OAUTH_CLIENT_SECRET }} >> .env
+          echo "API_ROOT=${{ secrets.ENV_DEV__API_ROOT }}" >> .env
+          echo "CLIENT_ID=${{ secrets.ENV_DEV__OAUTH_CLIENT_ID }}" >> .env
+          echo "CLIENT_SECRET=${{ secrets.ENV_DEV__OAUTH_CLIENT_SECRET }}" >> .env
 
       - name: Test
         run: cargo test
