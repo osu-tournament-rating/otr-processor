@@ -428,7 +428,7 @@ mod api_client_tests {
             timestamp: Utc::now().with_timezone(&FixedOffset::east_opt(0).unwrap())
         }];
 
-        api.post_adjustments(&payload).await.expect("TODO: panic message");
+        api.post_adjustments(&payload).await.expect("Failed to POST adjustments");
     }
 
     #[tokio::test]
