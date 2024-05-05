@@ -3,7 +3,7 @@ pub mod api_structs;
 use std::{sync::Arc, time::Duration};
 
 use crate::{
-    api::api_structs::{Match, MatchIdMapping, OAuthResponse, Player, PlayerCountryMapping},
+    api::api_structs::{Match, MatchIdMapping, OAuthResponse, Player, PlayerCountryMapping, RatingAdjustment},
     utils::progress_utils::progress_bar
 };
 use reqwest::{
@@ -212,7 +212,7 @@ impl OtrApiClient {
     /// ```
     async fn make_request<T>(&self, method: Method, partial_url: &str) -> Result<T, Error>
     where
-        T: DeserializeOwned
+        T: DeserializeOwned + Default
     {
         self.make_request_with_body(method, partial_url, None::<u8>).await
     }
@@ -245,7 +245,7 @@ impl OtrApiClient {
     /// ```
     async fn make_request_with_body<T, B>(&self, method: Method, partial_url: &str, body: Option<B>) -> Result<T, Error>
     where
-        T: DeserializeOwned,
+        T: DeserializeOwned + Default,
         B: Serialize
     {
         let request_link = format!("{}{}", self.body.api_root, partial_url);
@@ -268,7 +268,11 @@ impl OtrApiClient {
             .send()
             .await?;
 
-        resp.json().await
+        match resp.json().await {
+            Ok(res) => Ok(res),
+            Err(err) if err.is_decode() => Ok(T::default()),
+            Err(e) => Err(e)
+        }
     }
 
     /// Get ids of matches
@@ -310,6 +314,13 @@ impl OtrApiClient {
 
         Ok(data)
     }
+    /// Post rating adjustments
+    pub async fn post_adjustments(&self, adjustments: &[RatingAdjustment]) -> Result<(), Error> {
+        let link = "/v1/stats/ratingadjustments";
+
+        self.make_request_with_body::<(), &[RatingAdjustment]>(Method::POST, link, Some(adjustments))
+            .await
+    }
 
     /// Get list of match id mappings
     /// otr_match_id <-> osu_match_id
@@ -340,9 +351,11 @@ mod api_client_tests {
     use serde_json::json;
     use std::time::Duration;
 
+    use crate::api::api_structs::RatingAdjustment;
     use async_once_cell::OnceCell;
+    use chrono::{FixedOffset, Utc};
 
-    use crate::api::OtrApiClient;
+    use crate::{api::OtrApiClient, model::structures::mode::Mode};
 
     static API_INSTANCE: OnceCell<OtrApiClient> = OnceCell::new();
 
@@ -396,6 +409,27 @@ mod api_client_tests {
         let result = api.get_players().await.unwrap();
 
         assert!(!result.is_empty())
+    }
+    #[tokio::test]
+    async fn test_api_client_post_rating_adjustments() {
+        let api = get_api().await;
+
+        let payload = vec![RatingAdjustment {
+            player_id: 440,
+            mode: Mode::Osu,
+            rating_adjustment_amount: 3.123,
+            volatility_adjustment_amount: 2.123,
+            rating_before: 1000.0,
+            rating_after: 1003.123,
+            volatility_before: 100.0,
+            volatility_after: 102.123,
+            rating_adjustment_type: 0,
+            timestamp: Utc::now().with_timezone(&FixedOffset::east_opt(0).unwrap())
+        }];
+
+        api.post_adjustments(&payload)
+            .await
+            .expect("Failed to POST adjustments");
     }
 
     #[tokio::test]
