@@ -63,23 +63,27 @@ impl DecayTracker {
         }
 
         let mut adjustments = Vec::new();
+        let mut old_mu;
+        let mut old_sigma;
         let mut new_mu = mu;
         let mut new_sigma = sigma;
 
         for i in 0..decay_weeks {
             // Increment time by 7 days for each decay application (this is for accurate timestamps)
             let now = last_play_time.unwrap().fixed_offset() + chrono::Duration::days(i * 7);
+            old_mu = new_mu;
+            old_sigma = new_sigma;
             new_mu = decay_mu(new_mu);
             new_sigma = decay_sigma(new_sigma);
-
+            
             let adjustment = RatingAdjustment {
                 player_id,
                 mode,
-                rating_adjustment_amount: new_mu - mu,
-                volatility_adjustment_amount: new_sigma - sigma,
-                rating_before: mu,
+                rating_adjustment_amount: new_mu - old_mu,
+                volatility_adjustment_amount: new_sigma - old_sigma,
+                rating_before: old_mu,
                 rating_after: new_mu,
-                volatility_before: sigma,
+                volatility_before: old_sigma,
                 volatility_after: new_sigma,
                 rating_adjustment_type: 0,
                 timestamp: now
