@@ -75,7 +75,7 @@ impl DecayTracker {
             old_sigma = new_sigma;
             new_mu = decay_mu(new_mu);
             new_sigma = decay_sigma(new_sigma);
-            
+
             let adjustment = RatingAdjustment {
                 player_id,
                 mode,
