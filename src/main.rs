@@ -75,5 +75,8 @@ async fn main() {
 
     println!("{:?}", result.game_win_records.first());
     println!("{:?}", result.match_win_records.first());
-    println!("Total object size: {:?}", std::mem::size_of_val(&result.game_win_records));
+    println!(
+        "Total object size: {:?}",
+        std::mem::size_of_val(&result.game_win_records)
+    );
 }

@@ -17,7 +17,8 @@ use statrs::{
 
 use crate::{
     api::api_structs::{
-        Game, GameWinRecord, Match, MatchRatingStats, MatchScore, MatchWinRecord, Player, PlayerCountryMapping, RatingAdjustment
+        Game, GameWinRecord, Match, MatchRatingStats, MatchScore, MatchWinRecord, Player, PlayerCountryMapping,
+        PlayerMatchStats, RatingAdjustment
     },
     model::{
         constants::BLUE_TEAM_ID,
@@ -29,11 +30,13 @@ use crate::{
     },
     utils::progress_utils::progress_bar
 };
-use crate::api::api_structs::PlayerMatchStats;
 
 use self::{
     constants::RED_TEAM_ID,
-    structures::{match_type::MatchType, processing::{PlayerMatchData, ProcessedMatchData}}
+    structures::{
+        match_type::MatchType,
+        processing::{PlayerMatchData, ProcessedMatchData}
+    }
 };
 
 /// The flow of processor
@@ -426,7 +429,7 @@ fn calculate_match_win_records(matches: &[Match]) -> (Vec<MatchWinRecord>, Vec<G
 
     for m in matches {
         let mut gwrs = Vec::new();
-        
+
         for g in &m.games {
             let gwr = game_win_record(&g);
             gwrs.push(gwr.clone());
@@ -455,8 +458,7 @@ fn match_win_record_from_game_win_records(match_id: i32, game_win_records: &[Gam
     for gwr in game_win_records {
         if gwr.winner_team == 0 {
             count_h2h += 1;
-        }
-        else {
+        } else {
             count_teamvs += 1;
         }
     }
@@ -543,7 +545,7 @@ fn match_win_record_from_game_win_records(match_id: i32, game_win_records: &[Gam
             winner_team,
             loser_team,
             match_type: Some(match_type)
-        }
+        };
     }
 
     // Identify winning & losing rosters. If tie, default to red.
@@ -657,7 +659,7 @@ fn player_match_stats(matches: &[Match]) -> Vec<PlayerMatchStats> {
                 player_id: p_id,
                 match_id: m.id,
                 won,
-                average_score: mean_i64(p_scores.entry(p_id).or_insert(Vec::new())) as i32,
+                average_score: mean_i64(p_scores.entry(p_id).or_insert(Vec::new())),
                 average_misses: mean_i32(p_misses.entry(p_id).or_insert(Vec::new())),
                 average_accuracy: mean_f64(p_accs.entry(p_id).or_insert(Vec::new())),
                 average_placement: mean_i32(p_placement.entry(p_id).or_insert(Vec::new())),
@@ -665,15 +667,25 @@ fn player_match_stats(matches: &[Match]) -> Vec<PlayerMatchStats> {
                 games_lost: *p_glost.entry(p_id).or_insert(0),
                 games_played: *p_gplayed.entry(p_id).or_insert(0),
                 teammate_ids: if won {
-                    winning_roster.clone().iter().filter(|x| **x != p_id).map(|x| *x).collect()
+                    winning_roster
+                        .clone()
+                        .iter()
+                        .filter(|x| **x != p_id)
+                        .map(|x| *x)
+                        .collect()
                 } else {
-                    losing_roster.clone().iter().filter(|x| **x != p_id).map(|x| *x).collect()
+                    losing_roster
+                        .clone()
+                        .iter()
+                        .filter(|x| **x != p_id)
+                        .map(|x| *x)
+                        .collect()
                 },
                 opponent_ids: if won {
                     losing_roster.clone()
                 } else {
                     winning_roster.clone()
-                },
+                }
             });
         }
     }
@@ -1233,21 +1245,27 @@ mod tests {
     use openskill::{model::model::Model, rating::Rating};
 
     use crate::{
-        api::api_structs::{Beatmap, Game, GameWinRecord, Match, MatchScore, Player, PlayerCountryMapping},
+        api::api_structs::{
+            Beatmap, Game, GameWinRecord, Match, MatchScore, MatchWinRecord, Player, PlayerCountryMapping,
+            PlayerMatchStats
+        },
         model::{
-            calc_percentile, calculate_country_ranks, calculate_post_match_info, calculate_ratings, mu_for_rank,
+            calc_percentile, calculate_country_ranks, calculate_post_match_info, calculate_ratings,
+            constants::{BLUE_TEAM_ID, RED_TEAM_ID},
+            mu_for_rank,
             structures::{
-                match_cost::MatchCost, mode::Mode, player_rating::PlayerRating, scoring_type::ScoringType,
-                team_type::TeamType
+                match_cost::MatchCost, match_type::MatchType, mode::Mode, player_rating::PlayerRating,
+                scoring_type::ScoringType, team_type::TeamType
             }
         },
         utils::test_utils
     };
-    use crate::api::api_structs::MatchWinRecord;
-    use crate::model::constants::{BLUE_TEAM_ID, RED_TEAM_ID};
-    use crate::model::structures::match_type::MatchType;
 
-    use super::{calculate_match_win_records, calculate_global_ranks, calculate_player_adjustments, calculate_processed_match_data, create_initial_ratings, create_model, game_win_record, hash_country_mappings};
+    use super::{
+        calculate_global_ranks, calculate_match_win_records, calculate_player_adjustments,
+        calculate_processed_match_data, create_initial_ratings, create_model, game_win_record, hash_country_mappings,
+        player_match_stats
+    };
 
     fn match_from_json(json: &str) -> Match {
         serde_json::from_str(json).unwrap()
@@ -2751,7 +2769,7 @@ mod tests {
                             accuracy_catch: 0.0,
                             accuracy_mania: 0.0
                         },
-                    ],
+                    ]
                 },
                 // Game 2: Red wins against blue
                 Game {
@@ -2809,7 +2827,7 @@ mod tests {
                             accuracy_catch: 0.0,
                             accuracy_mania: 0.0
                         },
-                    ],
+                    ]
                 },
                 // Game 3: Blue wins against red
                 Game {
@@ -2867,9 +2885,9 @@ mod tests {
                             accuracy_catch: 0.0,
                             accuracy_mania: 0.0
                         },
-                    ],
-                }
-            ],
+                    ]
+                },
+            ]
         };
 
         let expected_mwr = MatchWinRecord {
@@ -2904,7 +2922,7 @@ mod tests {
                 losers: vec![2, 3],
                 winner_team: BLUE_TEAM_ID,
                 loser_team: RED_TEAM_ID
-            }
+            },
         ];
 
         let (actual_mwr, actual_gwrs) = calculate_match_win_records(&vec![match_data]);
@@ -2965,7 +2983,7 @@ mod tests {
                             accuracy_catch: 0.0,
                             accuracy_mania: 0.0
                         },
-                    ],
+                    ]
                 },
                 // Game 2: Player 1 wins against player 0
                 Game {
@@ -3000,7 +3018,7 @@ mod tests {
                             accuracy_taiko: 0.0,
                             accuracy_catch: 0.0,
                             accuracy_mania: 0.0
-                        }
+                        },
                     ]
                 },
                 // Game 3: Player 0 wins against player 1
@@ -3036,9 +3054,9 @@ mod tests {
                             accuracy_taiko: 0.0,
                             accuracy_catch: 0.0,
                             accuracy_mania: 0.0
-                        }
+                        },
                     ]
-                }
+                },
             ]
         };
 
@@ -3110,7 +3128,7 @@ mod tests {
                             accuracy_catch: 0.0,
                             accuracy_mania: 0.0
                         },
-                    ],
+                    ]
                 },
                 // Game 2: Player 1 wins
                 Game {
@@ -3148,7 +3166,7 @@ mod tests {
                         },
                     ]
                 },
-           ]
+            ]
         };
 
         let expected_mwr = MatchWinRecord {
@@ -3174,5 +3192,248 @@ mod tests {
         assert_eq!(actual_mwr[0].winner_team, expected_mwr.winner_team);
         assert_eq!(actual_mwr[0].loser_team, expected_mwr.loser_team);
         assert_eq!(actual_mwr[0].match_type, expected_mwr.match_type);
+    }
+
+    #[test]
+    fn test_player_match_stats() {
+        let matches = vec![Match {
+            id: 1,
+            match_id: 123,
+            name: Some("Osu game".to_owned()),
+            mode: Mode::Osu,
+            start_time: Some(Utc::now().with_timezone(&FixedOffset::east_opt(0).unwrap())),
+            end_time: None,
+            games: vec![
+                // Game 1:
+                // - Player 1: 100000
+                // - Player 2: 1000000
+                //
+                // - P1 acc: 100.0
+                // - P2 acc: 100.0
+                //
+                // - P1 misses: 1
+                // - P2 misses: 0
+                //
+                // - P1 placing: 2
+                // - P2 placing: 1
+                Game {
+                    id: 123,
+                    ruleset: Mode::Osu,
+                    scoring_type: ScoringType::Score,
+                    team_type: TeamType::TeamVs,
+                    mods: 0,
+                    game_id: 456,
+                    start_time: Utc::now().with_timezone(&FixedOffset::east_opt(0).unwrap()),
+                    end_time: None,
+                    beatmap: None,
+                    match_scores: vec![
+                        MatchScore {
+                            player_id: 1,
+                            team: 1,
+                            score: 100000,
+                            enabled_mods: Some(0),
+                            misses: 1,
+                            accuracy_standard: 100.0,
+                            accuracy_taiko: 100.0,
+                            accuracy_catch: 100.0,
+                            accuracy_mania: 100.0
+                        },
+                        MatchScore {
+                            player_id: 2,
+                            team: 2,
+                            score: 1000000,
+                            enabled_mods: Some(0),
+                            misses: 0,
+                            accuracy_standard: 100.0,
+                            accuracy_taiko: 100.0,
+                            accuracy_catch: 100.0,
+                            accuracy_mania: 100.0
+                        },
+                    ]
+                },
+                // Game 2:
+                // - Player 1: 200000
+                // - Player 2: 500000
+                //
+                // - P1 acc: 90.0
+                // - P2 acc: 95.0
+                //
+                // - P1 misses: 1
+                // - P2 misses: 3
+                //
+                // - P1 placing: 2
+                // - P2 placing: 1
+                Game {
+                    id: 2,
+                    ruleset: Mode::Osu,
+                    scoring_type: ScoringType::Score,
+                    team_type: TeamType::TeamVs,
+                    mods: 0,
+                    game_id: 457,
+                    start_time: Utc::now().with_timezone(&FixedOffset::east_opt(0).unwrap()),
+                    end_time: None,
+                    beatmap: None,
+                    match_scores: vec![
+                        MatchScore {
+                            player_id: 1,
+                            team: 1,
+                            score: 200000,
+                            enabled_mods: Some(0),
+                            misses: 1,
+                            accuracy_standard: 90.0,
+                            accuracy_taiko: 100.0,
+                            accuracy_catch: 100.0,
+                            accuracy_mania: 100.0
+                        },
+                        MatchScore {
+                            player_id: 2,
+                            team: 2,
+                            score: 500000,
+                            enabled_mods: Some(0),
+                            misses: 3,
+                            accuracy_standard: 95.0,
+                            accuracy_taiko: 100.0,
+                            accuracy_catch: 100.0,
+                            accuracy_mania: 100.0
+                        },
+                    ]
+                },
+                // Game 3:
+                //
+                // - Player 1: 230210
+                // - Player 2: 300000
+                //
+                // - P1 acc: 80.0
+                // - P2 acc: 85.0
+                //
+                // - P1 misses: 12
+                // - P2 misses: 7
+                //
+                // - P1 placing: 2
+                // - P2 placing: 1
+                Game {
+                    id: 3,
+                    ruleset: Mode::Osu,
+                    scoring_type: ScoringType::Score,
+                    team_type: TeamType::TeamVs,
+                    mods: 0,
+                    game_id: 458,
+                    start_time: Utc::now().with_timezone(&FixedOffset::east_opt(0).unwrap()),
+                    end_time: None,
+                    beatmap: None,
+                    match_scores: vec![
+                        MatchScore {
+                            player_id: 1,
+                            team: 1,
+                            score: 230210,
+                            enabled_mods: Some(0),
+                            misses: 12,
+                            accuracy_standard: 80.0,
+                            accuracy_taiko: 100.0,
+                            accuracy_catch: 100.0,
+                            accuracy_mania: 100.0
+                        },
+                        MatchScore {
+                            player_id: 2,
+                            team: 2,
+                            score: 300000,
+                            enabled_mods: Some(0),
+                            misses: 7,
+                            accuracy_standard: 85.0,
+                            accuracy_taiko: 100.0,
+                            accuracy_catch: 100.0,
+                            accuracy_mania: 100.0
+                        },
+                    ]
+                },
+                // Game 4:
+                //
+                // - Player 1: 1000000
+                // - Player 2: 100000
+                //
+                // - P1 acc: 100.0
+                // - P2 acc: 86.0
+                //
+                // - P1 misses: 0
+                // - P2 misses: 5
+                //
+                // - P1 placing: 1
+                // - P2 placing: 2
+                Game {
+                    id: 4,
+                    ruleset: Mode::Osu,
+                    scoring_type: ScoringType::Score,
+                    team_type: TeamType::TeamVs,
+                    mods: 0,
+                    game_id: 459,
+                    start_time: Utc::now().with_timezone(&FixedOffset::east_opt(0).unwrap()),
+                    end_time: None,
+                    beatmap: None,
+                    match_scores: vec![
+                        MatchScore {
+                            player_id: 1,
+                            team: 1,
+                            score: 1000000,
+                            enabled_mods: Some(0),
+                            misses: 0,
+                            accuracy_standard: 100.0,
+                            accuracy_taiko: 100.0,
+                            accuracy_catch: 100.0,
+                            accuracy_mania: 100.0
+                        },
+                        MatchScore {
+                            player_id: 2,
+                            team: 2,
+                            score: 100000,
+                            enabled_mods: Some(0),
+                            misses: 5,
+                            accuracy_standard: 86.0,
+                            accuracy_taiko: 100.0,
+                            accuracy_catch: 100.0,
+                            accuracy_mania: 100.0
+                        },
+                    ]
+                },
+            ]
+        }];
+
+        let expected_p1 = PlayerMatchStats {
+            player_id: 1,
+            match_id: 1,
+            won: false,
+            average_score: 382552.5,
+            average_misses: 3.5,
+            average_accuracy: 92.5,
+            average_placement: 1.75,
+            games_won: 1,
+            games_lost: 3,
+            games_played: 4,
+            teammate_ids: vec![],
+            opponent_ids: vec![2]
+        };
+
+        let expected_p2 = PlayerMatchStats {
+            player_id: 2,
+            match_id: 1,
+            won: true,
+            average_score: 475000.0,
+            average_misses: 3.75,
+            average_accuracy: 91.5,
+            average_placement: 1.25,
+            games_won: 3,
+            games_lost: 1,
+            games_played: 4,
+            teammate_ids: vec![],
+            opponent_ids: vec![1]
+        };
+
+        let results = player_match_stats(&matches);
+
+        let r_1 = results.iter().find(|x| x.player_id == 1).unwrap();
+        let r_2 = results.iter().find(|x| x.player_id == 2).unwrap();
+
+        assert_eq!(results.len(), 2);
+        assert_eq!(*r_1, expected_p1);
+        assert_eq!(*r_2, expected_p2);
     }
 }

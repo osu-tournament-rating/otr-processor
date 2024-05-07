@@ -32,13 +32,13 @@ pub struct RatingAdjustment {
     pub timestamp: DateTime<FixedOffset>
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerMatchStats {
     pub player_id: i32,
     pub match_id: i32,
     pub won: bool,
-    pub average_score: i32,
+    pub average_score: f64,
     pub average_misses: f64,
     pub average_accuracy: f64,
     pub average_placement: f64,
