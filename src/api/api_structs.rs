@@ -1,7 +1,7 @@
 use chrono::{DateTime, FixedOffset};
 use serde::{Deserialize, Serialize};
 
-use crate::model::structures::{mode::Mode, scoring_type::ScoringType, team_type::TeamType};
+use crate::model::structures::{match_type::MatchType, mode::Mode, scoring_type::ScoringType, team_type::TeamType};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -87,7 +87,7 @@ pub struct BaseStatsPost {
     pub country_rank: i32
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GameWinRecord {
     pub game_id: i32,
@@ -107,7 +107,7 @@ pub struct MatchWinRecord {
     pub red_points: i32,
     pub winner_team: Option<i32>,
     pub loser_team: Option<i32>,
-    pub match_type: Option<i32>
+    pub match_type: Option<MatchType>
 }
 
 #[derive(Debug, Serialize, Deserialize)]

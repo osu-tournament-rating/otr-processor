@@ -16,7 +16,7 @@ use statrs::{
 
 use crate::{
     api::api_structs::{
-        Game, GameWinRecord, Match, MatchRatingStats, MatchScore, Player, PlayerCountryMapping, RatingAdjustment
+        Game, GameWinRecord, Match, MatchRatingStats, MatchScore, MatchWinRecord, Player, PlayerCountryMapping, RatingAdjustment
     },
     model::{
         constants::BLUE_TEAM_ID,
@@ -31,7 +31,7 @@ use crate::{
 
 use self::{
     constants::RED_TEAM_ID,
-    structures::processing::{PlayerMatchData, ProcessedMatchData}
+    structures::{match_type::MatchType, processing::{PlayerMatchData, ProcessedMatchData}}
 };
 
 /// The flow of processor
@@ -392,15 +392,125 @@ pub fn calculate_ratings(
     let mut copied_ratings = initial_ratings.clone();
 
     let (mut match_data, adj) = calculate_processed_match_data(&copied_ratings, matches, model);
-
     let match_info = calculate_post_match_info(&mut copied_ratings, &mut match_data);
+    let (match_wrs, game_wrs) = calcualte_match_win_records(&matches);
 
     RatingCalculationResult {
         base_ratings: copied_ratings,
         rating_stats: match_info,
         adjustments: adj,
-        processed_data: match_data
+        processed_data: match_data,
+        game_win_records: game_wrs,
+        match_win_records: match_wrs
     }
+}
+
+fn calculate_game_win_records(matches: &[Match]) -> Vec<GameWinRecord> {
+    let mut res = Vec::new();
+
+    // Iterate over matches and their games, then push the game win records to the result vector
+    for m in matches {
+        for g in &m.games {
+            res.push(game_win_record(g));
+        }
+    }
+
+    res
+}
+
+fn calcualte_match_win_records(matches: &[Match]) -> (Vec<MatchWinRecord>, Vec<GameWinRecord>) {
+    let mut mwrs = Vec::new();
+    let mut gwrs_final = Vec::new();
+
+    for m in matches {
+        let mut gwrs = Vec::new();
+        
+        for g in &m.games {
+            let gwr = game_win_record(&g);
+            gwrs.push(gwr.clone());
+            gwrs_final.push(gwr.clone());
+        }
+
+        // Calculate match win record
+        mwrs.push(match_win_record_from_game_win_records(m.id, &gwrs));
+    }
+
+    (mwrs, gwrs_final)
+}
+
+fn match_win_record_from_game_win_records(match_id: i32, game_win_records: &[GameWinRecord]) -> MatchWinRecord {
+    let mut team_red = Vec::new();
+    let mut team_blue = Vec::new();
+
+    let mut red_pts = 0;
+    let mut blue_pts = 0;
+    let mut match_type = MatchType::Team;
+
+    for gwr in game_win_records {
+        if gwr.winner_team == 0 {
+            match_type = MatchType::HeadToHead;
+            // Head to head tournament - identify the winner as being 
+            if gwr.winners.len() > 1 || gwr.losers.len() > 1 {
+                panic!("Head to head with more than 1 member per team is unsupported!");
+            }
+
+            // Set the winner to team red
+            if team_red.len() == 0 {
+                team_red = gwr.winners.clone();
+                team_blue = gwr.losers.clone();
+            }
+            
+            // Compare the scores based on id
+            if gwr.winners == team_red {
+                red_pts += 1;
+            }
+
+            if gwr.winners == team_blue {
+                blue_pts += 1;
+            }
+        }
+        else {
+            // TeamVS
+            if gwr.winner_team == BLUE_TEAM_ID {
+                blue_pts += 1;
+                team_blue.extend(gwr.winners.clone());
+                team_red.extend(gwr.losers.clone());
+            }
+
+            if gwr.winner_team == RED_TEAM_ID {
+                red_pts += 1;
+                team_red.extend(gwr.winners.clone());
+                team_blue.extend(gwr.losers.clone());
+            }
+        }
+    }
+
+    team_red.dedup();
+    team_blue.dedup();
+
+    let mut winner_team = RED_TEAM_ID;
+
+    if blue_pts > red_pts {
+        winner_team = BLUE_TEAM_ID;
+    }
+
+    let loser_team = match winner_team {
+        RED_TEAM_ID => BLUE_TEAM_ID,
+        BLUE_TEAM_ID => RED_TEAM_ID,
+        _ => panic!("Not implemented")
+    };
+
+    MatchWinRecord {
+        match_id,
+        team_blue: team_blue,
+        team_red: team_red,
+        blue_points: blue_pts,
+        red_points: red_pts,
+        winner_team: Some(winner_team),
+        loser_team: Some(loser_team),
+        match_type: Some(match_type)
+    }
+
 }
 
 /// Calculates [`ProcessedMatchData`] for each match provided

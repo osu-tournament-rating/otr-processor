@@ -1,6 +1,6 @@
 use otr_processor::{
     api,
-    model::{self, hash_country_mappings}
+    model::{self, hash_country_mappings, structures::processing::RatingCalculationResult}
 };
 
 #[tokio::main]
@@ -72,4 +72,8 @@ async fn main() {
             player.mode
         );
     }
+
+    println!("{:?}", result.game_win_records.first());
+    println!("{:?}", result.match_win_records.first());
+    println!("Total object size: {:?}", std::mem::size_of_val(&result.game_win_records));
 }
