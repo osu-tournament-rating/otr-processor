@@ -29,6 +29,7 @@ use crate::{
     },
     utils::progress_utils::progress_bar
 };
+use crate::api::api_structs::PlayerMatchStats;
 
 use self::{
     constants::RED_TEAM_ID,
@@ -440,83 +441,272 @@ fn calculate_match_win_records(matches: &[Match]) -> (Vec<MatchWinRecord>, Vec<G
 }
 
 fn match_win_record_from_game_win_records(match_id: i32, game_win_records: &[GameWinRecord]) -> MatchWinRecord {
-    let mut team_red = Vec::new();
-    let mut team_blue = Vec::new();
+    let mut red_roster = Vec::new(); // Winner of head to head or team red
+    let mut blue_roster = Vec::new(); // Loser of head to head or team blue
 
-    let mut red_pts = 0;
-    let mut blue_pts = 0;
+    let mut red_points = 0; // Winner of head to head or team red
+    let mut blue_points = 0; // Loser of head to head or team blue
+
     let mut match_type = MatchType::Team;
+
+    let mut count_h2h = 0;
+    let mut count_teamvs = 0;
 
     for gwr in game_win_records {
         if gwr.winner_team == 0 {
-            match_type = MatchType::HeadToHead;
-            // Head to head tournament - identify the winner as being 
-            if gwr.winners.len() > 1 || gwr.losers.len() > 1 {
-                panic!("Head to head with more than 1 member per team is unsupported!");
-            }
-
-            // Set the winner to team red
-            if team_red.len() == 0 {
-                team_red = gwr.winners.clone();
-                team_blue = gwr.losers.clone();
-            }
-            
-            // Compare the scores based on id
-            if gwr.winners == team_red {
-                red_pts += 1;
-            }
-
-            if gwr.winners == team_blue {
-                blue_pts += 1;
-            }
+            count_h2h += 1;
         }
         else {
-            // TeamVS
-            if gwr.winner_team == BLUE_TEAM_ID {
-                blue_pts += 1;
-                team_blue.extend(gwr.winners.clone());
-                team_red.extend(gwr.losers.clone());
-            }
+            count_teamvs += 1;
+        }
+    }
 
-            if gwr.winner_team == RED_TEAM_ID {
-                red_pts += 1;
-                team_red.extend(gwr.winners.clone());
-                team_blue.extend(gwr.losers.clone());
+    match_type = if count_h2h > count_teamvs {
+        MatchType::HeadToHead
+    } else {
+        MatchType::Team
+    };
+
+    for gwr in game_win_records {
+        match match_type {
+            MatchType::Team => {
+                if gwr.winner_team == 0 || gwr.loser_team == 0 {
+                    panic!("Team based match type with head to head is unsupported!")
+                }
+
+                if gwr.winner_team == BLUE_TEAM_ID {
+                    blue_points += 1;
+                    blue_roster.extend(gwr.winners.clone());
+                    red_roster.extend(gwr.losers.clone());
+                }
+
+                if gwr.winner_team == RED_TEAM_ID {
+                    red_points += 1;
+                    red_roster.extend(gwr.winners.clone());
+                    blue_roster.extend(gwr.losers.clone());
+                }
+            }
+            MatchType::HeadToHead => {
+                if gwr.winner_team != 0 || gwr.loser_team != 0 {
+                    panic!("Head to head with team based match type is unsupported!")
+                }
+
+                if gwr.winners.len() > 1 || gwr.losers.len() > 1 {
+                    panic!("Head to head with more than 1 member per team is unsupported!");
+                }
+
+                // Set the winner to team red
+                if red_roster.len() == 0 {
+                    red_roster = gwr.winners.clone();
+                    blue_roster = gwr.losers.clone();
+                }
+
+                // Compare the scores based on id
+                if gwr.winners == red_roster {
+                    red_points += 1;
+                }
+
+                if gwr.winners == blue_roster {
+                    blue_points += 1;
+                }
             }
         }
     }
 
-    team_red = team_red.into_iter().unique().collect();
-    team_blue = team_blue.into_iter().unique().collect();
+    red_roster = red_roster.into_iter().unique().collect();
+    blue_roster = blue_roster.into_iter().unique().collect();
 
     let mut winner_team: Option<i32> = None;
+    let mut loser_team: Option<i32> = None;
 
-    if red_pts > blue_pts {
+    if red_points > blue_points {
         winner_team = Some(RED_TEAM_ID);
+        loser_team = Some(BLUE_TEAM_ID);
     }
 
-    if blue_pts > red_pts {
+    if blue_points > red_points {
         winner_team = Some(BLUE_TEAM_ID);
+        loser_team = Some(RED_TEAM_ID);
     }
 
-    let loser_team = match winner_team {
-        None => None,
-        Some(RED_TEAM_ID) => Some(BLUE_TEAM_ID),
-        Some(BLUE_TEAM_ID) => Some(RED_TEAM_ID),
-        _ => panic!("Not implemented")
+    if red_points == blue_points {
+        // The match is a tie
+        winner_team = None;
+        loser_team = None;
+
+        return MatchWinRecord {
+            match_id,
+            loser_roster: blue_roster,
+            winner_roster: red_roster,
+            winner_points: red_points,
+            loser_points: blue_points,
+            winner_team,
+            loser_team,
+            match_type: Some(match_type)
+        }
+    }
+
+    // Identify winning & losing rosters. If tie, default to red.
+    // In a head to head, the winning player is always red.
+
+    let winner_roster = if winner_team == Some(RED_TEAM_ID) {
+        red_roster.clone()
+    } else {
+        blue_roster.clone()
     };
+
+    let loser_roster = if loser_team == Some(RED_TEAM_ID) {
+        red_roster
+    } else {
+        blue_roster
+    };
+
+    let winner_points = if winner_team == Some(RED_TEAM_ID) {
+        red_points
+    } else {
+        blue_points
+    };
+
+    let loser_points = if loser_team == Some(RED_TEAM_ID) {
+        red_points
+    } else {
+        blue_points
+    };
+
+    if match_type == MatchType::HeadToHead {
+        winner_team = Some(0);
+        loser_team = Some(0);
+    }
 
     MatchWinRecord {
         match_id,
-        team_blue,
-        team_red,
-        blue_points: blue_pts,
-        red_points: red_pts,
+        loser_roster,
+        winner_roster,
+        winner_points,
+        loser_points,
         winner_team,
         loser_team,
         match_type: Some(match_type)
     }
+}
 
+/// For each player in the match, generate one [`PlayerMatchStats`] object.
+/// This allows us to identify how each player performed in the match.
+fn player_match_stats(matches: &[Match]) -> Vec<PlayerMatchStats> {
+    let mut res = Vec::new();
+
+    for m in matches {
+        let mut p_ids: Vec<i32> = Vec::new();
+        let mut p_scores: HashMap<i32, Vec<i64>> = HashMap::new();
+        let mut p_misses: HashMap<i32, Vec<i32>> = HashMap::new();
+        let mut p_accs: HashMap<i32, Vec<f64>> = HashMap::new();
+        let mut p_placement: HashMap<i32, Vec<i32>> = HashMap::new();
+        let mut p_gplayed: HashMap<i32, i32> = HashMap::new();
+        let mut p_gwon: HashMap<i32, i32> = HashMap::new();
+        let mut p_glost: HashMap<i32, i32> = HashMap::new();
+
+        let gwrs = calculate_game_win_records(std::slice::from_ref(m));
+        let mwr = match_win_record_from_game_win_records(m.id, &gwrs);
+
+        let mut g_idx = 0;
+        for g in &m.games {
+            let mut s_clone = g.match_scores.clone();
+            s_clone.sort_by(|a, b| b.score.cmp(&a.score));
+
+            let gwr = &gwrs[g_idx];
+
+            let mut p = 1;
+            for s in s_clone {
+                let scores = p_scores.entry(s.player_id).or_insert(Vec::new());
+                let misses = p_misses.entry(s.player_id).or_insert(Vec::new());
+                let accs = p_accs.entry(s.player_id).or_insert(Vec::new());
+                let placement = p_placement.entry(s.player_id).or_insert(Vec::new());
+                let gplayed = p_gplayed.entry(s.player_id).or_insert(0);
+                let gwon = p_gwon.entry(s.player_id).or_insert(0);
+                let glost = p_glost.entry(s.player_id).or_insert(0);
+
+                p_ids.push(s.player_id);
+                scores.push(s.score);
+                misses.push(s.misses);
+                accs.push(s.accuracy_standard);
+                placement.push(p);
+                *gplayed += 1;
+
+                let won = player_won_game(&s.player_id, &gwr);
+                if won {
+                    *gwon += 1;
+                } else {
+                    // Ties are technically losses in this case, we can figure this out later.
+                    *glost += 1;
+                }
+
+                p += 1;
+            }
+
+            g_idx += 1;
+        }
+
+        p_ids = p_ids.into_iter().unique().collect();
+
+        let winning_roster = mwr.winner_roster.clone();
+        let losing_roster = mwr.loser_roster.clone();
+
+        for p_id in p_ids {
+            let won = winning_roster.contains(&p_id);
+            res.push(PlayerMatchStats {
+                player_id: p_id,
+                match_id: m.id,
+                won,
+                average_score: mean_i64(p_scores.entry(p_id).or_insert(Vec::new())) as i32,
+                average_misses: mean_i32(p_misses.entry(p_id).or_insert(Vec::new())),
+                average_accuracy: mean_f64(p_accs.entry(p_id).or_insert(Vec::new())),
+                average_placement: mean_i32(p_placement.entry(p_id).or_insert(Vec::new())),
+                games_won: *p_gwon.entry(p_id).or_insert(0),
+                games_lost: *p_glost.entry(p_id).or_insert(0),
+                games_played: *p_gplayed.entry(p_id).or_insert(0),
+                teammate_ids: if won {
+                    winning_roster.clone().iter().filter(|x| **x != p_id).map(|x| *x).collect()
+                } else {
+                    losing_roster.clone().iter().filter(|x| **x != p_id).map(|x| *x).collect()
+                },
+                opponent_ids: if won {
+                    losing_roster.clone()
+                } else {
+                    winning_roster.clone()
+                },
+            });
+        }
+    }
+
+    res
+}
+
+fn mean_i32(numbers: &[i32]) -> f64 {
+    let sum: i32 = numbers.iter().sum();
+    let count = numbers.len() as f64;
+    sum as f64 / count
+}
+
+fn mean_f64(numbers: &[f64]) -> f64 {
+    let sum: f64 = numbers.iter().sum();
+    let count = numbers.len() as f64;
+    sum / count
+}
+
+fn mean_i64(numbers: &[i64]) -> f64 {
+    let sum: i64 = numbers.iter().sum();
+    let count = numbers.len() as f64;
+    sum as f64 / count
+}
+
+fn player_won_game(player_id: &i32, win_record: &GameWinRecord) -> bool {
+    win_record.winners.contains(player_id)
+}
+
+fn mean(numbers: &[f64]) -> f64 {
+    let sum: f64 = numbers.iter().sum();
+    let count = numbers.len() as f64;
+    sum / count
 }
 
 /// Calculates [`ProcessedMatchData`] for each match provided
@@ -2494,7 +2684,7 @@ mod tests {
     }
 
     #[test]
-    fn test_match_win_records() {
+    fn test_match_win_records_team_vs_simple() {
         // Winners: Team red, ids 2 and 3
         // Losers: Team blue, ids 0 and 1
         let match_data = Match {
@@ -2684,10 +2874,10 @@ mod tests {
 
         let expected_mwr = MatchWinRecord {
             match_id: 12,
-            team_blue: vec![0, 1],
-            team_red: vec![2, 3],
-            blue_points: 1,
-            red_points: 2,
+            loser_roster: vec![0, 1],
+            winner_roster: vec![2, 3],
+            loser_points: 1,
+            winner_points: 2,
             winner_team: Some(RED_TEAM_ID),
             loser_team: Some(BLUE_TEAM_ID),
             match_type: Some(MatchType::Team)
@@ -2727,5 +2917,262 @@ mod tests {
         for i in 0..3 {
             assert_eq!(actual_gwrs[i], expected_gwrs[i]);
         }
+    }
+
+    #[test]
+    fn test_match_win_records_head_to_head_simple() {
+        // Winners: 1
+        // Losers: 0
+        let match_data = Match {
+            id: 12,
+            match_id: 0,
+            name: Some("Foo".to_string()),
+            mode: Mode::Osu,
+            start_time: None,
+            end_time: None,
+            games: vec![
+                // Game 1: Player 1 wins against player 0
+                Game {
+                    id: 0,
+                    ruleset: Mode::Osu,
+                    scoring_type: ScoringType::ScoreV2,
+                    team_type: TeamType::HeadToHead,
+                    mods: 0,
+                    game_id: 0,
+                    start_time: Default::default(),
+                    end_time: None,
+                    beatmap: None,
+                    match_scores: vec![
+                        MatchScore {
+                            player_id: 0,
+                            team: 0,
+                            score: 525000,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 100.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0
+                        },
+                        MatchScore {
+                            player_id: 1,
+                            team: 0,
+                            score: 625000,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 100.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0
+                        },
+                    ],
+                },
+                // Game 2: Player 1 wins against player 0
+                Game {
+                    id: 1,
+                    ruleset: Mode::Osu,
+                    scoring_type: ScoringType::ScoreV2,
+                    team_type: TeamType::HeadToHead,
+                    mods: 0,
+                    game_id: 1,
+                    start_time: Default::default(),
+                    end_time: None,
+                    beatmap: None,
+                    match_scores: vec![
+                        MatchScore {
+                            player_id: 0,
+                            team: 0,
+                            score: 525000,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 100.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0
+                        },
+                        MatchScore {
+                            player_id: 1,
+                            team: 0,
+                            score: 625000,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 100.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0
+                        }
+                    ]
+                },
+                // Game 3: Player 0 wins against player 1
+                Game {
+                    id: 2,
+                    ruleset: Mode::Osu,
+                    scoring_type: ScoringType::ScoreV2,
+                    team_type: TeamType::HeadToHead,
+                    mods: 0,
+                    game_id: 2,
+                    start_time: Default::default(),
+                    end_time: None,
+                    beatmap: None,
+                    match_scores: vec![
+                        MatchScore {
+                            player_id: 0,
+                            team: 0,
+                            score: 625000,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 100.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0
+                        },
+                        MatchScore {
+                            player_id: 1,
+                            team: 0,
+                            score: 525000,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 100.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0
+                        }
+                    ]
+                }
+            ]
+        };
+
+        let expected_mwr = MatchWinRecord {
+            match_id: 12,
+            loser_roster: vec![0],
+            winner_roster: vec![1],
+            loser_points: 1,
+            winner_points: 2,
+            winner_team: Some(0),
+            loser_team: Some(0),
+            match_type: Some(MatchType::HeadToHead)
+        };
+
+        let (mwr, _) = calculate_match_win_records(&vec![match_data]);
+
+        assert_eq!(mwr.len(), 1);
+        assert_eq!(mwr[0], expected_mwr);
+    }
+
+    #[test]
+    fn test_match_win_records_head_to_head_tie() {
+        // Winners: 1
+        // Losers: 0
+
+        // Winner will earn 1 point and loser will earn 1 point across two games
+        // This can happen if a showmatch isn't detected, or warmups get included
+        // and the game results in a tie.
+
+        let match_data = Match {
+            id: 12,
+            match_id: 0,
+            name: Some("Foo".to_string()),
+            mode: Mode::Osu,
+            start_time: None,
+            end_time: None,
+            games: vec![
+                // Game 1: Player 0 wins
+                Game {
+                    id: 0,
+                    ruleset: Mode::Osu,
+                    scoring_type: ScoringType::ScoreV2,
+                    team_type: TeamType::HeadToHead,
+                    mods: 0,
+                    game_id: 0,
+                    start_time: Default::default(),
+                    end_time: None,
+                    beatmap: None,
+                    match_scores: vec![
+                        MatchScore {
+                            player_id: 0,
+                            team: 0,
+                            score: 525001,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 100.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0
+                        },
+                        MatchScore {
+                            player_id: 1,
+                            team: 0,
+                            score: 525000,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 100.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0
+                        },
+                    ],
+                },
+                // Game 2: Player 1 wins
+                Game {
+                    id: 1,
+                    ruleset: Mode::Osu,
+                    scoring_type: ScoringType::ScoreV2,
+                    team_type: TeamType::HeadToHead,
+                    mods: 0,
+                    game_id: 1,
+                    start_time: Default::default(),
+                    end_time: None,
+                    beatmap: None,
+                    match_scores: vec![
+                        MatchScore {
+                            player_id: 0,
+                            team: 0,
+                            score: 525000,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 100.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0
+                        },
+                        MatchScore {
+                            player_id: 1,
+                            team: 0,
+                            score: 525001,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 100.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0
+                        },
+                    ]
+                },
+           ]
+        };
+
+        let expected_mwr = MatchWinRecord {
+            match_id: 12,
+            loser_roster: vec![0],
+            winner_roster: vec![1],
+            loser_points: 1,
+            winner_points: 1,
+            winner_team: None,
+            loser_team: None,
+            match_type: Some(MatchType::HeadToHead)
+        };
+
+        let (actual_mwr, actual_gwrs) = calculate_match_win_records(&vec![match_data]);
+
+        assert_eq!(actual_mwr.len(), 1);
+        assert_eq!(actual_gwrs.len(), 2);
+
+        // Assert all is equal besides the roster (order does not matter in a tie)
+        assert_eq!(actual_mwr[0].match_id, expected_mwr.match_id);
+        assert_eq!(actual_mwr[0].loser_points, expected_mwr.loser_points);
+        assert_eq!(actual_mwr[0].winner_points, expected_mwr.winner_points);
+        assert_eq!(actual_mwr[0].winner_team, expected_mwr.winner_team);
+        assert_eq!(actual_mwr[0].loser_team, expected_mwr.loser_team);
+        assert_eq!(actual_mwr[0].match_type, expected_mwr.match_type);
     }
 }

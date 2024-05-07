@@ -101,10 +101,10 @@ pub struct GameWinRecord {
 #[serde(rename_all = "camelCase")]
 pub struct MatchWinRecord {
     pub match_id: i32,
-    pub team_blue: Vec<i32>,
-    pub team_red: Vec<i32>,
-    pub blue_points: i32,
-    pub red_points: i32,
+    pub loser_roster: Vec<i32>,
+    pub winner_roster: Vec<i32>,
+    pub loser_points: i32,
+    pub winner_points: i32,
     pub winner_team: Option<i32>,
     pub loser_team: Option<i32>,
     pub match_type: Option<MatchType>
