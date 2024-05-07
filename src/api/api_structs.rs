@@ -97,7 +97,7 @@ pub struct GameWinRecord {
     pub loser_team: i32
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct MatchWinRecord {
     pub match_id: i32,

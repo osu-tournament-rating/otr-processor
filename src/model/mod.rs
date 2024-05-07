@@ -393,7 +393,7 @@ pub fn calculate_ratings(
 
     let (mut match_data, adj) = calculate_processed_match_data(&copied_ratings, matches, model);
     let match_info = calculate_post_match_info(&mut copied_ratings, &mut match_data);
-    let (match_wrs, game_wrs) = calcualte_match_win_records(&matches);
+    let (match_wrs, game_wrs) = calculate_match_win_records(&matches);
 
     RatingCalculationResult {
         base_ratings: copied_ratings,
@@ -418,7 +418,7 @@ fn calculate_game_win_records(matches: &[Match]) -> Vec<GameWinRecord> {
     res
 }
 
-fn calcualte_match_win_records(matches: &[Match]) -> (Vec<MatchWinRecord>, Vec<GameWinRecord>) {
+fn calculate_match_win_records(matches: &[Match]) -> (Vec<MatchWinRecord>, Vec<GameWinRecord>) {
     let mut mwrs = Vec::new();
     let mut gwrs_final = Vec::new();
 
@@ -1047,11 +1047,11 @@ mod tests {
         },
         utils::test_utils
     };
+    use crate::api::api_structs::MatchWinRecord;
+    use crate::model::constants::{BLUE_TEAM_ID, RED_TEAM_ID};
+    use crate::model::structures::match_type::MatchType;
 
-    use super::{
-        calculate_global_ranks, calculate_player_adjustments, calculate_processed_match_data, create_initial_ratings,
-        create_model, game_win_record, hash_country_mappings
-    };
+    use super::{calculate_match_win_records, calculate_global_ranks, calculate_player_adjustments, calculate_processed_match_data, create_initial_ratings, create_model, game_win_record, hash_country_mappings};
 
     fn match_from_json(json: &str) -> Match {
         serde_json::from_str(json).unwrap()
@@ -2485,5 +2485,241 @@ mod tests {
         let result = game_win_record(&game);
 
         assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_match_win_records() {
+        // Winners: Team red, ids 2 and 3
+        // Losers: Team blue, ids 0 and 1
+        let match_data = Match {
+            id: 12,
+            match_id: 0,
+            name: Some("Foo".to_string()),
+            mode: Mode::Osu,
+            start_time: None,
+            end_time: None,
+            games: vec![
+                // Game 1: Red wins against blue
+                Game {
+                    id: 0,
+                    ruleset: Mode::Osu,
+                    scoring_type: ScoringType::ScoreV2,
+                    team_type: TeamType::TeamVs,
+                    mods: 0,
+                    game_id: 0,
+                    start_time: Default::default(),
+                    end_time: None,
+                    beatmap: None,
+                    match_scores: vec![
+                        MatchScore {
+                            player_id: 0,
+                            team: BLUE_TEAM_ID,
+                            score: 525000,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 100.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0
+                        },
+                        MatchScore {
+                            player_id: 1,
+                            team: BLUE_TEAM_ID,
+                            score: 525000,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 100.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0
+                        },
+                        MatchScore {
+                            player_id: 2,
+                            team: RED_TEAM_ID,
+                            score: 525000,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 100.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0
+                        },
+                        MatchScore {
+                            player_id: 3,
+                            team: RED_TEAM_ID,
+                            score: 625000,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 100.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0
+                        },
+                    ],
+                },
+                // Game 2: Red wins against blue
+                Game {
+                    id: 1,
+                    ruleset: Mode::Osu,
+                    scoring_type: ScoringType::ScoreV2,
+                    team_type: TeamType::TeamVs,
+                    mods: 0,
+                    game_id: 1,
+                    start_time: Default::default(),
+                    end_time: None,
+                    beatmap: None,
+                    match_scores: vec![
+                        MatchScore {
+                            player_id: 0,
+                            team: BLUE_TEAM_ID,
+                            score: 525000,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 100.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0
+                        },
+                        MatchScore {
+                            player_id: 1,
+                            team: BLUE_TEAM_ID,
+                            score: 525000,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 100.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0
+                        },
+                        MatchScore {
+                            player_id: 2,
+                            team: RED_TEAM_ID,
+                            score: 525000,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 100.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0
+                        },
+                        MatchScore {
+                            player_id: 3,
+                            team: RED_TEAM_ID,
+                            score: 625000,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 100.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0
+                        },
+                    ],
+                },
+                // Game 3: Blue wins against red
+                Game {
+                    id: 2,
+                    ruleset: Mode::Osu,
+                    scoring_type: ScoringType::ScoreV2,
+                    team_type: TeamType::TeamVs,
+                    mods: 0,
+                    game_id: 2,
+                    start_time: Default::default(),
+                    end_time: None,
+                    beatmap: None,
+                    match_scores: vec![
+                        MatchScore {
+                            player_id: 0,
+                            team: BLUE_TEAM_ID,
+                            score: 625000,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 100.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0
+                        },
+                        MatchScore {
+                            player_id: 1,
+                            team: BLUE_TEAM_ID,
+                            score: 625000,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 100.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0
+                        },
+                        MatchScore {
+                            player_id: 2,
+                            team: RED_TEAM_ID,
+                            score: 525000,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 100.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0
+                        },
+                        MatchScore {
+                            player_id: 3,
+                            team: RED_TEAM_ID,
+                            score: 525000,
+                            enabled_mods: None,
+                            misses: 0,
+                            accuracy_standard: 100.0,
+                            accuracy_taiko: 0.0,
+                            accuracy_catch: 0.0,
+                            accuracy_mania: 0.0
+                        },
+                    ],
+                }
+            ],
+        };
+
+        let expected_mwr = MatchWinRecord {
+            match_id: 12,
+            team_blue: vec![0, 1],
+            team_red: vec![2, 3],
+            blue_points: 1,
+            red_points: 2,
+            winner_team: Some(RED_TEAM_ID),
+            loser_team: Some(BLUE_TEAM_ID),
+            match_type: Some(MatchType::Team)
+        };
+
+        let expected_gwrs = vec![
+            GameWinRecord {
+                game_id: 0,
+                winners: vec![2, 3],
+                losers: vec![0, 1],
+                winner_team: RED_TEAM_ID,
+                loser_team: BLUE_TEAM_ID
+            },
+            GameWinRecord {
+                game_id: 1,
+                winners: vec![2, 3],
+                losers: vec![0, 1],
+                winner_team: RED_TEAM_ID,
+                loser_team: BLUE_TEAM_ID
+            },
+            GameWinRecord {
+                game_id: 2,
+                winners: vec![0, 1],
+                losers: vec![2, 3],
+                winner_team: BLUE_TEAM_ID,
+                loser_team: RED_TEAM_ID
+            }
+        ];
+
+        let (actual_mwr, actual_gwrs) = calculate_match_win_records(&vec![match_data]);
+
+        assert_eq!(actual_mwr.len(), 1);
+        assert_eq!(actual_gwrs.len(), 3);
+
+        assert_eq!(actual_mwr[0], expected_mwr);
+
+        for i in 0..3 {
+            assert_eq!(actual_gwrs[i], expected_gwrs[i]);
+        }
     }
 }
