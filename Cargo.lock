@@ -1564,6 +1564,7 @@ dependencies = [
  "dotenv",
  "httpmock",
  "indicatif",
+ "itertools 0.12.1",
  "lazy_static",
  "openskill",
  "rand",

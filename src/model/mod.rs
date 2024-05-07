@@ -5,6 +5,7 @@ use std::{
 };
 
 use chrono::Utc;
+use itertools::Itertools;
 use openskill::{
     model::{model::Model, plackett_luce::PlackettLuce},
     rating::{default_gamma, Rating}
@@ -485,29 +486,34 @@ fn match_win_record_from_game_win_records(match_id: i32, game_win_records: &[Gam
         }
     }
 
-    team_red.dedup();
-    team_blue.dedup();
+    team_red = team_red.into_iter().unique().collect();
+    team_blue = team_blue.into_iter().unique().collect();
 
-    let mut winner_team = RED_TEAM_ID;
+    let mut winner_team: Option<i32> = None;
+
+    if red_pts > blue_pts {
+        winner_team = Some(RED_TEAM_ID);
+    }
 
     if blue_pts > red_pts {
-        winner_team = BLUE_TEAM_ID;
+        winner_team = Some(BLUE_TEAM_ID);
     }
 
     let loser_team = match winner_team {
-        RED_TEAM_ID => BLUE_TEAM_ID,
-        BLUE_TEAM_ID => RED_TEAM_ID,
+        None => None,
+        Some(RED_TEAM_ID) => Some(BLUE_TEAM_ID),
+        Some(BLUE_TEAM_ID) => Some(RED_TEAM_ID),
         _ => panic!("Not implemented")
     };
 
     MatchWinRecord {
         match_id,
-        team_blue: team_blue,
-        team_red: team_red,
+        team_blue,
+        team_red,
         blue_points: blue_pts,
         red_points: red_pts,
-        winner_team: Some(winner_team),
-        loser_team: Some(loser_team),
+        winner_team,
+        loser_team,
         match_type: Some(match_type)
     }
 
