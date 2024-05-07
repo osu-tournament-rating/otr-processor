@@ -7,10 +7,10 @@ use otr_processor::{
 async fn main() {
     dotenv::dotenv().unwrap();
 
-    println!("Gettings otr client");
+    println!("Getting otr client");
     let api = api::OtrApiClient::new_from_env().await.unwrap();
 
-    println!("Gettings match id's");
+    println!("Gettings match ids");
     let match_ids = api
         .get_match_ids(None)
         .await

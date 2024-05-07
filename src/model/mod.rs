@@ -2363,6 +2363,7 @@ mod tests {
         }
     }
 
+    #[test]
     fn test_game_win_record_team_vs() {
         let game = Game {
             id: 14,
@@ -2435,6 +2436,7 @@ mod tests {
         assert_eq!(result, expected);
     }
 
+    #[test]
     fn test_game_win_record_1v1() {
         let game = Game {
             id: 14,
@@ -2476,8 +2478,8 @@ mod tests {
             game_id: 14,
             winners: vec![1],
             losers: vec![0],
-            winner_team: 2,
-            loser_team: 1
+            winner_team: 0,
+            loser_team: 0
         };
 
         let result = game_win_record(&game);
