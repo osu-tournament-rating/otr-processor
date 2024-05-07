@@ -952,15 +952,6 @@ pub fn calculate_processed_match_data(
     }
     bar.finish();
 
-    for i in matches_stats.iter() {
-        for j in &i.players_stats {
-            let (id, mode, mu, sigma) = (j.player_id, i.mode, j.new_rating.mu, j.new_rating.sigma);
-            if let Some(mut decay_list) = decay_tracker.decay(id, mode, mu, sigma, Utc::now().fixed_offset()) {
-                decays.append(&mut decay_list)
-            }
-        }
-    }
-
     (matches_stats, decays)
 }
 
