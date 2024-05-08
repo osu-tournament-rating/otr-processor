@@ -59,11 +59,11 @@ async fn main() {
 
     // Print top 100 players
     result
-        .base_ratings
+        .player_ratings
         .sort_by(|a, b| b.rating.mu.partial_cmp(&a.rating.mu).unwrap());
 
     println!("top 100");
-    for (i, player) in result.base_ratings.iter().take(100).enumerate() {
+    for (i, player) in result.player_ratings.iter().take(100).enumerate() {
         println!(
             "{}: {} - {} (mode: {:?})",
             i + 1,
@@ -73,10 +73,14 @@ async fn main() {
         );
     }
 
+    println!("{:?}", result.player_ratings.first());
+    println!("{:?}", result.base_stats.first());
+    println!("{:?}", result.rating_stats.first());
+    println!("{:?}", result.adjustments.first());
+    println!("{:?}", result.processed_data.first());
     println!("{:?}", result.game_win_records.first());
     println!("{:?}", result.match_win_records.first());
-    println!(
-        "Total object size: {:?}",
-        std::mem::size_of_val(&result.game_win_records)
-    );
+    println!("{:?}", result.player_match_stats.first());
+
+    println!(":steamhappy:")
 }

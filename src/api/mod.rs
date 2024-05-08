@@ -314,13 +314,6 @@ impl OtrApiClient {
 
         Ok(data)
     }
-    /// Post rating adjustments
-    pub async fn post_adjustments(&self, adjustments: &[RatingAdjustment]) -> Result<(), Error> {
-        let link = "/v1/stats/ratingadjustments";
-
-        self.make_request_with_body::<(), &[RatingAdjustment]>(Method::POST, link, Some(adjustments))
-            .await
-    }
 
     /// Get list of match id mappings
     /// otr_match_id <-> osu_match_id
@@ -342,6 +335,21 @@ impl OtrApiClient {
         let link = "/v1/players/country-mapping";
 
         self.make_request(Method::GET, link).await
+    }
+
+    /// Post rating adjustments
+    pub async fn post_adjustments(&self, adjustments: &[RatingAdjustment]) -> Result<(), Error> {
+        let link = "/v1/stats/ratingadjustments";
+
+        self.make_request_with_body::<(), &[RatingAdjustment]>(Method::POST, link, Some(adjustments))
+            .await
+    }
+
+    /// Delete all stats
+    pub async fn delete_all_stats(&self) -> Result<(), Error> {
+        let link = "/v1/stats";
+
+        self.make_request::<()>(Method::DELETE, link).await
     }
 }
 
