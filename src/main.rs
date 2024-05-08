@@ -2,6 +2,7 @@ use otr_processor::{
     api,
     model::{self, hash_country_mappings, structures::processing::RatingCalculationResult}
 };
+use otr_processor::api::OtrApiClient;
 
 #[tokio::main]
 async fn main() {
@@ -55,32 +56,23 @@ async fn main() {
         }
     }
 
-    let mut result = model::calculate_ratings(ratings, &matches, &plackett_luce);
-
-    // Print top 100 players
-    result
-        .player_ratings
-        .sort_by(|a, b| b.rating.mu.partial_cmp(&a.rating.mu).unwrap());
-
-    println!("top 100");
-    for (i, player) in result.player_ratings.iter().take(100).enumerate() {
-        println!(
-            "{}: {} - {} (mode: {:?})",
-            i + 1,
-            player.player_id,
-            player.rating,
-            player.mode
-        );
-    }
-
-    println!("{:?}", result.player_ratings.first());
-    println!("{:?}", result.base_stats.first());
-    println!("{:?}", result.rating_stats.first());
-    println!("{:?}", result.adjustments.first());
-    println!("{:?}", result.processed_data.first());
-    println!("{:?}", result.game_win_records.first());
-    println!("{:?}", result.match_win_records.first());
-    println!("{:?}", result.player_match_stats.first());
+    let result = model::calculate_ratings(ratings, &matches, &plackett_luce);
+    upload_stats(&result).await;
 
     println!(":steamhappy:")
+}
+
+async fn upload_stats(result: &RatingCalculationResult) {
+    let client = OtrApiClient::new_from_env().await.unwrap();
+
+    // Delete stats
+    client.delete_all_stats().await.unwrap();
+
+    // Post all stats
+    client.post_base_stats(&result.base_stats).await.unwrap();
+    client.post_adjustments(&result.adjustments).await.unwrap();
+    client.post_player_match_stats(&result.player_match_stats).await.unwrap();
+    client.post_match_rating_stats(&result.rating_stats).await.unwrap();
+    client.post_game_win_records(&result.game_win_records).await.unwrap();
+    client.post_match_win_records(&result.match_win_records).await.unwrap();
 }

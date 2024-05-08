@@ -107,7 +107,7 @@ pub struct MatchWinRecord {
     pub winner_points: i32,
     pub winner_team: Option<i32>,
     pub loser_team: Option<i32>,
-    pub match_type: Option<MatchType>
+    pub match_type: Option<i32>
 }
 
 #[derive(Debug, Serialize, Deserialize)]

@@ -15,6 +15,7 @@ use tokio::sync::{
     oneshot::{Receiver, Sender},
     RwLock
 };
+use crate::api::api_structs::{BaseStats, GameWinRecord, MatchRatingStats, MatchWinRecord, PlayerMatchStats};
 
 /// A loop that automatically refreshes token
 pub async fn refresh_token_loop(api: Arc<OtrApiBody>) {
@@ -253,6 +254,7 @@ impl OtrApiClient {
         let mut request = match method {
             Method::GET => self.body.client.get(request_link),
             Method::POST => self.body.client.post(request_link),
+            Method::DELETE => self.body.client.delete(request_link),
             _ => unimplemented!()
         };
 
@@ -337,12 +339,94 @@ impl OtrApiClient {
         self.make_request(Method::GET, link).await
     }
 
-    /// Post rating adjustments
+    /// Post RatingAdjustments
     pub async fn post_adjustments(&self, adjustments: &[RatingAdjustment]) -> Result<(), Error> {
         let link = "/v1/stats/ratingadjustments";
 
-        self.make_request_with_body::<(), &[RatingAdjustment]>(Method::POST, link, Some(adjustments))
-            .await
+        println!("Posting rating adjustments...");
+        let bar = progress_bar(adjustments.len() as u64);
+
+        let body = adjustments.chunks(5000);
+        Ok(for chunk in body {
+            self.make_request_with_body::<(), &[RatingAdjustment]>(Method::POST, link, Some(chunk))
+                .await?;
+            bar.inc(chunk.len() as u64);
+        })
+    }
+
+    /// Post PlayerMatchStats
+    pub async fn post_player_match_stats(&self, player_match_stats: &[PlayerMatchStats]) -> Result<(), Error> {
+        let link = "/v1/stats/matchstats";
+
+        println!("Posting player match stats...");
+        let bar = progress_bar(player_match_stats.len() as u64);
+
+        let body = player_match_stats.chunks(5000);
+        Ok(for chunk in body {
+            self.make_request_with_body::<(), &[PlayerMatchStats]>(Method::POST, link, Some(chunk))
+                .await?;
+            bar.inc(chunk.len() as u64);
+        })
+    }
+
+    /// Post MatchRatingStats
+    pub async fn post_match_rating_stats(&self, match_rating_stats: &[MatchRatingStats]) -> Result<(), Error> {
+        let link = "/v1/stats/ratingstats";
+
+        println!("Posting match rating stats...");
+        let bar = progress_bar(match_rating_stats.len() as u64);
+
+        let body = match_rating_stats.chunks(5000);
+        Ok(for chunk in body {
+            self.make_request_with_body::<(), &[MatchRatingStats]>(Method::POST, link, Some(chunk))
+                .await?;
+            bar.inc(chunk.len() as u64);
+        })
+    }
+
+    /// Post BaseStats
+    pub async fn post_base_stats(&self, base_stats: &[BaseStats]) -> Result<(), Error> {
+        let link = "/v1/stats/basestats";
+
+        println!("Posting base stats...");
+        let bar = progress_bar(base_stats.len() as u64);
+
+        let body = base_stats.chunks(5000);
+        Ok(for chunk in body {
+            self.make_request_with_body::<(), &[BaseStats]>(Method::POST, link, Some(chunk))
+                .await?;
+            bar.inc(chunk.len() as u64);
+        })
+    }
+
+    /// Post GameWinRecords
+    pub async fn post_game_win_records(&self, game_win_records: &[GameWinRecord]) -> Result<(), Error> {
+        let link = "/v1/stats/gamewinrecords";
+
+        println!("Posting game win records...");
+        let bar = progress_bar(game_win_records.len() as u64);
+
+        let body = game_win_records.chunks(5000);
+        Ok(for chunk in body {
+            self.make_request_with_body::<(), &[GameWinRecord]>(Method::POST, link, Some(chunk))
+                .await?;
+            bar.inc(chunk.len() as u64);
+        })
+    }
+
+    /// Post MatchWinRecords
+    pub async fn post_match_win_records(&self, match_win_records: &[MatchWinRecord]) -> Result<(), Error> {
+        let link = "/v1/stats/matchwinrecords";
+
+        println!("Posting match win records...");
+        let bar = progress_bar(match_win_records.len() as u64);
+
+        let body = match_win_records.chunks(5000);
+        Ok(for chunk in body {
+            self.make_request_with_body::<(), &[MatchWinRecord]>(Method::POST, link, Some(chunk))
+                .await?;
+            bar.inc(chunk.len() as u64);
+        })
     }
 
     /// Delete all stats

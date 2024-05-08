@@ -630,7 +630,7 @@ fn match_win_record_from_game_win_records(match_id: i32, game_win_records: &[Gam
             loser_points: blue_points,
             winner_team,
             loser_team,
-            match_type: Some(match_type)
+            match_type: Some(match_type as i32)
         };
     }
 
@@ -674,7 +674,7 @@ fn match_win_record_from_game_win_records(match_id: i32, game_win_records: &[Gam
         loser_points,
         winner_team,
         loser_team,
-        match_type: Some(match_type)
+        match_type: Some(match_type as i32)
     }
 }
 
@@ -1046,7 +1046,7 @@ pub fn calculate_processed_match_data(
 }
 
 fn calc_percentile(rank: i32, player_count: i32) -> f64 {
-    rank as f64 / player_count as f64
+    (1.0 - ((rank - 1) as f64 / player_count as f64)).abs()
 }
 
 pub fn get_country_rank(
@@ -1437,16 +1437,17 @@ mod tests {
 
     #[test]
     fn test_percentile() {
-        let percentiles = [0.2, 0.4, 0.6, 0.8, 1.0];
+        let percentiles = [1.0, 0.8, 0.6, 0.4, 0.2];
         let ranks = [1, 2, 3, 4, 5];
 
         for i in 0..percentiles.len() {
             let expected_percentile = percentiles[i];
             let rank = ranks[i];
 
-            // 1.0 5
+            // 1.0 = 1
+            // 0.2 = 5
             let calculated_percentile = calc_percentile(rank, percentiles.len() as i32);
-            assert_eq!(calculated_percentile, expected_percentile);
+            assert!(calculated_percentile - expected_percentile < f64::EPSILON);
         }
     }
 
@@ -2979,7 +2980,7 @@ mod tests {
             winner_points: 2,
             winner_team: Some(RED_TEAM_ID),
             loser_team: Some(BLUE_TEAM_ID),
-            match_type: Some(MatchType::Team)
+            match_type: Some(MatchType::Team as i32)
         };
 
         let expected_gwrs = vec![
@@ -3149,7 +3150,7 @@ mod tests {
             winner_points: 2,
             winner_team: Some(0),
             loser_team: Some(0),
-            match_type: Some(MatchType::HeadToHead)
+            match_type: Some(MatchType::HeadToHead as i32)
         };
 
         let (mwr, _) = calculate_match_win_records(&vec![match_data]);
@@ -3258,7 +3259,7 @@ mod tests {
             winner_points: 1,
             winner_team: None,
             loser_team: None,
-            match_type: Some(MatchType::HeadToHead)
+            match_type: Some(MatchType::HeadToHead as i32)
         };
 
         let (actual_mwr, actual_gwrs) = calculate_match_win_records(&vec![match_data]);
