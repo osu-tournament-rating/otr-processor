@@ -1,8 +1,8 @@
 use otr_processor::{
     api,
+    api::OtrApiClient,
     model::{self, hash_country_mappings, structures::processing::RatingCalculationResult}
 };
-use otr_processor::api::OtrApiClient;
 
 #[tokio::main]
 async fn main() {
@@ -71,7 +71,10 @@ async fn upload_stats(result: &RatingCalculationResult) {
     // Post all stats
     client.post_base_stats(&result.base_stats).await.unwrap();
     client.post_adjustments(&result.adjustments).await.unwrap();
-    client.post_player_match_stats(&result.player_match_stats).await.unwrap();
+    client
+        .post_player_match_stats(&result.player_match_stats)
+        .await
+        .unwrap();
     client.post_match_rating_stats(&result.rating_stats).await.unwrap();
     client.post_game_win_records(&result.game_win_records).await.unwrap();
     client.post_match_win_records(&result.match_win_records).await.unwrap();

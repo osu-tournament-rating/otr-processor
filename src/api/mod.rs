@@ -3,7 +3,10 @@ pub mod api_structs;
 use std::{sync::Arc, time::Duration};
 
 use crate::{
-    api::api_structs::{Match, MatchIdMapping, OAuthResponse, Player, PlayerCountryMapping, RatingAdjustment},
+    api::api_structs::{
+        BaseStats, GameWinRecord, Match, MatchIdMapping, MatchRatingStats, MatchWinRecord, OAuthResponse, Player,
+        PlayerCountryMapping, PlayerMatchStats, RatingAdjustment
+    },
     utils::progress_utils::progress_bar
 };
 use reqwest::{
@@ -15,7 +18,6 @@ use tokio::sync::{
     oneshot::{Receiver, Sender},
     RwLock
 };
-use crate::api::api_structs::{BaseStats, GameWinRecord, MatchRatingStats, MatchWinRecord, PlayerMatchStats};
 
 /// A loop that automatically refreshes token
 pub async fn refresh_token_loop(api: Arc<OtrApiBody>) {

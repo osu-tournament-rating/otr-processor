@@ -1,10 +1,11 @@
 use openskill::rating::Rating;
 
 use crate::{
-    api::api_structs::{GameWinRecord, MatchRatingStats, MatchWinRecord, RatingAdjustment},
+    api::api_structs::{
+        BaseStats, GameWinRecord, MatchRatingStats, MatchWinRecord, PlayerMatchStats, RatingAdjustment
+    },
     model::structures::player_rating::PlayerRating
 };
-use crate::api::api_structs::{BaseStats, PlayerMatchStats};
 
 use super::mode::Mode;
 
