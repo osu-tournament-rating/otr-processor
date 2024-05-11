@@ -3,6 +3,7 @@ use std::{
     collections::{HashMap, HashSet},
     ops::Index
 };
+use std::iter::Sum;
 
 use chrono::Utc;
 use itertools::Itertools;
@@ -572,7 +573,7 @@ fn player_match_stats(matches: &[Match]) -> Vec<PlayerMatchStats> {
 
     for m in matches {
         let mut p_ids: Vec<i32> = Vec::new();
-        let mut p_scores: HashMap<i32, Vec<i64>> = HashMap::new();
+        let mut p_scores: HashMap<i32, Vec<i32>> = HashMap::new();
         let mut p_misses: HashMap<i32, Vec<i32>> = HashMap::new();
         let mut p_accs: HashMap<i32, Vec<f64>> = HashMap::new();
         let mut p_placement: HashMap<i32, Vec<i32>> = HashMap::new();
@@ -632,10 +633,10 @@ fn player_match_stats(matches: &[Match]) -> Vec<PlayerMatchStats> {
                 player_id: p_id,
                 match_id: m.id,
                 won,
-                average_score: mean_i64(p_scores.entry(p_id).or_insert(Vec::new())),
-                average_misses: mean_i32(p_misses.entry(p_id).or_insert(Vec::new())),
-                average_accuracy: mean_f64(p_accs.entry(p_id).or_insert(Vec::new())),
-                average_placement: mean_i32(p_placement.entry(p_id).or_insert(Vec::new())),
+                average_score: mean(p_scores.entry(p_id).or_insert(Vec::new())),
+                average_misses: mean(p_misses.entry(p_id).or_insert(Vec::new())),
+                average_accuracy: mean(p_accs.entry(p_id).or_insert(Vec::new())),
+                average_placement: mean(p_placement.entry(p_id).or_insert(Vec::new())),
                 games_won: *p_gwon.entry(p_id).or_insert(0),
                 games_lost: *p_glost.entry(p_id).or_insert(0),
                 games_played: *p_gplayed.entry(p_id).or_insert(0),
@@ -666,32 +667,17 @@ fn player_match_stats(matches: &[Match]) -> Vec<PlayerMatchStats> {
     res
 }
 
-fn mean_i32(numbers: &[i32]) -> f64 {
-    let sum: i32 = numbers.iter().sum();
-    let count = numbers.len() as f64;
-    sum as f64 / count
-}
-
-fn mean_f64(numbers: &[f64]) -> f64 {
-    let sum: f64 = numbers.iter().sum();
-    let count = numbers.len() as f64;
-    sum / count
-}
-
-fn mean_i64(numbers: &[i64]) -> f64 {
-    let sum: i64 = numbers.iter().sum();
-    let count = numbers.len() as f64;
-    sum as f64 / count
+fn mean<T>(numbers: &[T]) -> f64
+    where
+        T: for<'a> Sum<&'a T>, f64: From<T>
+{
+    let sum: T = numbers.iter().sum();
+    let count: f64 = numbers.len() as f64;
+    f64::from(sum) / count
 }
 
 fn player_won_game(player_id: &i32, win_record: &GameWinRecord) -> bool {
     win_record.winners.contains(player_id)
-}
-
-fn mean(numbers: &[f64]) -> f64 {
-    let sum: f64 = numbers.iter().sum();
-    let count = numbers.len() as f64;
-    sum / count
 }
 
 /// Calculates [`ProcessedMatchData`] for each match provided
@@ -1156,8 +1142,8 @@ fn identify_game_winners_losers(game: &Game) -> (Vec<i32>, Vec<i32>, i32, i32) {
             let mut red_players = vec![];
             let mut blue_players = vec![];
 
-            let mut red_scores: Vec<i64> = vec![];
-            let mut blue_scores: Vec<i64> = vec![];
+            let mut red_scores: Vec<i32> = vec![];
+            let mut blue_scores: Vec<i32> = vec![];
 
             for score in &game.match_scores {
                 match score.team {
@@ -1173,8 +1159,8 @@ fn identify_game_winners_losers(game: &Game) -> (Vec<i32>, Vec<i32>, i32, i32) {
                 }
             }
 
-            let red_score: i64 = red_scores.iter().sum();
-            let blue_score: i64 = blue_scores.iter().sum();
+            let red_score: i32 = red_scores.iter().sum();
+            let blue_score: i32 = blue_scores.iter().sum();
 
             if red_score > blue_score {
                 (red_players, blue_players, RED_TEAM_ID, BLUE_TEAM_ID)

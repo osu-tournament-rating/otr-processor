@@ -19,8 +19,8 @@ pub fn apply_mod_multipliers(matches: &mut [Match]) {
             for s in g.match_scores.iter_mut() {
                 if let Some(enabled_mods) = s.enabled_mods {
                     if enabled_mods == 2 {
-                        let mult_score = s.score as f64 * (multipliers.ez as f64);
-                        s.score = mult_score as i64;
+                        let mult_score = s.score as f32 * (multipliers.ez);
+                        s.score = mult_score as i32;
                     }
                 }
             }
@@ -51,7 +51,7 @@ mod tests {
     #[test]
     fn mod_multipliers_applies_ez() {
         let earned_score = 500000;
-        let expected_score = ((earned_score as f64) * 1.75) as i64;
+        let expected_score = ((earned_score as f64) * 1.75) as i32;
 
         let score = MatchScore {
             player_id: 0,
