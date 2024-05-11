@@ -450,8 +450,6 @@ fn match_win_record_from_game_win_records(match_id: i32, game_win_records: &[Gam
     let mut red_points = 0; // Winner of head to head or team red
     let mut blue_points = 0; // Loser of head to head or team blue
 
-    let mut match_type = MatchType::Team;
-
     let mut count_h2h = 0;
     let mut count_teamvs = 0;
 
@@ -463,7 +461,7 @@ fn match_win_record_from_game_win_records(match_id: i32, game_win_records: &[Gam
         }
     }
 
-    match_type = if count_h2h > count_teamvs {
+    let match_type = if count_h2h > count_teamvs {
         MatchType::HeadToHead
     } else {
         MatchType::Team
@@ -498,7 +496,7 @@ fn match_win_record_from_game_win_records(match_id: i32, game_win_records: &[Gam
                 }
 
                 // Set the winner to team red
-                if red_roster.len() == 0 {
+                if red_roster.is_empty() {
                     red_roster = gwr.winners.clone();
                     blue_roster = gwr.losers.clone();
                 }
@@ -518,61 +516,36 @@ fn match_win_record_from_game_win_records(match_id: i32, game_win_records: &[Gam
     red_roster = red_roster.into_iter().unique().collect();
     blue_roster = blue_roster.into_iter().unique().collect();
 
-    let mut winner_team: Option<i32> = None;
-    let mut loser_team: Option<i32> = None;
-
-    if red_points > blue_points {
-        winner_team = Some(RED_TEAM_ID);
-        loser_team = Some(BLUE_TEAM_ID);
-    }
-
-    if blue_points > red_points {
-        winner_team = Some(BLUE_TEAM_ID);
-        loser_team = Some(RED_TEAM_ID);
-    }
-
-    if red_points == blue_points {
-        // The match is a tie
-        winner_team = None;
-        loser_team = None;
-
-        return MatchWinRecord {
-            match_id,
-            loser_roster: blue_roster,
-            winner_roster: red_roster,
-            winner_points: red_points,
-            loser_points: blue_points,
-            winner_team,
-            loser_team,
-            match_type: Some(match_type)
-        };
-    }
+    let (mut winner_team, mut loser_team) = match red_points.cmp(&blue_points) {
+        Ordering::Greater => (Some(RED_TEAM_ID), Some(BLUE_TEAM_ID)),
+        Ordering::Less => (Some(BLUE_TEAM_ID), Some(RED_TEAM_ID)),
+        Ordering::Equal => {
+            return MatchWinRecord {
+                match_id,
+                loser_roster: blue_roster,
+                winner_roster: red_roster,
+                winner_points: red_points,
+                loser_points: blue_points,
+                winner_team: None,
+                loser_team: None,
+                match_type: Some(match_type)
+            };
+        },
+    };
 
     // Identify winning & losing rosters. If tie, default to red.
     // In a head to head, the winning player is always red.
 
-    let winner_roster = if winner_team == Some(RED_TEAM_ID) {
-        red_roster.clone()
-    } else {
-        blue_roster.clone()
+    let (winner_roster, loser_roster) = match (winner_team, loser_team)  {
+        (Some(RED_TEAM_ID), Some(BLUE_TEAM_ID)) => (red_roster, blue_roster),
+        (Some(BLUE_TEAM_ID), Some(RED_TEAM_ID)) => (blue_roster, red_roster),
+        _ => panic!("Winner and loser teams should only contain RED and BLUE team ids") // Safe to panic here because that's obviously programmer mistake
     };
 
-    let loser_roster = if loser_team == Some(RED_TEAM_ID) {
-        red_roster
-    } else {
-        blue_roster
-    };
-
-    let winner_points = if winner_team == Some(RED_TEAM_ID) {
-        red_points
-    } else {
-        blue_points
-    };
-
-    let loser_points = if loser_team == Some(RED_TEAM_ID) {
-        red_points
-    } else {
-        blue_points
+    let (winner_points, loser_points) = match (winner_team, loser_team)  {
+        (Some(RED_TEAM_ID), Some(BLUE_TEAM_ID)) => (red_points, blue_points),
+        (Some(BLUE_TEAM_ID), Some(RED_TEAM_ID)) => (blue_points, red_points),
+        _ => panic!("Winner and loser teams should only contain RED and BLUE team ids") // Safe to panic here because that's obviously programmer mistake
     };
 
     if match_type == MatchType::HeadToHead {
