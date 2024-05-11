@@ -1,7 +1,7 @@
 use openskill::rating::Rating;
 
 use crate::{
-    api::api_structs::{MatchRatingStats, RatingAdjustment},
+    api::api_structs::{GameWinRecord, MatchRatingStats, MatchWinRecord, RatingAdjustment},
     model::structures::player_rating::PlayerRating
 };
 
@@ -14,7 +14,9 @@ pub struct RatingCalculationResult {
     pub base_ratings: Vec<PlayerRating>,
     pub rating_stats: Vec<MatchRatingStats>,
     pub adjustments: Vec<RatingAdjustment>,
-    pub processed_data: Vec<ProcessedMatchData>
+    pub processed_data: Vec<ProcessedMatchData>,
+    pub game_win_records: Vec<GameWinRecord>,
+    pub match_win_records: Vec<MatchWinRecord>
 }
 
 /// User data after one match

@@ -1,4 +1,5 @@
 pub mod match_cost;
+pub mod match_type;
 pub mod mode;
 pub mod player_rating;
 pub mod processing;

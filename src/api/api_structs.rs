@@ -1,7 +1,7 @@
 use chrono::{DateTime, FixedOffset};
 use serde::{Deserialize, Serialize};
 
-use crate::model::structures::{mode::Mode, scoring_type::ScoringType, team_type::TeamType};
+use crate::model::structures::{match_type::MatchType, mode::Mode, scoring_type::ScoringType, team_type::TeamType};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -32,13 +32,13 @@ pub struct RatingAdjustment {
     pub timestamp: DateTime<FixedOffset>
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerMatchStats {
     pub player_id: i32,
     pub match_id: i32,
     pub won: bool,
-    pub average_score: i32,
+    pub average_score: f64,
     pub average_misses: f64,
     pub average_accuracy: f64,
     pub average_placement: f64,
@@ -87,7 +87,7 @@ pub struct BaseStatsPost {
     pub country_rank: i32
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GameWinRecord {
     pub game_id: i32,
@@ -97,17 +97,17 @@ pub struct GameWinRecord {
     pub loser_team: i32
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct MatchWinRecord {
     pub match_id: i32,
-    pub team_blue: Vec<i32>,
-    pub team_red: Vec<i32>,
-    pub blue_points: i32,
-    pub red_points: i32,
+    pub loser_roster: Vec<i32>,
+    pub winner_roster: Vec<i32>,
+    pub loser_points: i32,
+    pub winner_points: i32,
     pub winner_team: Option<i32>,
     pub loser_team: Option<i32>,
-    pub match_type: Option<i32>
+    pub match_type: Option<MatchType>
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -156,7 +156,7 @@ pub struct Game {
 pub struct MatchScore {
     pub player_id: i32,
     pub team: i32,
-    pub score: i64,
+    pub score: i32,
     pub enabled_mods: Option<i32>,
     pub misses: i32,
     pub accuracy_standard: f64,

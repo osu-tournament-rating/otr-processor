@@ -1,16 +1,16 @@
 use otr_processor::{
     api,
-    model::{self, hash_country_mappings}
+    model::{self, hash_country_mappings, structures::processing::RatingCalculationResult}
 };
 
 #[tokio::main]
 async fn main() {
     dotenv::dotenv().unwrap();
 
-    println!("Gettings otr client");
+    println!("Getting otr client");
     let api = api::OtrApiClient::new_from_env().await.unwrap();
 
-    println!("Gettings match id's");
+    println!("Gettings match ids");
     let match_ids = api
         .get_match_ids(None)
         .await
@@ -72,4 +72,11 @@ async fn main() {
             player.mode
         );
     }
+
+    println!("{:?}", result.game_win_records.first());
+    println!("{:?}", result.match_win_records.first());
+    println!(
+        "Total object size: {:?}",
+        std::mem::size_of_val(&result.game_win_records)
+    );
 }
