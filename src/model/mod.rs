@@ -1,9 +1,9 @@
 use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet},
+    iter::Sum,
     ops::Index
 };
-use std::iter::Sum;
 
 use chrono::Utc;
 use itertools::Itertools;
@@ -531,22 +531,22 @@ fn match_win_record_from_game_win_records(match_id: i32, game_win_records: &[Gam
                 loser_team: None,
                 match_type: Some(match_type)
             };
-        },
+        }
     };
 
     // Identify winning & losing rosters. If tie, default to red.
     // In a head to head, the winning player is always red.
 
-    let (winner_roster, loser_roster) = match (winner_team, loser_team)  {
+    let (winner_roster, loser_roster) = match (winner_team, loser_team) {
         (Some(RED_TEAM_ID), Some(BLUE_TEAM_ID)) => (red_roster, blue_roster),
         (Some(BLUE_TEAM_ID), Some(RED_TEAM_ID)) => (blue_roster, red_roster),
-        _ => panic!("Winner and loser teams should only contain RED and BLUE team ids") // Safe to panic here because that's obviously programmer mistake
+        _ => panic!("Winner and loser teams should only contain RED and BLUE team ids") /* Safe to panic here because that's obviously programmer mistake */
     };
 
-    let (winner_points, loser_points) = match (winner_team, loser_team)  {
+    let (winner_points, loser_points) = match (winner_team, loser_team) {
         (Some(RED_TEAM_ID), Some(BLUE_TEAM_ID)) => (red_points, blue_points),
         (Some(BLUE_TEAM_ID), Some(RED_TEAM_ID)) => (blue_points, red_points),
-        _ => panic!("Winner and loser teams should only contain RED and BLUE team ids") // Safe to panic here because that's obviously programmer mistake
+        _ => panic!("Winner and loser teams should only contain RED and BLUE team ids") /* Safe to panic here because that's obviously programmer mistake */
     };
 
     if match_type == MatchType::HeadToHead {
@@ -668,8 +668,9 @@ fn player_match_stats(matches: &[Match]) -> Vec<PlayerMatchStats> {
 }
 
 fn mean<T>(numbers: &[T]) -> f64
-    where
-        T: for<'a> Sum<&'a T>, f64: From<T>
+where
+    T: for<'a> Sum<&'a T>,
+    f64: From<T>
 {
     let sum: T = numbers.iter().sum();
     let count: f64 = numbers.len() as f64;
