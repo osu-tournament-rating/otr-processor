@@ -1,6 +1,7 @@
 use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet},
+    iter::Sum,
     ops::Index,
     thread
 };
@@ -1029,7 +1030,15 @@ pub fn calculate_processed_match_data(
 }
 
 fn calc_percentile(rank: i32, player_count: i32) -> f64 {
-    (1.0 - ((rank - 1) as f64 / player_count as f64)).abs()
+    // Ensure the input values are valid
+    if rank < 1 || player_count < 1 || rank > player_count {
+        panic!("Invalid input: Rank and player count must be positive integers, and rank must be less than or equal to player count.");
+    }
+
+    // Calculate the percentile
+    let percentile = 1.0 - (rank as f64 - 1.0) / (player_count as f64 - 1.0);
+
+    percentile
 }
 
 pub fn get_country_rank(
