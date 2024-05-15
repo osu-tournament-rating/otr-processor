@@ -2043,7 +2043,6 @@ mod tests {
         assert_eq!(processed_match_data.0.len(), match_data.len());
     }
 
-    // TODO: Rework this test
     #[test]
     fn test_multiple_mode_tracking() {
         // Load in OWC 2023 data
@@ -2126,11 +2125,7 @@ mod tests {
 
         let mut combined_initial_ratings = Vec::new();
         combined_initial_ratings.extend(initial_ratings_taiko.clone());
-
-        let mut cloned_ratings = initial_ratings_taiko.clone();
-        cloned_ratings.iter_mut().for_each(|x| x.mode = Mode::Taiko);
-
-        combined_initial_ratings.extend(cloned_ratings);
+        combined_initial_ratings.extend(initial_ratings_std.clone());
 
         // Calculating correct ranking placements after extending
         calculate_global_ranks(&mut combined_initial_ratings, Mode::Osu);
@@ -2149,7 +2144,8 @@ mod tests {
                 .iter()
                 .enumerate()
                 .filter_map(|(i, x)| {
-                    if x.player_id == rating.player_id && (x.match_id == rating.match_id) {
+                    if x.player_id == rating.player_id && (x.match_id == rating.match_id || x.match_id == rating.match_id + id_offset ||
+                        x.match_id == rating.match_id - id_offset) {
                         Some(i)
                     } else {
                         None
