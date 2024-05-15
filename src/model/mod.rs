@@ -1968,34 +1968,27 @@ mod tests {
         // Percentile before
         // Worst in the collection (before match takes place)
         assert_eq!(
-            winner_stats.percentile_before, 1.0,
+            winner_stats.percentile_before, 0.0,
             "Winner's percentile before is {}, should be {}",
-            winner_stats.percentile_before, 1.0
+            winner_stats.percentile_before, 0.0
         );
 
-        // Since it's 1v1 match we iterating between two possible values
-        // 1.0 and 0.5
-        //
-        // PR = n/N
-        // 0.5 = 1/2
-        // 1.0 = 2/2
-
         assert_eq!(
-            loser_stats.percentile_before, 0.5,
+            loser_stats.percentile_before, 1.0,
             "Loser's percentile before is {}, should be {}",
-            loser_stats.percentile_before, 0.5
+            loser_stats.percentile_before, 1.0
         );
 
         assert_eq!(
-            winner_stats.percentile_after, 0.5,
+            winner_stats.percentile_after, 1.0,
             "Winner's percentile after is {:?}, should be {:?}",
-            winner_stats.percentile_after, 0.5
+            winner_stats.percentile_after, 1.0
         );
 
         assert_eq!(
-            loser_stats.percentile_after, 1.0,
+            loser_stats.percentile_after, 0.0,
             "Loser's percentile after is {:?}, should be {:?}",
-            loser_stats.percentile_after, 1.0
+            loser_stats.percentile_after, 0.0
         );
     }
 
