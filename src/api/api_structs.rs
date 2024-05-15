@@ -156,7 +156,7 @@ pub struct Game {
 pub struct MatchScore {
     pub player_id: i32,
     pub team: i32,
-    pub score: i64,
+    pub score: i32,
     pub enabled_mods: Option<i32>,
     pub misses: i32,
     pub accuracy_standard: f64,
