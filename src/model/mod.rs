@@ -582,7 +582,10 @@ fn match_win_record_from_game_win_records(
             }
 
             if winner_team_nums.is_empty() || loser_team_nums.is_empty() {
-                panic!("Winner or loser team nums are empty: {:?} {:?}", match_id, game_win_records);
+                panic!(
+                    "Winner or loser team nums are empty: {:?} {:?}",
+                    match_id, game_win_records
+                );
             }
 
             let winner_team = mode(&winner_team_nums).unwrap();
@@ -614,7 +617,7 @@ fn match_win_record_from_game_win_records(
                 loser_team: Some(loser_team),
                 match_type: Some(MatchType::Team as i32)
             }
-        },
+        }
         false => {
             // Head to head
 
@@ -641,23 +644,19 @@ fn match_win_record_from_game_win_records(
             }
 
             // If tie, use no winner team, else use 0
-            let team = if winner_points == loser_points {
-                None
-            } else {
-                Some(0)
-            };
+            let team = if winner_points == loser_points { None } else { Some(0) };
 
             // Build the rosters
-           MatchWinRecord {
-               match_id,
-               loser_roster: vec![loser_id],
-               winner_roster: vec![winner_id],
-               loser_points,
-               winner_points,
-               winner_team: team,
-               loser_team: team,
-               match_type: Some(MatchType::HeadToHead as i32),
-           }
+            MatchWinRecord {
+                match_id,
+                loser_roster: vec![loser_id],
+                winner_roster: vec![winner_id],
+                loser_points,
+                winner_points,
+                winner_team: team,
+                loser_team: team,
+                match_type: Some(MatchType::HeadToHead as i32)
+            }
         }
     }
 }
