@@ -1571,8 +1571,7 @@ mod tests {
                 &country_mappings_hash,
                 &initial_ratings
             );
-            let expected_percentile_before =
-                super::calc_percentile(expected_global_rank_before, initial_ratings.len());
+            let expected_percentile_before = super::calc_percentile(expected_global_rank_before, initial_ratings.len());
             let expected_global_rank_after =
                 super::get_global_rank(&expected_after_mu, &player_id, &result.player_ratings);
             let expected_country_rank_after = super::get_country_rank(
@@ -2151,8 +2150,11 @@ mod tests {
                 .iter()
                 .enumerate()
                 .filter_map(|(i, x)| {
-                    if x.player_id == rating.player_id && (x.match_id == rating.match_id || x.match_id == rating.match_id + id_offset ||
-                        x.match_id == rating.match_id - id_offset) {
+                    if x.player_id == rating.player_id
+                        && (x.match_id == rating.match_id
+                            || x.match_id == rating.match_id + id_offset
+                            || x.match_id == rating.match_id - id_offset)
+                    {
                         Some(i)
                     } else {
                         None

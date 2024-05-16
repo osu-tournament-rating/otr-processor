@@ -445,12 +445,16 @@ mod api_client_tests {
     use serde_json::json;
     use std::time::Duration;
 
-    use crate::api::api_structs::{BaseStats, GameWinRecord, MatchRatingStats, MatchWinRecord, PlayerMatchStats, RatingAdjustment};
+    use crate::api::api_structs::{
+        BaseStats, GameWinRecord, MatchRatingStats, MatchWinRecord, PlayerMatchStats, RatingAdjustment
+    };
     use async_once_cell::OnceCell;
     use chrono::{FixedOffset, Utc};
 
-    use crate::{api::OtrApiClient, model::structures::mode::Mode};
-    use crate::model::structures::match_type::MatchType;
+    use crate::{
+        api::OtrApiClient,
+        model::structures::{match_type::MatchType, mode::Mode}
+    };
 
     static API_INSTANCE: OnceCell<OtrApiClient> = OnceCell::new();
 
@@ -566,7 +570,7 @@ mod api_client_tests {
             games_lost: 3,
             games_played: 6,
             teammate_ids: vec![6666],
-            opponent_ids: vec![334],
+            opponent_ids: vec![334]
         }];
 
         api.post_player_match_stats(&payload)
@@ -598,7 +602,7 @@ mod api_client_tests {
             percentile_change: 0.6,
             average_teammate_rating: Some(1125.4),
             player_id: 440,
-            average_opponent_rating: Some(1420.5),
+            average_opponent_rating: Some(1420.5)
         }];
 
         api.post_match_rating_stats(&payload)
@@ -618,12 +622,10 @@ mod api_client_tests {
             global_rank: 730,
             country_rank: 20,
             percentile: 93.6,
-            match_cost_average: 1.375,
+            match_cost_average: 1.375
         }];
 
-        api.post_base_stats(&payload)
-            .await
-            .expect("Failed to POST base stats");
+        api.post_base_stats(&payload).await.expect("Failed to POST base stats");
     }
 
     #[tokio::test]
@@ -635,14 +637,14 @@ mod api_client_tests {
             winners: vec![440],
             losers: vec![6666],
             winner_team: 1,
-            loser_team: 2,
+            loser_team: 2
         }];
 
         api.post_game_win_records(&payload)
             .await
             .expect("Failed to POST game win records");
     }
-    
+
     #[tokio::test]
     async fn test_api_client_post_match_win_records() {
         let api = get_api().await;
@@ -655,7 +657,7 @@ mod api_client_tests {
             winner_points: 6,
             winner_team: Some(2),
             loser_team: Some(1),
-            match_type: Some(1), // TeamVS
+            match_type: Some(1) // TeamVS
         }];
 
         api.post_match_win_records(&payload)
