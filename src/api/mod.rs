@@ -445,11 +445,12 @@ mod api_client_tests {
     use serde_json::json;
     use std::time::Duration;
 
-    use crate::api::api_structs::{MatchRatingStats, PlayerMatchStats, RatingAdjustment};
+    use crate::api::api_structs::{BaseStats, GameWinRecord, MatchRatingStats, MatchWinRecord, PlayerMatchStats, RatingAdjustment};
     use async_once_cell::OnceCell;
     use chrono::{FixedOffset, Utc};
 
     use crate::{api::OtrApiClient, model::structures::mode::Mode};
+    use crate::model::structures::match_type::MatchType;
 
     static API_INSTANCE: OnceCell<OtrApiClient> = OnceCell::new();
 
@@ -604,6 +605,71 @@ mod api_client_tests {
             .await
             .expect("Failed to POST match rating stats");
     }
+
+    #[tokio::test]
+    async fn test_api_client_post_base_stats() {
+        let api = get_api().await;
+
+        let payload = vec![BaseStats {
+            player_id: 440,
+            mode: Mode::Osu,
+            rating: 1302.7,
+            volatility: 98.2,
+            global_rank: 730,
+            country_rank: 20,
+            percentile: 93.6,
+            match_cost_average: 1.375,
+        }];
+
+        api.post_base_stats(&payload)
+            .await
+            .expect("Failed to POST base stats");
+    }
+
+    #[tokio::test]
+    async fn test_api_client_post_game_win_records() {
+        let api = get_api().await;
+
+        let payload = vec![GameWinRecord {
+            game_id: 450905,
+            winners: vec![440],
+            losers: vec![6666],
+            winner_team: 1,
+            loser_team: 2,
+        }];
+
+        api.post_game_win_records(&payload)
+            .await
+            .expect("Failed to POST game win records");
+    }
+    
+    #[tokio::test]
+    async fn test_api_client_post_match_win_records() {
+        let api = get_api().await;
+
+        let payload = vec![MatchWinRecord {
+            match_id: 57243,
+            loser_roster: vec![440],
+            winner_roster: vec![6666],
+            loser_points: 0,
+            winner_points: 6,
+            winner_team: Some(2),
+            loser_team: Some(1),
+            match_type: Some(1), // TeamVS
+        }];
+
+        api.post_match_win_records(&payload)
+            .await
+            .expect("Failed to POST match win records");
+    }
+
+    // DANGEROUS
+    // #[tokio::test]
+    // async fn test_api_client_delete_all_stats() {
+    //     let api = get_api().await;
+    //
+    //     api.delete_all_stats().await.expect("Failed to DELETE all stats");
+    // }
 
     // Manually refresh token three times
     #[tokio::test]
