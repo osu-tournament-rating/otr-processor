@@ -30,20 +30,10 @@ async fn main() {
         .await
         .expect("Country mappings must be identified");
 
-    // let worst = players.iter().find(|x| x.id == 6666).unwrap();
-
     // Model
     let plackett_luce = model::create_model();
     let country_hash = hash_country_mappings(&country_mappings);
     let mut ratings = model::create_initial_ratings(&matches, &players);
-
-    // let mut counter = HashMap::new();
-    //
-    // for rating in &ratings {
-    // counter.entry(rating.rating.mu as u32).and_modify(|x| *x += 1).or_insert(1);
-    // }
-
-    // dbg!(counter);
 
     // Filling PlayerRating with their country
     for player_rating in ratings.iter_mut() {
