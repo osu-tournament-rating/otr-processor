@@ -51,7 +51,7 @@ async fn main() {
             if player_rating.country.is_empty() {
                 player_rating.country.push_str(country)
             } else {
-                panic!("WTF!@#$!@");
+                panic!("Player has no country");
             }
         }
     }
@@ -59,7 +59,7 @@ async fn main() {
     let result = model::calculate_ratings(ratings, &matches, &plackett_luce);
     upload_stats(&result).await;
 
-    println!(":steamhappy:")
+    println!("Processing complete!")
 }
 
 async fn upload_stats(result: &RatingCalculationResult) {
