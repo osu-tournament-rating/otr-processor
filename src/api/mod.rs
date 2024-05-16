@@ -445,7 +445,7 @@ mod api_client_tests {
     use serde_json::json;
     use std::time::Duration;
 
-    use crate::api::api_structs::{PlayerMatchStats, RatingAdjustment};
+    use crate::api::api_structs::{MatchRatingStats, PlayerMatchStats, RatingAdjustment};
     use async_once_cell::OnceCell;
     use chrono::{FixedOffset, Utc};
 
@@ -571,6 +571,38 @@ mod api_client_tests {
         api.post_player_match_stats(&payload)
             .await
             .expect("Failed to POST player match stats");
+    }
+
+    #[tokio::test]
+    async fn test_api_client_post_match_rating_stats() {
+        let api = get_api().await;
+
+        let payload = vec![MatchRatingStats {
+            match_id: 1,
+            match_cost: 1.754,
+            rating_before: 1270.3,
+            rating_after: 1302.7,
+            rating_change: 1302.7 - 1270.3,
+            volatility_before: 104.23,
+            volatility_after: 98.2,
+            volatility_change: 104.23 - 98.2,
+            global_rank_before: 743,
+            global_rank_after: 730,
+            global_rank_change: -13,
+            country_rank_before: 30,
+            country_rank_after: 20,
+            country_rank_change: -10,
+            percentile_before: 93.0,
+            percentile_after: 93.6,
+            percentile_change: 0.6,
+            average_teammate_rating: Some(1125.4),
+            player_id: 440,
+            average_opponent_rating: Some(1420.5),
+        }];
+
+        api.post_match_rating_stats(&payload)
+            .await
+            .expect("Failed to POST match rating stats");
     }
 
     // Manually refresh token three times
