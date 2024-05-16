@@ -480,12 +480,19 @@ fn calculate_base_stats(
             continue;
         }
 
+        let match_cost_average = match_costs.get(&(r.player_id, r.mode)).unwrap_or(&vec![0.0]).mean();
+
+        // if match_cost_average.is_nan() || match_cost_average == 0.0 {
+        //     // TODO: Player has a default rating with no matches played.
+        //     // TODO: Either break the loop here or stick with default value.
+        // }
+
         // Generate the final match costs list
         base_stats.insert(
             (r.player_id, r.mode),
             BaseStats {
                 player_id: r.player_id,
-                match_cost_average: match_costs.get(&(r.player_id, r.mode)).unwrap().mean(),
+                match_cost_average,
                 rating: r.rating.mu,
                 volatility: r.rating.sigma,
                 mode: r.mode,
