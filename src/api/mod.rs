@@ -445,7 +445,7 @@ mod api_client_tests {
     use serde_json::json;
     use std::time::Duration;
 
-    use crate::api::api_structs::RatingAdjustment;
+    use crate::api::api_structs::{PlayerMatchStats, RatingAdjustment};
     use async_once_cell::OnceCell;
     use chrono::{FixedOffset, Utc};
 
@@ -504,6 +504,29 @@ mod api_client_tests {
 
         assert!(!result.is_empty())
     }
+
+    #[tokio::test]
+    async fn test_api_client_get_matches() {
+        let api = get_api().await;
+
+        let match_ids = api.get_match_ids(Some(10)).await.unwrap();
+
+        assert_eq!(match_ids.len(), 10);
+
+        let result = api.get_matches(&match_ids, 250).await.unwrap();
+
+        assert_eq!(result.len(), match_ids.len())
+    }
+
+    #[tokio::test]
+    async fn test_api_get_match_id_mapping() {
+        let api = get_api().await;
+
+        let result = api.get_match_id_mapping().await.unwrap();
+
+        assert!(!result.is_empty())
+    }
+
     #[tokio::test]
     async fn test_api_client_post_rating_adjustments() {
         let api = get_api().await;
@@ -527,25 +550,27 @@ mod api_client_tests {
     }
 
     #[tokio::test]
-    async fn test_api_client_get_matches() {
+    async fn test_api_client_post_player_match_stats() {
         let api = get_api().await;
 
-        let match_ids = api.get_match_ids(Some(10)).await.unwrap();
+        let payload = vec![PlayerMatchStats {
+            player_id: 440,
+            match_id: 1,
+            won: true,
+            average_score: 502013.15,
+            average_misses: 3.2,
+            average_accuracy: 97.32,
+            average_placement: 2.1,
+            games_won: 5,
+            games_lost: 3,
+            games_played: 6,
+            teammate_ids: vec![6666],
+            opponent_ids: vec![334],
+        }];
 
-        assert_eq!(match_ids.len(), 10);
-
-        let result = api.get_matches(&match_ids, 250).await.unwrap();
-
-        assert_eq!(result.len(), match_ids.len())
-    }
-
-    #[tokio::test]
-    async fn test_api_get_match_id_mapping() {
-        let api = get_api().await;
-
-        let result = api.get_match_id_mapping().await.unwrap();
-
-        assert!(!result.is_empty())
+        api.post_player_match_stats(&payload)
+            .await
+            .expect("Failed to POST player match stats");
     }
 
     // Manually refresh token three times
