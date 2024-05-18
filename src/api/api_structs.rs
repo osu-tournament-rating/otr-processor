@@ -76,15 +76,15 @@ pub struct MatchRatingStats {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct BaseStatsPost {
+pub struct BaseStats {
     pub player_id: i32,
     pub match_cost_average: f64,
     pub rating: f64,
     pub volatility: f64,
-    pub mode: i32,
+    pub mode: Mode,
     pub percentile: f64,
-    pub global_rank: i32,
-    pub country_rank: i32
+    pub global_rank: u32,
+    pub country_rank: u32
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -107,7 +107,7 @@ pub struct MatchWinRecord {
     pub winner_points: i32,
     pub winner_team: Option<i32>,
     pub loser_team: Option<i32>,
-    pub match_type: Option<MatchType>
+    pub match_type: Option<i32>
 }
 
 #[derive(Debug, Serialize, Deserialize)]
