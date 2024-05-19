@@ -15,7 +15,7 @@ impl From<TeamType> for i32 {
             TeamType::HeadToHead => 0,
             TeamType::TagCoop => 1,
             TeamType::TeamVs => 2,
-            TeamType::TagTeamVs => 3,
+            TeamType::TagTeamVs => 3
         }
     }
 }
