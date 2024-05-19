@@ -1,6 +1,6 @@
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-#[derive(Deserialize_repr, Serialize_repr, Debug, Eq, PartialEq)]
+#[derive(Deserialize_repr, Serialize_repr, Debug, Eq, PartialEq, Copy, Clone)]
 #[repr(u8)]
 pub enum TeamType {
     HeadToHead = 0,
