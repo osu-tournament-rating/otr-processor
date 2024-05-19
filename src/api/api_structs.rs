@@ -1,10 +1,9 @@
 use chrono::{DateTime, FixedOffset};
 use serde::{Deserialize, Serialize};
-use serde_repr::Serialize_repr;
 
 use crate::model::structures::{
-    match_type::MatchType, match_verification_status::MatchVerificationStatus, ruleset::Ruleset,
-    scoring_type::ScoringType, team_type::TeamType
+    match_verification_status::MatchVerificationStatus, ruleset::Ruleset, scoring_type::ScoringType,
+    team_type::TeamType
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -85,7 +84,7 @@ pub struct BaseStats {
     pub match_cost_average: f64,
     pub rating: f64,
     pub volatility: f64,
-    pub mode: Mode,
+    pub mode: Ruleset,
     pub percentile: f64,
     pub global_rank: u32,
     pub country_rank: u32

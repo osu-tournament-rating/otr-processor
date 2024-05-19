@@ -2,8 +2,7 @@ use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet},
     iter::Sum,
-    ops::Index,
-    thread
+    ops::Index
 };
 
 use chrono::Utc;
@@ -463,8 +462,7 @@ fn calculate_base_stats(
     // We know that some values are current from player_ratings, others
     // need to be calculated from the stats
 
-    println!("Calculating base stats...");
-    let bar = progress_bar(player_ratings.len() as u64);
+    let bar = progress_bar(player_ratings.len() as u64, "Calculating base stats".to_string());
     for r in player_ratings {
         let cur_count = match r.mode {
             Ruleset::Osu => count_osu,
@@ -520,8 +518,7 @@ fn calculate_game_win_records(matches: &[Match]) -> Vec<GameWinRecord> {
 }
 
 fn calculate_match_win_records(matches: &[Match]) -> (Vec<MatchWinRecord>, Vec<GameWinRecord>) {
-    println!("Calculating match win records...");
-    let bar = progress_bar(matches.len() as u64);
+    let bar = progress_bar(matches.len() as u64, "Calculating match win records".to_string());
     let mut mwrs = Vec::new();
     let mut gwrs_final = Vec::new();
 

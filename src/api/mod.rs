@@ -1,14 +1,5 @@
-pub mod api_structs;
-
 use std::{sync::Arc, time::Duration};
 
-use crate::{
-    api::api_structs::{
-        BaseStats, GameWinRecord, Match, MatchIdMapping, MatchRatingStats, MatchWinRecord, OAuthResponse, Player,
-        PlayerCountryMapping, PlayerMatchStats, RatingAdjustment
-    },
-    utils::progress_utils::{indeterminate_bar, progress_bar}
-};
 use reqwest::{
     header::{AUTHORIZATION, CONTENT_TYPE},
     Client, ClientBuilder, Error, Method
@@ -19,7 +10,17 @@ use tokio::sync::{
     RwLock
 };
 
+use crate::{
+    api::api_structs::{
+        BaseStats, GameWinRecord, MatchRatingStats, MatchWinRecord, OAuthResponse, Player, PlayerCountryMapping,
+        PlayerMatchStats, RatingAdjustment
+    },
+    utils::progress_utils::progress_bar
+};
+
 use self::api_structs::MatchPagedResult;
+
+pub mod api_structs;
 
 /// A loop that automatically refreshes token
 pub async fn refresh_token_loop(api: Arc<OtrApiBody>) {
@@ -311,8 +312,7 @@ impl OtrApiClient {
     pub async fn post_adjustments(&self, adjustments: &[RatingAdjustment]) -> Result<(), Error> {
         let link = "/v1/stats/ratingadjustments";
 
-        println!("Posting rating adjustments...");
-        let bar = progress_bar(adjustments.len() as u64);
+        let bar = progress_bar(adjustments.len() as u64, "Posting rating adjustments".to_string());
 
         let body = adjustments.chunks(5000);
         Ok(for chunk in body {
@@ -326,8 +326,10 @@ impl OtrApiClient {
     pub async fn post_player_match_stats(&self, player_match_stats: &[PlayerMatchStats]) -> Result<(), Error> {
         let link = "/v1/stats/matchstats";
 
-        println!("Posting player match stats...");
-        let bar = progress_bar(player_match_stats.len() as u64);
+        let bar = progress_bar(
+            player_match_stats.len() as u64,
+            "Posting player match stats".to_string()
+        );
 
         let body = player_match_stats.chunks(5000);
         Ok(for chunk in body {
@@ -341,8 +343,10 @@ impl OtrApiClient {
     pub async fn post_match_rating_stats(&self, match_rating_stats: &[MatchRatingStats]) -> Result<(), Error> {
         let link = "/v1/stats/ratingstats";
 
-        println!("Posting match rating stats...");
-        let bar = progress_bar(match_rating_stats.len() as u64);
+        let bar = progress_bar(
+            match_rating_stats.len() as u64,
+            "Posting match rating stats".to_string()
+        );
 
         let body = match_rating_stats.chunks(5000);
         Ok(for chunk in body {
@@ -356,8 +360,7 @@ impl OtrApiClient {
     pub async fn post_base_stats(&self, base_stats: &[BaseStats]) -> Result<(), Error> {
         let link = "/v1/stats/basestats";
 
-        println!("Posting base stats...");
-        let bar = progress_bar(base_stats.len() as u64);
+        let bar = progress_bar(base_stats.len() as u64, "Posting base stats".to_string());
 
         let body = base_stats.chunks(5000);
         Ok(for chunk in body {
@@ -371,8 +374,7 @@ impl OtrApiClient {
     pub async fn post_game_win_records(&self, game_win_records: &[GameWinRecord]) -> Result<(), Error> {
         let link = "/v1/stats/gamewinrecords";
 
-        println!("Posting game win records...");
-        let bar = progress_bar(game_win_records.len() as u64);
+        let bar = progress_bar(game_win_records.len() as u64, "Posting game win records".to_string());
 
         let body = game_win_records.chunks(5000);
         Ok(for chunk in body {
@@ -386,8 +388,7 @@ impl OtrApiClient {
     pub async fn post_match_win_records(&self, match_win_records: &[MatchWinRecord]) -> Result<(), Error> {
         let link = "/v1/stats/matchwinrecords";
 
-        println!("Posting match win records...");
-        let bar = progress_bar(match_win_records.len() as u64);
+        let bar = progress_bar(match_win_records.len() as u64, "Posting match win records".to_string());
 
         let body = match_win_records.chunks(5000);
         Ok(for chunk in body {
@@ -407,18 +408,20 @@ impl OtrApiClient {
 
 #[cfg(test)]
 mod api_client_tests {
-    use httpmock::prelude::*;
-    use serde_json::json;
     use std::time::Duration;
 
-    use crate::api::api_structs::{
-        BaseStats, GameWinRecord, MatchRatingStats, MatchWinRecord, PlayerMatchStats, RatingAdjustment
-    };
     use async_once_cell::OnceCell;
     use chrono::{FixedOffset, Utc};
+    use httpmock::prelude::*;
+    use serde_json::json;
 
     use crate::{
-        api::OtrApiClient,
+        api::{
+            api_structs::{
+                BaseStats, GameWinRecord, MatchRatingStats, MatchWinRecord, PlayerMatchStats, RatingAdjustment
+            },
+            OtrApiClient
+        },
         model::structures::{match_type::MatchType, ruleset::Ruleset}
     };
 

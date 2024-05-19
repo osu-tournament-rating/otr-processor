@@ -1,9 +1,13 @@
 use otr_processor::{
-    api::{self, api_structs::Match, OtrApiClient},
-    model::{self, hash_country_mappings, structures::match_verification_status::MatchVerificationStatus::Verified},
+    api::{api_structs::Match, OtrApiClient},
+    model::{
+        self, hash_country_mappings,
+        structures::{
+            match_verification_status::MatchVerificationStatus::Verified, processing::RatingCalculationResult
+        }
+    },
     utils::progress_utils::indeterminate_bar
 };
-use otr_processor::model::structures::processing::RatingCalculationResult;
 
 #[tokio::main]
 async fn main() {

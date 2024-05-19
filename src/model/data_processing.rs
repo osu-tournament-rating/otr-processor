@@ -37,7 +37,10 @@ mod tests {
         api::api_structs::{Game, Match, MatchScore},
         model::{
             data_processing::{apply_mod_multipliers, get_mod_multipliers},
-            structures::{ruleset::Ruleset, scoring_type::ScoringType, team_type::TeamType}
+            structures::{
+                match_verification_status::MatchVerificationStatus::Verified, ruleset::Ruleset,
+                scoring_type::ScoringType, team_type::TeamType
+            }
         }
     };
 
@@ -83,6 +86,7 @@ mod tests {
             match_id: 12345,
             name: Some("STT3: (Coffee) vs (The voices are back)".to_string()),
             ruleset: Ruleset::Osu,
+            verification_status: Verified,
             start_time: None,
             end_time: None,
             games: vec![game]
