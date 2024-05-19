@@ -82,10 +82,10 @@ async fn get_all_matches() -> Vec<Match> {
             break;
         }
 
-        bar.set_message(format!("[{}] Fetched {} matches from page {}", total, chunk_size, page));
+        bar.set_message(format!("[{}] Fetched {} matches from page {}", total, result.count, page));
 
         bar.inc(1);
-        total += chunk_size;
+        total += result.count as usize;
     }
 
     bar.finish();

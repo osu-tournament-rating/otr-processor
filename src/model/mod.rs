@@ -511,7 +511,11 @@ fn calculate_game_win_records(matches: &[Match]) -> Vec<GameWinRecord> {
     // Iterate over matches and their games, then push the game win records to the result vector
     for m in matches {
         for g in &m.games {
-            res.push(game_win_record(g));
+            let gwr = game_win_record(&g);
+
+            if gwr.is_some() {
+                res.push(gwr.unwrap());
+            }
         }
     }
 
@@ -524,18 +528,45 @@ fn calculate_match_win_records(matches: &[Match]) -> (Vec<MatchWinRecord>, Vec<G
     let mut gwrs_final = Vec::new();
 
     for m in matches {
+        if m.games.len() == 0 {
+            println!("Match {} has no games, skipping when considering MatchWinRecord creation", m.id);
+            continue;
+        }
+
         let mut gwrs = Vec::new();
         let mut team_types = Vec::new();
 
         for g in &m.games {
-            let gwr = game_win_record(&g);
+            let gwr = match game_win_record(&g) {
+                Some(gwr) => gwr,
+                None => {
+                    println!("Game {} has no winners or losers, skipping when considering MatchWinRecord creation", g.id);
+                    continue;
+                }
+            };
+
             gwrs.push(gwr.clone());
             gwrs_final.push(gwr.clone());
             team_types.push(g.team_type.clone())
         }
 
+        if team_types.is_empty() {
+            println!("Expected match {} to have at least 1 TeamType, skipping", m.id);
+            continue;
+        }
+
+        if gwrs.is_empty() {
+            println!("Expected match {} to have at least 1 GameWinRecord, skipping", m.id);
+            continue;
+        }
+
         // Calculate match win record
-        mwrs.push(create_match_win_record(m.id, &gwrs, &team_types));
+        let mwr = create_match_win_record(m.id, &gwrs, &team_types);
+
+        if mwr.is_some() {
+            mwrs.push(mwr.unwrap());
+        }
+
         bar.inc(1);
     }
 
@@ -546,12 +577,16 @@ pub fn create_match_win_record(
     match_id: i32,
     game_win_records: &Vec<GameWinRecord>,
     team_types: &Vec<TeamType>
-) -> MatchWinRecord {
+) -> Option<MatchWinRecord> {
     // Identify common team type
-    let team_type = mode(team_types).unwrap();
+    if team_types.is_empty() {
+        return None;
+    }
+
+    let team_type = mode(team_types);
 
     match team_type {
-        TeamVs => {
+        Some(TeamVs) => {
             // Identify the team that has the most points
             let mut team_red_points = 0;
             let mut team_blue_points = 0;
@@ -588,7 +623,7 @@ pub fn create_match_win_record(
                 }
             }
 
-            MatchWinRecord {
+            Some(MatchWinRecord {
                 match_id,
                 loser_roster: loser_roster.into_iter().collect(),
                 winner_roster: winner_roster.into_iter().collect(),
@@ -596,10 +631,10 @@ pub fn create_match_win_record(
                 winner_points: team_red_points,
                 winner_team: Some(winner_team),
                 loser_team: Some(if winner_team == RED_TEAM_ID { BLUE_TEAM_ID } else { RED_TEAM_ID }),
-                match_type: Some(MatchType::Team)
-            }
+                match_type: Some(MatchType::Team as i32)
+            })
         },
-        TeamType::HeadToHead => {
+        Some(TeamType::HeadToHead) => {
             let mut points = HashMap::new();
 
             for gwr in game_win_records {
@@ -631,7 +666,7 @@ pub fn create_match_win_record(
             let winner_points = points.get(winner).unwrap();
             let loser_points = points.get(loser).unwrap();
 
-            MatchWinRecord {
+            Some(MatchWinRecord {
                 match_id,
                 loser_roster: vec![*loser],
                 winner_roster: vec![*winner],
@@ -639,10 +674,10 @@ pub fn create_match_win_record(
                 winner_points: *winner_points,
                 winner_team: None,
                 loser_team: None,
-                match_type: Some(MatchType::HeadToHead)
-            }
+                match_type: Some(MatchType::HeadToHead as i32)
+            })
         },
-        _ => panic!("Unexpected team type")
+        _ => None
     }
 }
 
@@ -683,18 +718,42 @@ fn player_match_stats(matches: &[Match]) -> Vec<PlayerMatchStats> {
         let mut p_glost: HashMap<i32, i32> = HashMap::new();
 
         let gwrs = calculate_game_win_records(std::slice::from_ref(m));
-        let mwr = create_match_win_record(
+
+        // Convert gwrs into a hashmap of game_id -> GameWinRecord
+        let gwr_hash = gwrs.clone().into_iter().map(|x| (x.game_id, x)).collect::<HashMap<i32, GameWinRecord>>();
+
+        let team_types = &m.games.iter().map(|x| x.team_type).collect::<Vec<TeamType>>();
+
+        if gwrs.is_empty() || team_types.is_empty() {
+            bar.inc(1);
+            continue;
+        }
+
+        let mwr_unsafe = create_match_win_record(
             m.id,
             &gwrs,
-            &m.games.iter().map(|x| x.team_type).collect::<Vec<TeamType>>()
+            team_types
         );
+
+        if mwr_unsafe.is_none() {
+            bar.inc(1);
+            continue;
+        }
+
+        let match_win_record = mwr_unsafe.unwrap();
 
         let mut g_idx = 0;
         for g in &m.games {
             let mut s_clone = g.match_scores.clone();
             s_clone.sort_by(|a, b| b.score.cmp(&a.score));
 
-            let gwr = &gwrs[g_idx];
+            let gwr = match gwr_hash.get(&g.id) {
+                Some(gwr) => gwr,
+                None => {
+                    println!("Game {} has no GameWinRecord, skipping when considering PlayerMatchStats creation", g.id);
+                    continue;
+                }
+            };
 
             let mut p = 1;
             for s in s_clone {
@@ -729,8 +788,8 @@ fn player_match_stats(matches: &[Match]) -> Vec<PlayerMatchStats> {
 
         p_ids = p_ids.into_iter().unique().collect();
 
-        let winning_roster = mwr.winner_roster.clone();
-        let losing_roster = mwr.loser_roster.clone();
+        let winning_roster = match_win_record.winner_roster.clone();
+        let losing_roster = match_win_record.loser_roster.clone();
 
         for p_id in p_ids {
             let won = winning_roster.contains(&p_id);
@@ -1222,22 +1281,32 @@ pub fn match_costs(games: &[Game]) -> Option<Vec<MatchCost>> {
     Some(match_costs)
 }
 
-fn game_win_record(game: &Game) -> GameWinRecord {
+fn game_win_record(game: &Game) -> Option<GameWinRecord> {
     let game_id = game.id;
-    let (winners, losers, winner_team, loser_team) = identify_game_winners_losers(game);
 
-    GameWinRecord {
-        game_id,
-        winners,
-        losers,
-        winner_team,
-        loser_team
+    if game.match_scores.len() < 2 {
+        println!("Game {} has less than 2 scores, skipping", game_id);
+        return None;
+    }
+
+    match identify_game_winners_losers(game) {
+        Some((winners, losers, winner_team, loser_team)) => Some(GameWinRecord {
+            game_id,
+            winners,
+            losers,
+            winner_team,
+            loser_team
+        }),
+        None => {
+            println!("Game {} has no winners or losers, skipping", game_id);
+            return None;
+        }
     }
 }
 
 /// Identifies the winners and losers of a game.
 /// Return format is tuple of (winner ids, loser ids, winner team, loser team)
-fn identify_game_winners_losers(game: &Game) -> (Vec<i32>, Vec<i32>, i32, i32) {
+fn identify_game_winners_losers(game: &Game) -> Option<(Vec<i32>, Vec<i32>, i32, i32)> {
     match game.team_type {
         TeamType::HeadToHead => {
             if game.match_scores.len() != 2 {
@@ -1260,7 +1329,7 @@ fn identify_game_winners_losers(game: &Game) -> (Vec<i32>, Vec<i32>, i32, i32) {
                 losers = vec![score_0.player_id];
             }
 
-            return (winners, losers, 0, 0);
+            return Some((winners, losers, 0, 0));
         }
         TeamType::TeamVs => {
             let mut red_players = vec![];
@@ -1287,12 +1356,12 @@ fn identify_game_winners_losers(game: &Game) -> (Vec<i32>, Vec<i32>, i32, i32) {
             let blue_score: i32 = blue_scores.iter().sum();
 
             if red_score > blue_score {
-                (red_players, blue_players, RED_TEAM_ID, BLUE_TEAM_ID)
+                Some((red_players, blue_players, RED_TEAM_ID, BLUE_TEAM_ID))
             } else {
-                (blue_players, red_players, BLUE_TEAM_ID, RED_TEAM_ID)
+                Some((blue_players, red_players, BLUE_TEAM_ID, RED_TEAM_ID))
             }
-        }
-        _ => panic!("Invalid team type")
+        },
+        _ => None
     }
 }
 
@@ -1316,6 +1385,7 @@ mod tests {
     use std::collections::HashMap;
 
     use chrono::{FixedOffset, Utc};
+    use itertools::Itertools;
     use openskill::{model::model::Model, rating::Rating};
 
     use crate::{
@@ -2732,7 +2802,7 @@ mod tests {
 
         let result = game_win_record(&game);
 
-        assert_eq!(result, expected);
+        assert_eq!(result, Some(expected));
     }
 
     #[test]
@@ -2783,7 +2853,7 @@ mod tests {
 
         let result = game_win_record(&game);
 
-        assert_eq!(result, expected);
+        assert_eq!(result, Some(expected));
     }
 
     #[test]
@@ -2976,7 +3046,7 @@ mod tests {
             ]
         };
 
-        let expected_mwr = MatchWinRecord {
+        let mut expected_mwr = MatchWinRecord {
             match_id: 12,
             loser_roster: vec![0, 1],
             winner_roster: vec![2, 3],
@@ -2984,7 +3054,7 @@ mod tests {
             winner_points: 2,
             winner_team: Some(RED_TEAM_ID),
             loser_team: Some(BLUE_TEAM_ID),
-            match_type: Some(MatchType::Team)
+            match_type: Some(MatchType::Team as i32)
         };
 
         let expected_gwrs = vec![
@@ -3011,16 +3081,43 @@ mod tests {
             },
         ];
 
-        let (actual_mwr, actual_gwrs) = calculate_match_win_records(&vec![match_data]);
+        let (mut actual_mwr, actual_gwrs) = calculate_match_win_records(&vec![match_data]);
 
         assert_eq!(actual_mwr.len(), 1);
         assert_eq!(actual_gwrs.len(), 3);
+
+        let act_mwr = &mut actual_mwr[0];
+
+        act_mwr.loser_roster.sort_unstable();
+        act_mwr.winner_roster.sort_unstable();
+
+        expected_mwr.loser_roster.sort_unstable();
+        expected_mwr.winner_roster.sort_unstable();
 
         assert_eq!(actual_mwr[0], expected_mwr);
 
         for i in 0..3 {
             assert_eq!(actual_gwrs[i], expected_gwrs[i]);
         }
+    }
+
+    #[test]
+    fn test_match_win_record_does_not_panic_when_no_games() {
+        let match_data = Match {
+            id: 12,
+            match_id: 0,
+            name: Some("Foo".to_string()),
+            ruleset: Ruleset::Osu,
+            verification_status: Verified,
+            start_time: None,
+            end_time: None,
+            games: vec![],
+        };
+
+        let (actual_mwr, actual_gwrs) = calculate_match_win_records(&vec![match_data]);
+
+        assert_eq!(actual_mwr.len(), 0);
+        assert_eq!(actual_gwrs.len(), 0);
     }
 
     #[test]
@@ -3063,10 +3160,10 @@ mod tests {
             winner_points: 2, // Team 2 won 2 games
             winner_team: Some(2),
             loser_team: Some(1),
-            match_type: Some(MatchType::Team),
+            match_type: Some(MatchType::Team as i32),
         };
 
-        let match_win_record = create_match_win_record(1, &game_win_records, &team_types);
+        let match_win_record = create_match_win_record(1, &game_win_records, &team_types).unwrap();
 
         assert_eq!(match_win_record.match_id, expected_match_win_record.match_id);
         assert_eq!(match_win_record.loser_roster.len(), expected_match_win_record.loser_roster.len());
@@ -3223,7 +3320,7 @@ mod tests {
             winner_points: 2,
             winner_team: None,
             loser_team: None,
-            match_type: Some(MatchType::HeadToHead)
+            match_type: Some(MatchType::HeadToHead as i32)
         };
 
         let (mwr, _) = calculate_match_win_records(&vec![match_data]);
@@ -3333,7 +3430,7 @@ mod tests {
             winner_points: 1,
             winner_team: None,
             loser_team: None,
-            match_type: Some(MatchType::HeadToHead)
+            match_type: Some(MatchType::HeadToHead as i32)
         };
 
         let (actual_mwr, actual_gwrs) = calculate_match_win_records(&vec![match_data]);
