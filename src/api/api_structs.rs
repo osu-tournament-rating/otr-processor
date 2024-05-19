@@ -5,6 +5,7 @@ use crate::model::structures::{
     match_verification_status::MatchVerificationStatus, ruleset::Ruleset, scoring_type::ScoringType,
     team_type::TeamType
 };
+use crate::model::structures::match_type::MatchType;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -110,7 +111,7 @@ pub struct MatchWinRecord {
     pub winner_points: i32,
     pub winner_team: Option<i32>,
     pub loser_team: Option<i32>,
-    pub match_type: Option<i32>
+    pub match_type: Option<MatchType>
 }
 
 #[derive(Debug, Serialize, Deserialize)]

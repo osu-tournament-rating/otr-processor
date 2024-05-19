@@ -600,7 +600,7 @@ mod api_client_tests {
             winner_points: 6,
             winner_team: Some(2),
             loser_team: Some(1),
-            match_type: Some(1) // TeamVS
+            match_type: Some(MatchType::Team) // TeamVS
         }];
 
         api.post_match_win_records(&payload)
