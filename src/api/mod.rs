@@ -319,7 +319,7 @@ impl OtrApiClient {
             self.make_request_with_body::<(), &[RatingAdjustment]>(Method::POST, link, Some(chunk))
                 .await?;
             bar.inc(chunk.len() as u64);
-        };
+        }
         Ok(())
     }
 
@@ -337,7 +337,7 @@ impl OtrApiClient {
             self.make_request_with_body::<(), &[PlayerMatchStats]>(Method::POST, link, Some(chunk))
                 .await?;
             bar.inc(chunk.len() as u64);
-        };
+        }
         Ok(())
     }
 
@@ -355,7 +355,7 @@ impl OtrApiClient {
             self.make_request_with_body::<(), &[MatchRatingStats]>(Method::POST, link, Some(chunk))
                 .await?;
             bar.inc(chunk.len() as u64);
-        };
+        }
         Ok(())
     }
 
@@ -370,7 +370,7 @@ impl OtrApiClient {
             self.make_request_with_body::<(), &[BaseStats]>(Method::POST, link, Some(chunk))
                 .await?;
             bar.inc(chunk.len() as u64);
-        };
+        }
         Ok(())
     }
 
@@ -385,7 +385,7 @@ impl OtrApiClient {
             self.make_request_with_body::<(), &[GameWinRecord]>(Method::POST, link, Some(chunk))
                 .await?;
             bar.inc(chunk.len() as u64);
-        };
+        }
         Ok(())
     }
 
@@ -400,7 +400,7 @@ impl OtrApiClient {
             self.make_request_with_body::<(), &[MatchWinRecord]>(Method::POST, link, Some(chunk))
                 .await?;
             bar.inc(chunk.len() as u64);
-        };
+        }
         Ok(())
     }
 

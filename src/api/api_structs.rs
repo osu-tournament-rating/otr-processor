@@ -2,8 +2,8 @@ use chrono::{DateTime, FixedOffset};
 use serde::{Deserialize, Serialize};
 
 use crate::model::structures::{
-    match_verification_status::MatchVerificationStatus, ruleset::Ruleset,
-    scoring_type::ScoringType, team_type::TeamType
+    match_verification_status::MatchVerificationStatus, ruleset::Ruleset, scoring_type::ScoringType,
+    team_type::TeamType
 };
 
 #[derive(Debug, Serialize, Deserialize)]

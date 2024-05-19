@@ -821,17 +821,9 @@ fn player_match_stats(matches: &[Match]) -> Vec<PlayerMatchStats> {
                 games_lost: *p_glost.entry(p_id).or_insert(0),
                 games_played: *p_gplayed.entry(p_id).or_insert(0),
                 teammate_ids: if won {
-                    winning_roster
-                        .clone()
-                        .iter()
-                        .filter(|x| **x != p_id).copied()
-                        .collect()
+                    winning_roster.clone().iter().filter(|x| **x != p_id).copied().collect()
                 } else {
-                    losing_roster
-                        .clone()
-                        .iter()
-                        .filter(|x| **x != p_id).copied()
-                        .collect()
+                    losing_roster.clone().iter().filter(|x| **x != p_id).copied().collect()
                 },
                 opponent_ids: if won {
                     losing_roster.clone()
@@ -1101,7 +1093,6 @@ fn calc_percentile(rank: i32, player_count: usize) -> f64 {
     }
 
     // Calculate the percentile
-    
 
     1.0 - (rank as f64 - 1.0) / (player_count as f64 - 1.0)
 }
