@@ -3057,8 +3057,8 @@ mod tests {
 
         let expected_match_win_record = MatchWinRecord {
             match_id: 1,
-            loser_roster: vec![4, 5, 6, 7],
-            winner_roster: vec![1, 2, 3, 8],
+            loser_roster: vec![1, 2, 3, 8],
+            winner_roster: vec![4, 5, 6, 7],
             loser_points: 1, // Team 1 won 1 game
             winner_points: 2, // Team 2 won 2 games
             winner_team: Some(2),
@@ -3079,15 +3079,16 @@ mod tests {
 
         let mut actual_loser_roster: Vec<i32> = match_win_record.loser_roster;
         let mut expected_loser_roster: Vec<i32> = expected_match_win_record.loser_roster;
+
         actual_loser_roster.sort_unstable();
         expected_loser_roster.sort_unstable();
-        assert_eq!(actual_loser_roster, expected_loser_roster);
+        assert_eq!(expected_loser_roster, actual_loser_roster);
 
         let mut actual_winner_roster: Vec<i32> = match_win_record.winner_roster;
         let mut expected_winner_roster: Vec<i32> = expected_match_win_record.winner_roster;
         actual_winner_roster.sort_unstable();
         expected_winner_roster.sort_unstable();
-        assert_eq!(actual_winner_roster, expected_winner_roster);
+        assert_eq!(expected_winner_roster, actual_winner_roster);
     }
 
     #[test]
