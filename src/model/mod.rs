@@ -1,8 +1,7 @@
 use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet},
-    iter::Sum,
-    ops::Index
+    iter::Sum
 };
 
 use chrono::Utc;
@@ -400,10 +399,10 @@ pub fn calculate_ratings(
     let (mut processed_data, adjustments) = calculate_processed_match_data(&player_ratings, matches, model);
     let rating_stats = calculate_rating_stats(&mut player_ratings, &mut processed_data);
 
-    let (match_win_records, game_win_records) = calculate_match_win_records(&matches);
-    let player_match_stats = player_match_stats(&matches);
+    let (match_win_records, game_win_records) = calculate_match_win_records(matches);
+    let player_match_stats = player_match_stats(matches);
 
-    let base_stats = calculate_base_stats(&player_ratings, &rating_stats, &matches);
+    let base_stats = calculate_base_stats(&player_ratings, &rating_stats, matches);
 
     RatingCalculationResult {
         player_ratings,
@@ -504,7 +503,7 @@ fn calculate_base_stats(
     }
 
     // Return base stat values
-    base_stats.into_iter().map(|(_, v)| v).collect()
+    base_stats.into_values().collect()
 }
 
 fn calculate_game_win_records(matches: &[Match]) -> Vec<GameWinRecord> {
@@ -513,10 +512,8 @@ fn calculate_game_win_records(matches: &[Match]) -> Vec<GameWinRecord> {
     // Iterate over matches and their games, then push the game win records to the result vector
     for m in matches {
         for g in &m.games {
-            let gwr = game_win_record(&g);
-
-            if gwr.is_some() {
-                res.push(gwr.unwrap());
+            if let Some(gwr) = game_win_record(g) {
+                res.push(gwr);
             }
         }
     }
@@ -530,7 +527,7 @@ fn calculate_match_win_records(matches: &[Match]) -> (Vec<MatchWinRecord>, Vec<G
     let mut gwrs_final = Vec::new();
 
     for m in matches {
-        if m.games.len() == 0 {
+        if m.games.is_empty() {
             println!(
                 "Match {} has no games, skipping when considering MatchWinRecord creation",
                 m.id
@@ -542,7 +539,7 @@ fn calculate_match_win_records(matches: &[Match]) -> (Vec<MatchWinRecord>, Vec<G
         let mut team_types = Vec::new();
 
         for g in &m.games {
-            let gwr = match game_win_record(&g) {
+            let gwr = match game_win_record(g) {
                 Some(gwr) => gwr,
                 None => {
                     println!(
@@ -555,7 +552,7 @@ fn calculate_match_win_records(matches: &[Match]) -> (Vec<MatchWinRecord>, Vec<G
 
             gwrs.push(gwr.clone());
             gwrs_final.push(gwr.clone());
-            team_types.push(g.team_type.clone())
+            team_types.push(g.team_type)
         }
 
         if team_types.is_empty() {
@@ -569,10 +566,8 @@ fn calculate_match_win_records(matches: &[Match]) -> (Vec<MatchWinRecord>, Vec<G
         }
 
         // Calculate match win record
-        let mwr = create_match_win_record(m.id, &gwrs, &team_types);
-
-        if mwr.is_some() {
-            mwrs.push(mwr.unwrap());
+        if let Some(mwr) = create_match_win_record(m.id, &gwrs, &team_types) {
+            mwrs.push(mwr);
         }
 
         bar.inc(1);
@@ -712,7 +707,7 @@ fn mode<T: Eq + std::hash::Hash>(v: &Vec<T>) -> Option<&T> {
     for (k, v) in map {
         if v > max {
             max = v;
-            mode = Some(k.clone());
+            mode = Some(k);
         }
     }
 
@@ -778,10 +773,10 @@ fn player_match_stats(matches: &[Match]) -> Vec<PlayerMatchStats> {
 
             let mut p = 1;
             for s in s_clone {
-                let scores = p_scores.entry(s.player_id).or_insert(Vec::new());
-                let misses = p_misses.entry(s.player_id).or_insert(Vec::new());
-                let accs = p_accs.entry(s.player_id).or_insert(Vec::new());
-                let placement = p_placement.entry(s.player_id).or_insert(Vec::new());
+                let scores = p_scores.entry(s.player_id).or_default();
+                let misses = p_misses.entry(s.player_id).or_default();
+                let accs = p_accs.entry(s.player_id).or_default();
+                let placement = p_placement.entry(s.player_id).or_default();
                 let gplayed = p_gplayed.entry(s.player_id).or_insert(0);
                 let gwon = p_gwon.entry(s.player_id).or_insert(0);
                 let glost = p_glost.entry(s.player_id).or_insert(0);
@@ -793,7 +788,7 @@ fn player_match_stats(matches: &[Match]) -> Vec<PlayerMatchStats> {
                 placement.push(p);
                 *gplayed += 1;
 
-                let won = player_won_game(&s.player_id, &gwr);
+                let won = player_won_game(&s.player_id, gwr);
                 if won {
                     *gwon += 1;
                 } else {
@@ -818,10 +813,10 @@ fn player_match_stats(matches: &[Match]) -> Vec<PlayerMatchStats> {
                 player_id: p_id,
                 match_id: m.id,
                 won,
-                average_score: mean(p_scores.entry(p_id).or_insert(Vec::new())),
-                average_misses: mean(p_misses.entry(p_id).or_insert(Vec::new())),
-                average_accuracy: mean(p_accs.entry(p_id).or_insert(Vec::new())),
-                average_placement: mean(p_placement.entry(p_id).or_insert(Vec::new())),
+                average_score: mean(p_scores.entry(p_id).or_default()),
+                average_misses: mean(p_misses.entry(p_id).or_default()),
+                average_accuracy: mean(p_accs.entry(p_id).or_default()),
+                average_placement: mean(p_placement.entry(p_id).or_default()),
                 games_won: *p_gwon.entry(p_id).or_insert(0),
                 games_lost: *p_glost.entry(p_id).or_insert(0),
                 games_played: *p_gplayed.entry(p_id).or_insert(0),
@@ -829,15 +824,13 @@ fn player_match_stats(matches: &[Match]) -> Vec<PlayerMatchStats> {
                     winning_roster
                         .clone()
                         .iter()
-                        .filter(|x| **x != p_id)
-                        .map(|x| *x)
+                        .filter(|x| **x != p_id).copied()
                         .collect()
                 } else {
                     losing_roster
                         .clone()
                         .iter()
-                        .filter(|x| **x != p_id)
-                        .map(|x| *x)
+                        .filter(|x| **x != p_id).copied()
                         .collect()
                 },
                 opponent_ids: if won {
@@ -1108,9 +1101,9 @@ fn calc_percentile(rank: i32, player_count: usize) -> f64 {
     }
 
     // Calculate the percentile
-    let percentile = 1.0 - (rank as f64 - 1.0) / (player_count as f64 - 1.0);
+    
 
-    percentile
+    1.0 - (rank as f64 - 1.0) / (player_count as f64 - 1.0)
 }
 
 pub fn get_country_rank(
@@ -1320,7 +1313,7 @@ fn game_win_record(game: &Game) -> Option<GameWinRecord> {
         }),
         None => {
             println!("Game {} has no winners or losers, skipping", game_id);
-            return None;
+            None
         }
     }
 }
@@ -1350,7 +1343,7 @@ fn identify_game_winners_losers(game: &Game) -> Option<(Vec<i32>, Vec<i32>, i32,
                 losers = vec![score_0.player_id];
             }
 
-            return Some((winners, losers, 0, 0));
+            Some((winners, losers, 0, 0))
         }
         TeamType::TeamVs => {
             let mut red_players = vec![];

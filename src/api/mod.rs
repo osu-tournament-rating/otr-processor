@@ -315,11 +315,12 @@ impl OtrApiClient {
         let bar = progress_bar(adjustments.len() as u64, "Posting rating adjustments".to_string());
 
         let body = adjustments.chunks(5000);
-        Ok(for chunk in body {
+        for chunk in body {
             self.make_request_with_body::<(), &[RatingAdjustment]>(Method::POST, link, Some(chunk))
                 .await?;
             bar.inc(chunk.len() as u64);
-        })
+        };
+        Ok(())
     }
 
     /// Post PlayerMatchStats
@@ -332,11 +333,12 @@ impl OtrApiClient {
         );
 
         let body = player_match_stats.chunks(5000);
-        Ok(for chunk in body {
+        for chunk in body {
             self.make_request_with_body::<(), &[PlayerMatchStats]>(Method::POST, link, Some(chunk))
                 .await?;
             bar.inc(chunk.len() as u64);
-        })
+        };
+        Ok(())
     }
 
     /// Post MatchRatingStats
@@ -349,11 +351,12 @@ impl OtrApiClient {
         );
 
         let body = match_rating_stats.chunks(5000);
-        Ok(for chunk in body {
+        for chunk in body {
             self.make_request_with_body::<(), &[MatchRatingStats]>(Method::POST, link, Some(chunk))
                 .await?;
             bar.inc(chunk.len() as u64);
-        })
+        };
+        Ok(())
     }
 
     /// Post BaseStats
@@ -363,11 +366,12 @@ impl OtrApiClient {
         let bar = progress_bar(base_stats.len() as u64, "Posting base stats".to_string());
 
         let body = base_stats.chunks(5000);
-        Ok(for chunk in body {
+        for chunk in body {
             self.make_request_with_body::<(), &[BaseStats]>(Method::POST, link, Some(chunk))
                 .await?;
             bar.inc(chunk.len() as u64);
-        })
+        };
+        Ok(())
     }
 
     /// Post GameWinRecords
@@ -377,11 +381,12 @@ impl OtrApiClient {
         let bar = progress_bar(game_win_records.len() as u64, "Posting game win records".to_string());
 
         let body = game_win_records.chunks(5000);
-        Ok(for chunk in body {
+        for chunk in body {
             self.make_request_with_body::<(), &[GameWinRecord]>(Method::POST, link, Some(chunk))
                 .await?;
             bar.inc(chunk.len() as u64);
-        })
+        };
+        Ok(())
     }
 
     /// Post MatchWinRecords
@@ -391,11 +396,12 @@ impl OtrApiClient {
         let bar = progress_bar(match_win_records.len() as u64, "Posting match win records".to_string());
 
         let body = match_win_records.chunks(5000);
-        Ok(for chunk in body {
+        for chunk in body {
             self.make_request_with_body::<(), &[MatchWinRecord]>(Method::POST, link, Some(chunk))
                 .await?;
             bar.inc(chunk.len() as u64);
-        })
+        };
+        Ok(())
     }
 
     /// Delete all stats
