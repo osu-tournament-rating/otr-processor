@@ -12,7 +12,7 @@ use rand::{
 
 use otr_processor::model::{
     calculate_country_ranks, get_country_rank, get_global_rank,
-    structures::{mode::Mode, player_rating::PlayerRating}
+    structures::{player_rating::PlayerRating, ruleset::Ruleset}
 };
 
 #[derive(Debug, Clone)]
@@ -56,7 +56,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         for _ in 0..AMOUNT_OF_USERS_IN_ONE_COUNTRY {
             ratings.push(PlayerRating {
                 player_id: rng.gen_range(0..100_000), // Random player id
-                mode: Mode::Osu,
+                mode: Ruleset::Osu,
                 rating: Rating {
                     mu: rng.gen_range(0.0..2000.0),
                     sigma: 200.0
@@ -79,7 +79,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
     c.bench_with_input(BenchmarkId::new("calc_rankings_new", input.clone()), &input, |b, s| {
         let mut input = input.clone();
-        b.iter(|| calculate_country_ranks(&mut input.ratings, Mode::Osu));
+        b.iter(|| calculate_country_ranks(&mut input.ratings, Ruleset::Osu));
     });
 
     c.bench_with_input(BenchmarkId::new("calc_rankings_old", input.clone()), &input, |b, s| {

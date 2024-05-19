@@ -1,12 +1,12 @@
 use crate::{
     api::api_structs::RatingAdjustment,
-    model::{constants, structures::mode::Mode}
+    model::{constants, structures::ruleset::Ruleset}
 };
 use chrono::{DateTime, FixedOffset};
 use std::collections::HashMap;
 /// Tracks decay activity for players
 pub struct DecayTracker {
-    last_play_time: HashMap<(i32, Mode), DateTime<FixedOffset>>
+    last_play_time: HashMap<(i32, Ruleset), DateTime<FixedOffset>>
 }
 
 impl DecayTracker {
@@ -15,11 +15,11 @@ impl DecayTracker {
             last_play_time: HashMap::new()
         }
     }
-    pub fn record_activity(&mut self, player_id: i32, mode: Mode, time: DateTime<FixedOffset>) {
+    pub fn record_activity(&mut self, player_id: i32, mode: Ruleset, time: DateTime<FixedOffset>) {
         self.last_play_time.insert((player_id, mode), time);
     }
 
-    pub fn get_activity(&mut self, player_id: i32, mode: Mode) -> Option<&DateTime<FixedOffset>> {
+    pub fn get_activity(&mut self, player_id: i32, mode: Ruleset) -> Option<&DateTime<FixedOffset>> {
         self.last_play_time.get(&(player_id, mode))
     }
 
@@ -41,7 +41,7 @@ impl DecayTracker {
     pub fn decay(
         &self,
         player_id: i32,
-        mode: Mode,
+        mode: Ruleset,
         mu: f64,
         sigma: f64,
         d: DateTime<FixedOffset>
@@ -137,7 +137,7 @@ mod tests {
         constants,
         constants::MULTIPLIER,
         decay::{decay_mu, decay_sigma, is_decay_possible, DecayTracker},
-        structures::mode::Mode
+        structures::ruleset::Ruleset
     };
     use chrono::DateTime;
     use std::ops::Add;
@@ -145,7 +145,7 @@ mod tests {
     #[test]
     fn test_decay() {
         let id = 1;
-        let mode = Mode::Osu;
+        let mode = Ruleset::Osu;
         let mu = 1000.0;
         let sigma = 200.0;
 

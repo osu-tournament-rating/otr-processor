@@ -4,7 +4,7 @@ use std::{sync::Arc, time::Duration};
 
 use crate::{
     api::api_structs::{Match, MatchIdMapping, OAuthResponse, Player, PlayerCountryMapping, RatingAdjustment},
-    utils::progress_utils::progress_bar
+    utils::progress_utils::{indeterminate_bar, progress_bar}
 };
 use reqwest::{
     header::{AUTHORIZATION, CONTENT_TYPE},
@@ -15,6 +15,8 @@ use tokio::sync::{
     oneshot::{Receiver, Sender},
     RwLock
 };
+
+use self::api_structs::MatchPagedResult;
 
 /// A loop that automatically refreshes token
 pub async fn refresh_token_loop(api: Arc<OtrApiBody>) {
@@ -275,59 +277,24 @@ impl OtrApiClient {
         }
     }
 
-    /// Get ids of matches
-    pub async fn get_match_ids(&self, limit: Option<u32>) -> Result<Vec<u32>, Error> {
-        let limit = limit.unwrap_or(0);
-        let link = "/v1/matches/ids";
-
-        let response = self.make_request(Method::GET, link).await?;
-
-        if limit == 0 {
-            return Ok(response);
-        }
-
-        let limited_response = response.into_iter().take(limit as usize).collect();
-
-        Ok(limited_response)
-    }
-
     /// Get matches based on provided list of match id's
     /// # Arguments
-    /// * `match_ids` - valid id's of matches
+    /// * `page` - The page number (the response is a paged result)
     /// * `chunk_size` - amount of matches that is going to be fetched
     /// in one request. Done to reduce strain on API side. Recommended
     /// value is `250`
-    pub async fn get_matches(&self, match_ids: &[u32], chunk_size: usize) -> Result<Vec<Match>, Error> {
-        let link = "/v1/matches/convert";
+    pub async fn get_matches(&self, page: usize, chunk_size: usize) -> Result<MatchPagedResult, Error> {
+        let link = format!("/v1/matches?page={}&limit={}", page, chunk_size);
 
-        let mut data: Vec<Match> = Vec::new();
-
-        println!("Fetching match data...");
-        let bar = progress_bar(match_ids.len() as u64);
-        for chunk in match_ids.chunks(chunk_size) {
-            let response: Vec<Match> = self.make_request_with_body(Method::POST, link, Some(chunk)).await?;
-
-            data.extend(response);
-            bar.inc(chunk.len() as u64);
-        }
-        bar.finish();
-
-        Ok(data)
+        self.make_request(Method::GET, &link).await
     }
+
     /// Post rating adjustments
     pub async fn post_adjustments(&self, adjustments: &[RatingAdjustment]) -> Result<(), Error> {
         let link = "/v1/stats/ratingadjustments";
 
         self.make_request_with_body::<(), &[RatingAdjustment]>(Method::POST, link, Some(adjustments))
             .await
-    }
-
-    /// Get list of match id mappings
-    /// otr_match_id <-> osu_match_id
-    pub async fn get_match_id_mapping(&self) -> Result<Vec<MatchIdMapping>, Error> {
-        let link = "/v1/matches/id-mapping";
-
-        self.make_request(Method::GET, link).await
     }
 
     /// Get list of players
@@ -355,7 +322,7 @@ mod api_client_tests {
     use async_once_cell::OnceCell;
     use chrono::{FixedOffset, Utc};
 
-    use crate::{api::OtrApiClient, model::structures::mode::Mode};
+    use crate::{api::OtrApiClient, model::structures::ruleset::Ruleset};
 
     static API_INSTANCE: OnceCell<OtrApiClient> = OnceCell::new();
 
@@ -390,19 +357,6 @@ mod api_client_tests {
     }
 
     #[tokio::test]
-    async fn test_api_client_get_match_ids() {
-        let api = get_api().await;
-
-        let result = api.get_match_ids(None).await.unwrap();
-
-        assert!(!result.is_empty());
-
-        let result = api.get_match_ids(Some(10)).await.unwrap();
-
-        assert_eq!(result.len(), 10);
-    }
-
-    #[tokio::test]
     async fn test_api_client_get_players() {
         let api = get_api().await;
 
@@ -416,7 +370,7 @@ mod api_client_tests {
 
         let payload = vec![RatingAdjustment {
             player_id: 440,
-            mode: Mode::Osu,
+            mode: Ruleset::Osu,
             rating_adjustment_amount: 3.123,
             volatility_adjustment_amount: 2.123,
             rating_before: 1000.0,
@@ -436,22 +390,9 @@ mod api_client_tests {
     async fn test_api_client_get_matches() {
         let api = get_api().await;
 
-        let match_ids = api.get_match_ids(Some(10)).await.unwrap();
+        let result = api.get_matches(1, 5).await.unwrap();
 
-        assert_eq!(match_ids.len(), 10);
-
-        let result = api.get_matches(&match_ids, 250).await.unwrap();
-
-        assert_eq!(result.len(), match_ids.len())
-    }
-
-    #[tokio::test]
-    async fn test_api_get_match_id_mapping() {
-        let api = get_api().await;
-
-        let result = api.get_match_id_mapping().await.unwrap();
-
-        assert!(!result.is_empty())
+        assert_eq!(result.count as usize, result.results.len())
     }
 
     // Manually refresh token three times

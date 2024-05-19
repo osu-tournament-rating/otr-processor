@@ -9,7 +9,7 @@ pub fn valid_games(m: &Match) -> Vec<&Game> {
     let games = &m.games;
 
     for g in games {
-        if g.ruleset == m.mode {
+        if g.ruleset == m.ruleset {
             valid.push(g);
         }
     }

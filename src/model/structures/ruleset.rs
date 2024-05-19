@@ -3,7 +3,7 @@ use std::convert::TryFrom;
 
 #[derive(Deserialize_repr, Serialize_repr, Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 #[repr(u8)]
-pub enum Mode {
+pub enum Ruleset {
     #[default]
     Osu = 0,
     Taiko = 1,
@@ -11,15 +11,15 @@ pub enum Mode {
     Mania = 3
 }
 
-impl TryFrom<i32> for Mode {
+impl TryFrom<i32> for Ruleset {
     type Error = ();
 
     fn try_from(v: i32) -> Result<Self, Self::Error> {
         match v {
-            0 => Ok(Mode::Osu),
-            1 => Ok(Mode::Taiko),
-            2 => Ok(Mode::Catch),
-            3 => Ok(Mode::Mania),
+            0 => Ok(Ruleset::Osu),
+            1 => Ok(Ruleset::Taiko),
+            2 => Ok(Ruleset::Catch),
+            3 => Ok(Ruleset::Mania),
             _ => Err(())
         }
     }

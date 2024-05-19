@@ -1,6 +1,7 @@
 use otr_processor::{
-    api,
-    model::{self, hash_country_mappings, structures::processing::RatingCalculationResult}
+    api::{self, api_structs::Match, OtrApiClient},
+    model::{self, hash_country_mappings, structures::match_verification_status::MatchVerificationStatus::Verified},
+    utils::progress_utils::indeterminate_bar
 };
 
 #[tokio::main]
@@ -10,17 +11,8 @@ async fn main() {
     println!("Getting otr client");
     let api = api::OtrApiClient::new_from_env().await.unwrap();
 
-    println!("Gettings match ids");
-    let match_ids = api
-        .get_match_ids(None)
-        .await
-        .expect("Match ids must be valid before proceeding");
-
     println!("Getting matches");
-    let matches = api
-        .get_matches(&match_ids, 250)
-        .await
-        .expect("Matches need to be loaded before continuing");
+    let matches = get_all_matches().await;
 
     println!("Getting players");
     let players = api.get_players().await.expect("Ranks must be identified");
@@ -79,4 +71,43 @@ async fn main() {
         "Total object size: {:?}",
         std::mem::size_of_val(&result.game_win_records)
     );
+}
+
+/// Repeatedly calls the /matches GET endpoint and returns all matches
+async fn get_all_matches() -> Vec<Match> {
+    let bar = indeterminate_bar("Fetching matches".to_string());
+    let mut matches = vec![];
+    let client = OtrApiClient::new_from_env().await.unwrap();
+
+    let chunk_size = 250;
+    let mut total = chunk_size;
+    for page in 1.. {
+        let mut result = client.get_matches(page, chunk_size).await.unwrap();
+        matches.append(&mut result.results);
+
+        if result.next.is_none() {
+            break;
+        }
+
+        bar.set_message(format!("[{}] Fetched {} matches from page {}", total, chunk_size, page));
+
+        bar.inc(1);
+        total += chunk_size;
+    }
+
+    bar.finish();
+
+    if matches.is_empty() {
+        panic!("Expected matches to be populated")
+    }
+
+    // Sort matches by start time
+    matches.sort_by(|a, b| a.start_time.cmp(&b.start_time));
+
+    // Remove all matches that are invalid
+    matches.retain(|x| x.verification_status == Verified);
+
+    println!("Retained {} verified matches", matches.len());
+
+    matches
 }
