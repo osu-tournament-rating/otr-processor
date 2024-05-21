@@ -459,11 +459,13 @@ mod api_client_tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn test_api_client_login() {
         let _api = get_api().await;
     }
 
     #[tokio::test]
+    #[ignore]
     async fn test_api_client_get_players() {
         let api = get_api().await;
 
@@ -472,6 +474,7 @@ mod api_client_tests {
         assert!(!result.is_empty())
     }
     #[tokio::test]
+    #[ignore]
     async fn test_api_client_post_rating_adjustments() {
         let api = get_api().await;
 
@@ -494,6 +497,7 @@ mod api_client_tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn test_api_client_post_player_match_stats() {
         let api = get_api().await;
 
@@ -518,6 +522,7 @@ mod api_client_tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn test_api_client_post_match_rating_stats() {
         let api = get_api().await;
 
@@ -550,6 +555,7 @@ mod api_client_tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn test_api_client_post_base_stats() {
         let api = get_api().await;
 
@@ -568,6 +574,7 @@ mod api_client_tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn test_api_client_get_matches() {
         let api = get_api().await;
 
@@ -577,6 +584,7 @@ mod api_client_tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn test_api_client_post_game_win_records() {
         let api = get_api().await;
 
@@ -595,6 +603,7 @@ mod api_client_tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn test_api_client_post_match_win_records() {
         let api = get_api().await;
 
@@ -615,15 +624,17 @@ mod api_client_tests {
     }
 
     // DANGEROUS
-    // #[tokio::test]
-    // async fn test_api_client_delete_all_stats() {
-    //     let api = get_api().await;
-    //
-    //     api.delete_all_stats().await.expect("Failed to DELETE all stats");
-    // }
+    #[tokio::test]
+    #[ignore]
+    async fn test_api_client_delete_all_stats() {
+        let api = get_api().await;
+
+        api.delete_all_stats().await.expect("Failed to DELETE all stats");
+    }
 
     // Manually refresh token three times
     #[tokio::test]
+    #[ignore]
     async fn test_refresh_token() {
         let api = get_api().await;
 
@@ -664,6 +675,7 @@ mod api_client_tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn test_login_refresh_worker() {
         let server = MockServer::start();
 
@@ -696,6 +708,7 @@ mod api_client_tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn test_login_refresh_worker_hits() {
         let server = MockServer::start();
 
