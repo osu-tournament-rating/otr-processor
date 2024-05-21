@@ -7,7 +7,7 @@ use crate::{
     model::structures::player_rating::PlayerRating
 };
 
-use super::mode::Mode;
+use super::ruleset::Ruleset;
 
 #[derive(Debug)]
 pub struct RatingCalculationResult {
@@ -45,6 +45,6 @@ pub struct PlayerMatchData {
 #[derive(Clone, Debug, Default)]
 pub struct ProcessedMatchData {
     pub match_id: i32,
-    pub mode: Mode,
+    pub mode: Ruleset,
     pub players_stats: Vec<PlayerMatchData>
 }

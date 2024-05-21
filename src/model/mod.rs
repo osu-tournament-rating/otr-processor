@@ -1,9 +1,7 @@
 use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet},
-    iter::Sum,
-    ops::Index,
-    thread
+    iter::Sum
 };
 
 use chrono::Utc;
@@ -26,8 +24,11 @@ use crate::{
         constants::BLUE_TEAM_ID,
         decay::{is_decay_possible, DecayTracker},
         structures::{
-            match_cost::MatchCost, mode::Mode, player_rating::PlayerRating, processing::RatingCalculationResult,
-            team_type::TeamType
+            match_cost::MatchCost,
+            player_rating::PlayerRating,
+            processing::RatingCalculationResult,
+            ruleset::Ruleset,
+            team_type::{TeamType, TeamType::TeamVs}
         }
     },
     utils::progress_utils::progress_bar
@@ -99,24 +100,23 @@ pub fn calculate_player_adjustments(
 
 /// Calculates [`MatchRatingStats`] based on initial ratings
 /// and match adjustments
-pub fn calculate_post_match_info(
+pub fn calculate_rating_stats(
     initial_ratings: &mut [PlayerRating],
     match_data: &mut [ProcessedMatchData]
 ) -> Vec<MatchRatingStats> {
-    println!("Calculating post match info...");
-    let bar = progress_bar(match_data.len() as u64);
+    let bar = progress_bar(match_data.len() as u64, "Calculating match rating stats".to_string());
     let mut res = Vec::with_capacity(match_data.len());
 
     // Calculating leadearboard for all modes
-    calculate_global_ranks(initial_ratings, Mode::Osu);
-    calculate_global_ranks(initial_ratings, Mode::Mania);
-    calculate_global_ranks(initial_ratings, Mode::Taiko);
-    calculate_global_ranks(initial_ratings, Mode::Catch);
+    calculate_global_ranks(initial_ratings, Ruleset::Osu);
+    calculate_global_ranks(initial_ratings, Ruleset::Mania);
+    calculate_global_ranks(initial_ratings, Ruleset::Taiko);
+    calculate_global_ranks(initial_ratings, Ruleset::Catch);
 
-    calculate_country_ranks(initial_ratings, Mode::Osu);
-    calculate_country_ranks(initial_ratings, Mode::Mania);
-    calculate_country_ranks(initial_ratings, Mode::Taiko);
-    calculate_country_ranks(initial_ratings, Mode::Catch);
+    calculate_country_ranks(initial_ratings, Ruleset::Osu);
+    calculate_country_ranks(initial_ratings, Ruleset::Mania);
+    calculate_country_ranks(initial_ratings, Ruleset::Taiko);
+    calculate_country_ranks(initial_ratings, Ruleset::Catch);
 
     for match_info in match_data.iter_mut() {
         // Preparing initial_ratings with new rating
@@ -164,8 +164,7 @@ pub fn calculate_post_match_info(
     }
     bar.finish();
 
-    println!("Calculating rating stats...");
-    let bar2 = progress_bar(match_data.len() as u64);
+    let bar2 = progress_bar(match_data.len() as u64, "Calculating rating stats".to_string());
     // Casting it to MatchRatingStats since we have all neccessary data
     for match_info in match_data.iter() {
         match_info
@@ -210,7 +209,7 @@ pub fn calculate_post_match_info(
 ///
 /// # Notes
 /// Modifies and invalidate any existing sorting in [`PlayerRating`] slice
-pub fn calculate_global_ranks(existing_ratings: &mut [PlayerRating], mode: Mode) {
+pub fn calculate_global_ranks(existing_ratings: &mut [PlayerRating], mode: Ruleset) {
     existing_ratings.sort_by(|x, y| {
         if y.mode != mode {
             Ordering::Less
@@ -244,7 +243,7 @@ pub fn calculate_global_ranks(existing_ratings: &mut [PlayerRating], mode: Mode)
 ///
 /// # Notes
 /// Modifies and invalidate any existing sorting in [`PlayerRating`] slice
-pub fn calculate_country_ranks(existing_ratings: &mut [PlayerRating], mode: Mode) {
+pub fn calculate_country_ranks(existing_ratings: &mut [PlayerRating], mode: Ruleset) {
     let mut countries = HashSet::new();
 
     // Country ranking
@@ -308,11 +307,10 @@ pub fn create_initial_ratings(matches: &Vec<Match>, players: &Vec<Player>) -> Ve
     // The first step in the rating algorithm. Generate ratings from known ranks.
 
     // A fast lookup used for understanding who has default ratings created at this time.
-    let mut stored_lookup_log: HashSet<(i32, Mode)> = HashSet::new();
+    let mut stored_lookup_log: HashSet<(i32, Ruleset)> = HashSet::new();
     let mut ratings: Vec<PlayerRating> = Vec::new();
 
-    println!("Processing initial ratings...");
-    let bar = progress_bar(matches.len() as u64);
+    let bar = progress_bar(matches.len() as u64, "Processing initial ratings".to_string());
 
     // Map the osu ids for fast lookup
     let mut player_hashmap: HashMap<i32, Player> = HashMap::with_capacity(players.len());
@@ -337,10 +335,10 @@ pub fn create_initial_ratings(matches: &Vec<Match>, players: &Vec<Player>) -> Ve
                     .get(&score.player_id)
                     .expect("Player should be present in the hashmap.");
                 let rank: Option<i32> = match mode {
-                    Mode::Osu => player.earliest_osu_global_rank.or(player.rank_standard),
-                    Mode::Taiko => player.earliest_taiko_global_rank.or(player.rank_taiko),
-                    Mode::Catch => player.earliest_catch_global_rank.or(player.rank_catch),
-                    Mode::Mania => player.earliest_mania_global_rank.or(player.rank_mania)
+                    Ruleset::Osu => player.earliest_osu_global_rank.or(player.rank_standard),
+                    Ruleset::Taiko => player.earliest_taiko_global_rank.or(player.rank_taiko),
+                    Ruleset::Catch => player.earliest_catch_global_rank.or(player.rank_catch),
+                    Ruleset::Mania => player.earliest_mania_global_rank.or(player.rank_mania)
                 };
 
                 let mu;
@@ -399,12 +397,12 @@ pub fn calculate_ratings(
     let mut player_ratings = initial_ratings.clone();
 
     let (mut processed_data, adjustments) = calculate_processed_match_data(&player_ratings, matches, model);
-    let rating_stats = calculate_post_match_info(&mut player_ratings, &mut processed_data);
+    let rating_stats = calculate_rating_stats(&mut player_ratings, &mut processed_data);
 
-    let (match_win_records, game_win_records) = calculate_match_win_records(&matches);
-    let player_match_stats = player_match_stats(&matches);
+    let (match_win_records, game_win_records) = calculate_match_win_records(matches);
+    let player_match_stats = player_match_stats(matches);
 
-    let base_stats = calculate_base_stats(&player_ratings, &rating_stats, &matches);
+    let base_stats = calculate_base_stats(&player_ratings, &rating_stats, matches);
 
     RatingCalculationResult {
         player_ratings,
@@ -425,20 +423,20 @@ fn calculate_base_stats(
 ) -> Vec<BaseStats> {
     println!("Calculating base stats...");
 
-    let mut match_modes: HashMap<i32, Mode> = HashMap::new();
-    let mut base_stats: HashMap<(i32, Mode), BaseStats> = HashMap::new();
+    let mut match_modes: HashMap<i32, Ruleset> = HashMap::new();
+    let mut base_stats: HashMap<(i32, Ruleset), BaseStats> = HashMap::new();
 
-    let count_osu = player_ratings.iter().filter(|x| x.mode == Mode::Osu).count();
-    let count_taiko = player_ratings.iter().filter(|x| x.mode == Mode::Taiko).count();
-    let count_catch = player_ratings.iter().filter(|x| x.mode == Mode::Catch).count();
-    let count_mania = player_ratings.iter().filter(|x| x.mode == Mode::Mania).count();
+    let count_osu = player_ratings.iter().filter(|x| x.mode == Ruleset::Osu).count();
+    let count_taiko = player_ratings.iter().filter(|x| x.mode == Ruleset::Taiko).count();
+    let count_catch = player_ratings.iter().filter(|x| x.mode == Ruleset::Catch).count();
+    let count_mania = player_ratings.iter().filter(|x| x.mode == Ruleset::Mania).count();
 
     // Calculated values
-    let mut match_costs: HashMap<(i32, Mode), Vec<f64>> = HashMap::new();
+    let mut match_costs: HashMap<(i32, Ruleset), Vec<f64>> = HashMap::new();
 
     // Iterate through the matches, identify the mode of the match
     for m in matches {
-        match_modes.insert(m.id, m.mode);
+        match_modes.insert(m.id, m.ruleset);
     }
 
     if match_modes.len() != matches.len() {
@@ -466,14 +464,13 @@ fn calculate_base_stats(
     // We know that some values are current from player_ratings, others
     // need to be calculated from the stats
 
-    println!("Calculating base stats...");
-    let bar = progress_bar(player_ratings.len() as u64);
+    let bar = progress_bar(player_ratings.len() as u64, "Calculating base stats".to_string());
     for r in player_ratings {
         let cur_count = match r.mode {
-            Mode::Osu => count_osu,
-            Mode::Taiko => count_taiko,
-            Mode::Catch => count_catch,
-            Mode::Mania => count_mania
+            Ruleset::Osu => count_osu,
+            Ruleset::Taiko => count_taiko,
+            Ruleset::Catch => count_catch,
+            Ruleset::Mania => count_mania
         };
 
         if cur_count == 0 {
@@ -506,7 +503,7 @@ fn calculate_base_stats(
     }
 
     // Return base stat values
-    base_stats.into_iter().map(|(_, v)| v).collect()
+    base_stats.into_values().collect()
 }
 
 fn calculate_game_win_records(matches: &[Match]) -> Vec<GameWinRecord> {
@@ -515,7 +512,9 @@ fn calculate_game_win_records(matches: &[Match]) -> Vec<GameWinRecord> {
     // Iterate over matches and their games, then push the game win records to the result vector
     for m in matches {
         for g in &m.games {
-            res.push(game_win_record(g));
+            if let Some(gwr) = game_win_record(g) {
+                res.push(gwr);
+            }
         }
     }
 
@@ -523,167 +522,202 @@ fn calculate_game_win_records(matches: &[Match]) -> Vec<GameWinRecord> {
 }
 
 fn calculate_match_win_records(matches: &[Match]) -> (Vec<MatchWinRecord>, Vec<GameWinRecord>) {
-    println!("Calculating match win records...");
-    let bar = progress_bar(matches.len() as u64);
+    let bar = progress_bar(matches.len() as u64, "Calculating match win records".to_string());
     let mut mwrs = Vec::new();
     let mut gwrs_final = Vec::new();
 
     for m in matches {
+        if m.games.is_empty() {
+            println!(
+                "Match {} has no games, skipping when considering MatchWinRecord creation",
+                m.id
+            );
+            continue;
+        }
+
         let mut gwrs = Vec::new();
         let mut team_types = Vec::new();
 
         for g in &m.games {
-            let gwr = game_win_record(&g);
+            let gwr = match game_win_record(g) {
+                Some(gwr) => gwr,
+                None => {
+                    println!(
+                        "Game {} has no winners or losers, skipping when considering MatchWinRecord creation",
+                        g.id
+                    );
+                    continue;
+                }
+            };
+
             gwrs.push(gwr.clone());
             gwrs_final.push(gwr.clone());
-            team_types.push(g.team_type.clone())
+            team_types.push(g.team_type)
+        }
+
+        if team_types.is_empty() {
+            println!("Expected match {} to have at least 1 TeamType, skipping", m.id);
+            continue;
+        }
+
+        if gwrs.is_empty() {
+            println!("Expected match {} to have at least 1 GameWinRecord, skipping", m.id);
+            continue;
         }
 
         // Calculate match win record
-        mwrs.push(match_win_record_from_game_win_records(m.id, &gwrs, &team_types));
+        if let Some(mwr) = create_match_win_record(m.id, &gwrs, &team_types) {
+            mwrs.push(mwr);
+        }
+
         bar.inc(1);
     }
 
     (mwrs, gwrs_final)
 }
 
-fn match_win_record_from_game_win_records(
+pub fn create_match_win_record(
     match_id: i32,
-    game_win_records: &[GameWinRecord],
-    team_types: &[TeamType]
-) -> MatchWinRecord {
-    let mut winner_roster: Vec<i32> = Vec::new();
-    let mut loser_roster: Vec<i32> = Vec::new();
-    let mut winner_points = 0;
-    let mut loser_points = 0;
-
-    let mut count_team = 0;
-    let mut count_head_to_head = 0;
-
-    // These are vecs containing the team numbers for each game
-    // e.g. if red wins a point, winner_team_nums.push(2)
-    let mut winner_team_nums = vec![];
-    let mut loser_team_nums = vec![];
-
-    // First pass: Identify head to head / teamvs
-    for i in 0..team_types.len() {
-        match team_types[i] {
-            TeamType::TeamVs => {
-                count_team += 1;
-            }
-            TeamType::HeadToHead => {
-                count_head_to_head += 1;
-            }
-            _ => {
-                panic!("not supported");
-            }
-        }
+    game_win_records: &Vec<GameWinRecord>,
+    team_types: &Vec<TeamType>
+) -> Option<MatchWinRecord> {
+    // Identify common team type
+    if team_types.is_empty() {
+        return None;
     }
 
-    let team_vs = count_team >= count_head_to_head;
-    match team_vs {
-        true => {
-            // Team VS
+    let team_type = mode(team_types);
+
+    match team_type {
+        Some(TeamVs) => {
+            // Identify the team that has the most points
+            let mut team_red_points = 0;
+            let mut team_blue_points = 0;
+
             for gwr in game_win_records {
-                winner_team_nums.push(gwr.winner_team);
-                loser_team_nums.push(gwr.loser_team);
+                if gwr.winner_team == BLUE_TEAM_ID {
+                    team_blue_points += 1;
+                } else if gwr.winner_team == RED_TEAM_ID {
+                    team_red_points += 1;
+                }
             }
 
-            if winner_team_nums.is_empty() || loser_team_nums.is_empty() {
-                panic!(
-                    "Winner or loser team nums are empty: {:?} {:?}",
-                    match_id, game_win_records
-                );
-            }
+            // Now that we know the winner, we can build the 'winner' and 'loser' rosters.
+            // Ties are given to team red, even though it's likely due to bad data (e.g. warmup
+            // accidentally gets included)
+            let winner_team = if team_red_points >= team_blue_points {
+                RED_TEAM_ID
+            } else {
+                BLUE_TEAM_ID
+            };
+            let mut winner_roster = HashSet::new();
+            let mut loser_roster = HashSet::new();
 
-            let winner_team = mode(&winner_team_nums).unwrap();
-            let loser_team = mode(&loser_team_nums).unwrap();
-
-            // Second pass: Build the rosters
+            // If we know that the game's winning team
+            // is equal to the match winning team, we extend the
+            // 'winner' roster. Otherwise, extend the 'loser' roster.
             for gwr in game_win_records {
                 if gwr.winner_team == winner_team {
                     winner_roster.extend(gwr.winners.clone());
                     loser_roster.extend(gwr.losers.clone());
-                    winner_points += 1;
                 } else {
                     winner_roster.extend(gwr.losers.clone());
                     loser_roster.extend(gwr.winners.clone());
-                    loser_points += 1;
                 }
             }
 
-            winner_roster = winner_roster.into_iter().unique().collect();
-            loser_roster = loser_roster.into_iter().unique().collect();
-
-            MatchWinRecord {
+            Some(MatchWinRecord {
                 match_id,
-                loser_roster,
-                winner_roster,
-                loser_points,
-                winner_points,
+                loser_roster: loser_roster.into_iter().collect(),
+                winner_roster: winner_roster.into_iter().collect(),
+                loser_points: team_blue_points,
+                winner_points: team_red_points,
                 winner_team: Some(winner_team),
-                loser_team: Some(loser_team),
-                match_type: Some(MatchType::Team as i32)
-            }
-        }
-        false => {
-            // Head to head
-
-            // Identify winning player
-            let mut winner_ids: Vec<i32> = Vec::new();
-            let mut loser_ids: Vec<i32> = Vec::new();
-
-            for gwr in game_win_records {
-                winner_ids.extend(gwr.winners.clone());
-                loser_ids.extend(gwr.losers.clone());
-            }
-
-            // Identify the winner
-            let winner_id = mode(&winner_ids).unwrap();
-            let loser_id = mode(&loser_ids).unwrap();
-
-            // Count the points
-            for gwr in game_win_records {
-                if gwr.winners.contains(&winner_id) {
-                    winner_points += 1;
+                loser_team: Some(if winner_team == RED_TEAM_ID {
+                    BLUE_TEAM_ID
                 } else {
-                    loser_points += 1;
-                }
-            }
-
-            // If tie, use no winner team, else use 0
-            let team = if winner_points == loser_points { None } else { Some(0) };
-
-            // Build the rosters
-            MatchWinRecord {
-                match_id,
-                loser_roster: vec![loser_id],
-                winner_roster: vec![winner_id],
-                loser_points,
-                winner_points,
-                winner_team: team,
-                loser_team: team,
-                match_type: Some(MatchType::HeadToHead as i32)
-            }
+                    RED_TEAM_ID
+                }),
+                match_type: Some(MatchType::Team as i32)
+            })
         }
+        Some(TeamType::HeadToHead) => {
+            let mut points = HashMap::new();
+
+            for gwr in game_win_records {
+                if gwr.winners.len() > 1 {
+                    println!(
+                        "Game {} is a head to head game with more than one winner, skipping when \
+                    considering MatchWinRecord creation",
+                        gwr.game_id
+                    );
+                    continue;
+                }
+
+                if gwr.losers.len() > 1 {
+                    println!(
+                        "Game {} is a head to head game with more than one loser, skipping when \
+                    considering MatchWinRecord creation",
+                        gwr.game_id
+                    );
+                    continue;
+                }
+
+                let winner = gwr.winners[0];
+                let loser = gwr.losers[0];
+
+                let winner_points = points.entry(winner).or_insert(0);
+                *winner_points += 1;
+
+                points.entry(loser).or_insert(0);
+            }
+
+            // Now that we have a point value for both players, find the winner
+            let winner = points.iter().max_by_key(|x| x.1).unwrap().0;
+            let loser = points.iter().min_by_key(|x| x.1).unwrap().0;
+
+            let winner_points = points.get(winner).unwrap();
+            let loser_points = points.get(loser).unwrap();
+
+            Some(MatchWinRecord {
+                match_id,
+                loser_roster: vec![*loser],
+                winner_roster: vec![*winner],
+                loser_points: *loser_points,
+                winner_points: *winner_points,
+                winner_team: None,
+                loser_team: None,
+                match_type: Some(MatchType::HeadToHead as i32)
+            })
+        }
+        _ => None
     }
 }
 
-fn mode(numbers: &[i32]) -> Option<i32> {
-    let mut count = HashMap::new();
-
-    for number in numbers {
-        *count.entry(*number).or_insert(0) += 1;
+/// Generic function that identifies the most frequent element in a vector
+fn mode<T: Eq + std::hash::Hash>(v: &Vec<T>) -> Option<&T> {
+    let mut map = HashMap::new();
+    for i in v {
+        let count = map.entry(i).or_insert(0);
+        *count += 1;
     }
 
-    count.iter().max_by_key(|(_, &n)| n).map(|(&v, _)| v)
+    let mut max = 0;
+    let mut mode = None;
+    for (k, v) in map {
+        if v > max {
+            max = v;
+            mode = Some(k);
+        }
+    }
+
+    mode
 }
 
 /// For each player in the match, generate one [`PlayerMatchStats`] object.
 /// This allows us to identify how each player performed in the match.
 fn player_match_stats(matches: &[Match]) -> Vec<PlayerMatchStats> {
-    println!("Calculating player match stats...");
-    let bar = progress_bar(matches.len() as u64);
+    let bar = progress_bar(matches.len() as u64, "Calculating player match stats...".to_string());
     let mut res = Vec::new();
 
     for m in matches {
@@ -697,25 +731,52 @@ fn player_match_stats(matches: &[Match]) -> Vec<PlayerMatchStats> {
         let mut p_glost: HashMap<i32, i32> = HashMap::new();
 
         let gwrs = calculate_game_win_records(std::slice::from_ref(m));
-        let mwr = match_win_record_from_game_win_records(
-            m.id,
-            &gwrs,
-            &m.games.iter().map(|x| x.team_type).collect::<Vec<TeamType>>()
-        );
+
+        // Convert gwrs into a hashmap of game_id -> GameWinRecord
+        let gwr_hash = gwrs
+            .clone()
+            .into_iter()
+            .map(|x| (x.game_id, x))
+            .collect::<HashMap<i32, GameWinRecord>>();
+
+        let team_types = &m.games.iter().map(|x| x.team_type).collect::<Vec<TeamType>>();
+
+        if gwrs.is_empty() || team_types.is_empty() {
+            bar.inc(1);
+            continue;
+        }
+
+        let mwr_unsafe = create_match_win_record(m.id, &gwrs, team_types);
+
+        if mwr_unsafe.is_none() {
+            bar.inc(1);
+            continue;
+        }
+
+        let match_win_record = mwr_unsafe.unwrap();
 
         let mut g_idx = 0;
         for g in &m.games {
             let mut s_clone = g.match_scores.clone();
             s_clone.sort_by(|a, b| b.score.cmp(&a.score));
 
-            let gwr = &gwrs[g_idx];
+            let gwr = match gwr_hash.get(&g.id) {
+                Some(gwr) => gwr,
+                None => {
+                    println!(
+                        "Game {} has no GameWinRecord, skipping when considering PlayerMatchStats creation",
+                        g.id
+                    );
+                    continue;
+                }
+            };
 
             let mut p = 1;
             for s in s_clone {
-                let scores = p_scores.entry(s.player_id).or_insert(Vec::new());
-                let misses = p_misses.entry(s.player_id).or_insert(Vec::new());
-                let accs = p_accs.entry(s.player_id).or_insert(Vec::new());
-                let placement = p_placement.entry(s.player_id).or_insert(Vec::new());
+                let scores = p_scores.entry(s.player_id).or_default();
+                let misses = p_misses.entry(s.player_id).or_default();
+                let accs = p_accs.entry(s.player_id).or_default();
+                let placement = p_placement.entry(s.player_id).or_default();
                 let gplayed = p_gplayed.entry(s.player_id).or_insert(0);
                 let gwon = p_gwon.entry(s.player_id).or_insert(0);
                 let glost = p_glost.entry(s.player_id).or_insert(0);
@@ -727,7 +788,7 @@ fn player_match_stats(matches: &[Match]) -> Vec<PlayerMatchStats> {
                 placement.push(p);
                 *gplayed += 1;
 
-                let won = player_won_game(&s.player_id, &gwr);
+                let won = player_won_game(&s.player_id, gwr);
                 if won {
                     *gwon += 1;
                 } else {
@@ -743,8 +804,8 @@ fn player_match_stats(matches: &[Match]) -> Vec<PlayerMatchStats> {
 
         p_ids = p_ids.into_iter().unique().collect();
 
-        let winning_roster = mwr.winner_roster.clone();
-        let losing_roster = mwr.loser_roster.clone();
+        let winning_roster = match_win_record.winner_roster.clone();
+        let losing_roster = match_win_record.loser_roster.clone();
 
         for p_id in p_ids {
             let won = winning_roster.contains(&p_id);
@@ -752,27 +813,17 @@ fn player_match_stats(matches: &[Match]) -> Vec<PlayerMatchStats> {
                 player_id: p_id,
                 match_id: m.id,
                 won,
-                average_score: mean(p_scores.entry(p_id).or_insert(Vec::new())),
-                average_misses: mean(p_misses.entry(p_id).or_insert(Vec::new())),
-                average_accuracy: mean(p_accs.entry(p_id).or_insert(Vec::new())),
-                average_placement: mean(p_placement.entry(p_id).or_insert(Vec::new())),
+                average_score: mean(p_scores.entry(p_id).or_default()),
+                average_misses: mean(p_misses.entry(p_id).or_default()),
+                average_accuracy: mean(p_accs.entry(p_id).or_default()),
+                average_placement: mean(p_placement.entry(p_id).or_default()),
                 games_won: *p_gwon.entry(p_id).or_insert(0),
                 games_lost: *p_glost.entry(p_id).or_insert(0),
                 games_played: *p_gplayed.entry(p_id).or_insert(0),
                 teammate_ids: if won {
-                    winning_roster
-                        .clone()
-                        .iter()
-                        .filter(|x| **x != p_id)
-                        .map(|x| *x)
-                        .collect()
+                    winning_roster.clone().iter().filter(|x| **x != p_id).copied().collect()
                 } else {
-                    losing_roster
-                        .clone()
-                        .iter()
-                        .filter(|x| **x != p_id)
-                        .map(|x| *x)
-                        .collect()
+                    losing_roster.clone().iter().filter(|x| **x != p_id).copied().collect()
                 },
                 opponent_ids: if won {
                     losing_roster.clone()
@@ -808,12 +859,11 @@ pub fn calculate_processed_match_data(
     matches: &[Match],
     model: &PlackettLuce
 ) -> (Vec<ProcessedMatchData>, Vec<RatingAdjustment>) {
-    println!("Calculating processed match data...");
-    let bar = progress_bar(matches.len() as u64);
+    let bar = progress_bar(matches.len() as u64, "Calculating processed match data".to_string());
 
     let mut decay_tracker = DecayTracker::new();
 
-    let mut ratings_hash: HashMap<(i32, Mode), PlayerRating> = HashMap::with_capacity(initial_ratings.len());
+    let mut ratings_hash: HashMap<(i32, Ruleset), PlayerRating> = HashMap::with_capacity(initial_ratings.len());
 
     // Pointless cloning
     // TODO think of a way to reuse same provided list
@@ -828,12 +878,12 @@ pub fn calculate_processed_match_data(
 
     for curr_match in matches {
         let mut current_match_stats = ProcessedMatchData {
-            mode: curr_match.mode,
+            mode: curr_match.ruleset,
             match_id: curr_match.id,
             players_stats: Vec::new()
         };
 
-        if curr_match.games.iter().any(|game| game.ruleset != curr_match.mode) {
+        if curr_match.games.iter().any(|game| game.ruleset != curr_match.ruleset) {
             bar.inc(1);
             continue;
         }
@@ -866,14 +916,14 @@ pub fn calculate_processed_match_data(
         for match_cost in &match_costs {
             // If user has no prior activity, store the first one
             if decay_tracker
-                .get_activity(match_cost.player_id, curr_match.mode)
+                .get_activity(match_cost.player_id, curr_match.ruleset)
                 .is_none()
             {
-                decay_tracker.record_activity(match_cost.player_id, curr_match.mode, start_time);
+                decay_tracker.record_activity(match_cost.player_id, curr_match.ruleset, start_time);
             }
 
             // Get user's current rating to use for decay
-            let mut rating_prior = match ratings_hash.get_mut(&(match_cost.player_id, curr_match.mode)) {
+            let mut rating_prior = match ratings_hash.get_mut(&(match_cost.player_id, curr_match.ruleset)) {
                 None => panic!("No rating found?"),
                 Some(rate) => rate.clone()
             };
@@ -882,7 +932,7 @@ pub fn calculate_processed_match_data(
             if is_decay_possible(rating_prior.rating.mu) {
                 let adjustments = decay_tracker.decay(
                     match_cost.player_id,
-                    curr_match.mode,
+                    curr_match.ruleset,
                     rating_prior.rating.mu,
                     rating_prior.rating.sigma,
                     start_time
@@ -901,7 +951,7 @@ pub fn calculate_processed_match_data(
 
             // Update hashmap with decay values, if any.
             ratings_hash
-                .entry((match_cost.player_id, curr_match.mode))
+                .entry((match_cost.player_id, curr_match.ruleset))
                 .and_modify(|f| {
                     f.rating = rating_prior.rating.clone();
                 });
@@ -980,7 +1030,7 @@ pub fn calculate_processed_match_data(
             let average_o_rating = average_rating(opponent_ratings);
             // Record currently processed match
             // Uses start_time as end_time can be null (issue on osu-web side)
-            decay_tracker.record_activity(rating_prior.player_id, curr_match.mode, start_time);
+            decay_tracker.record_activity(rating_prior.player_id, curr_match.ruleset, start_time);
 
             current_match_stats.players_stats.push(PlayerMatchData {
                 player_id: rating_prior.player_id,
@@ -1021,7 +1071,7 @@ pub fn calculate_processed_match_data(
                 .unwrap();
 
             ratings_hash
-                .entry((player_match_stats.player_id, curr_match.mode))
+                .entry((player_match_stats.player_id, curr_match.ruleset))
                 .and_modify(|x| x.rating = rate.rating.clone());
 
             player_match_stats.new_rating = rate.rating.clone();
@@ -1043,9 +1093,8 @@ fn calc_percentile(rank: i32, player_count: usize) -> f64 {
     }
 
     // Calculate the percentile
-    let percentile = 1.0 - (rank as f64 - 1.0) / (player_count as f64 - 1.0);
 
-    percentile
+    1.0 - (rank as f64 - 1.0) / (player_count as f64 - 1.0)
 }
 
 pub fn get_country_rank(
@@ -1119,14 +1168,14 @@ pub fn get_global_rank(mu: &f64, player_id: &i32, existing_ratings: &[PlayerRati
 }
 
 fn push_team_rating(
-    ratings_hash: &mut HashMap<(i32, Mode), PlayerRating>,
+    ratings_hash: &mut HashMap<(i32, Ruleset), PlayerRating>,
     curr_match: &Match,
     teammate_list: Vec<i32>,
     teammate: &mut Vec<f64>
 ) {
     for id in teammate_list {
         let teammate_id = id;
-        let mode = curr_match.mode;
+        let mode = curr_match.ruleset;
         let rating = match ratings_hash.get(&(teammate_id, mode)) {
             Some(r) => r.rating.mu,
             None => todo!("This player is not in the hashmap")
@@ -1167,6 +1216,12 @@ pub fn match_costs(games: &[Game]) -> Option<Vec<MatchCost>> {
 
     for game in games {
         let match_scores = &game.match_scores;
+
+        if match_scores.len() <= 1 {
+            println!("Game has less than 2 players, skipping: {:?}", game);
+            continue;
+        }
+
         let score_values: Vec<f64> = match_scores.iter().map(|x| x.score as f64).collect();
         let sum_scores: f64 = score_values.iter().sum();
         let average_score = sum_scores / match_scores.len() as f64;
@@ -1214,7 +1269,10 @@ pub fn match_costs(games: &[Game]) -> Option<Vec<MatchCost>> {
         };
 
         if result.is_nan() {
-            panic!("Match cost cannot be NaN. {}", result);
+            panic!(
+                "Match cost cannot be NaN. {:?} pid {}, n_played {}",
+                match_costs, player_id, n_played
+            );
         }
 
         let mc = MatchCost {
@@ -1228,31 +1286,41 @@ pub fn match_costs(games: &[Game]) -> Option<Vec<MatchCost>> {
     Some(match_costs)
 }
 
-fn game_win_record(game: &Game) -> GameWinRecord {
+fn game_win_record(game: &Game) -> Option<GameWinRecord> {
     let game_id = game.id;
-    let (winners, losers, winner_team, loser_team) = identify_game_winners_losers(game);
 
-    GameWinRecord {
-        game_id,
-        winners,
-        losers,
-        winner_team,
-        loser_team
+    if game.match_scores.len() < 2 {
+        println!("Game {} has less than 2 scores, skipping", game_id);
+        return None;
+    }
+
+    match identify_game_winners_losers(game) {
+        Some((winners, losers, winner_team, loser_team)) => Some(GameWinRecord {
+            game_id,
+            winners,
+            losers,
+            winner_team,
+            loser_team
+        }),
+        None => {
+            println!("Game {} has no winners or losers, skipping", game_id);
+            None
+        }
     }
 }
 
 /// Identifies the winners and losers of a game.
 /// Return format is tuple of (winner ids, loser ids, winner team, loser team)
-fn identify_game_winners_losers(game: &Game) -> (Vec<i32>, Vec<i32>, i32, i32) {
+fn identify_game_winners_losers(game: &Game) -> Option<(Vec<i32>, Vec<i32>, i32, i32)> {
     match game.team_type {
         TeamType::HeadToHead => {
             if game.match_scores.len() != 2 {
-                println!("Head to head game must have 2 players: {:?}", game);
+                println!("Head to head game must have 2 scores: {:?}", game);
             }
 
             // Head to head
             let [ref score_0, ref score_1] = game.match_scores[0..2] else {
-                panic!("Head to head game needs at least two scores!")
+                panic!("Head to head game needs at least two scores: {:?}", game);
             };
 
             let winners;
@@ -1266,7 +1334,7 @@ fn identify_game_winners_losers(game: &Game) -> (Vec<i32>, Vec<i32>, i32, i32) {
                 losers = vec![score_0.player_id];
             }
 
-            return (winners, losers, 0, 0);
+            Some((winners, losers, 0, 0))
         }
         TeamType::TeamVs => {
             let mut red_players = vec![];
@@ -1293,12 +1361,12 @@ fn identify_game_winners_losers(game: &Game) -> (Vec<i32>, Vec<i32>, i32, i32) {
             let blue_score: i32 = blue_scores.iter().sum();
 
             if red_score > blue_score {
-                (red_players, blue_players, RED_TEAM_ID, BLUE_TEAM_ID)
+                Some((red_players, blue_players, RED_TEAM_ID, BLUE_TEAM_ID))
             } else {
-                (blue_players, red_players, BLUE_TEAM_ID, RED_TEAM_ID)
+                Some((blue_players, red_players, BLUE_TEAM_ID, RED_TEAM_ID))
             }
         }
-        _ => panic!("Invalid team type")
+        _ => None
     }
 }
 
@@ -1322,6 +1390,7 @@ mod tests {
     use std::collections::HashMap;
 
     use chrono::{FixedOffset, Utc};
+    use itertools::Itertools;
     use openskill::{model::model::Model, rating::Rating};
 
     use crate::{
@@ -1330,12 +1399,13 @@ mod tests {
             PlayerMatchStats
         },
         model::{
-            calc_percentile, calculate_country_ranks, calculate_post_match_info, calculate_ratings,
+            calc_percentile, calculate_country_ranks, calculate_rating_stats, calculate_ratings,
             constants::{BLUE_TEAM_ID, RED_TEAM_ID},
             mu_for_rank,
             structures::{
-                match_cost::MatchCost, match_type::MatchType, mode::Mode, player_rating::PlayerRating,
-                scoring_type::ScoringType, team_type::TeamType
+                match_cost::MatchCost, match_type::MatchType,
+                match_verification_status::MatchVerificationStatus::Verified, player_rating::PlayerRating,
+                ruleset::Ruleset, scoring_type::ScoringType, team_type::TeamType
             }
         },
         utils::test_utils
@@ -1343,8 +1413,8 @@ mod tests {
 
     use super::{
         calculate_global_ranks, calculate_match_win_records, calculate_player_adjustments,
-        calculate_processed_match_data, create_initial_ratings, create_model, game_win_record, hash_country_mappings,
-        player_match_stats
+        calculate_processed_match_data, create_initial_ratings, create_match_win_record, create_model, game_win_record,
+        hash_country_mappings, player_match_stats
     };
 
     fn match_from_json(json: &str) -> Match {
@@ -1361,6 +1431,30 @@ mod tests {
 
     fn country_mapping_from_json(json: &str) -> Vec<PlayerCountryMapping> {
         serde_json::from_str(json).unwrap()
+    }
+
+    #[test]
+    fn test_mode_int() {
+        let v = vec![1, 2, 3, 4, 4, 5, 6, 7, 8];
+        let expected = 4;
+        let value = super::mode(&v).unwrap();
+
+        assert_eq!(expected, *value);
+    }
+
+    #[test]
+    fn test_mode_team_type() {
+        let v = vec![
+            TeamType::HeadToHead,
+            TeamType::HeadToHead,
+            TeamType::TeamVs,
+            TeamType::TeamVs,
+            TeamType::TeamVs,
+        ];
+        let expected = TeamType::TeamVs;
+        let value = super::mode(&v).unwrap();
+
+        assert_eq!(expected, *value);
     }
 
     #[test]
@@ -1470,7 +1564,7 @@ mod tests {
         for id in player_ids {
             initial_ratings.push(PlayerRating {
                 player_id: id,
-                mode: Mode::Osu,
+                mode: Ruleset::Osu,
                 rating: Rating {
                     mu: 1500.0 + offset,
                     sigma: 200.0
@@ -1641,7 +1735,7 @@ mod tests {
 
             initial_ratings.push(PlayerRating {
                 player_id: i,
-                mode: Mode::Osu,
+                mode: Ruleset::Osu,
                 rating: Rating {
                     // We subtract 1.0 from player 1 here because
                     // global / country ranks etc. need to be known ahead of time.
@@ -1696,7 +1790,7 @@ mod tests {
         let game = Game {
             id: 0,
             game_id: 0,
-            ruleset: Mode::Osu,
+            ruleset: Ruleset::Osu,
             scoring_type: ScoringType::ScoreV2,
             team_type: TeamType::HeadToHead,
             start_time,
@@ -1712,7 +1806,8 @@ mod tests {
             id: 0,
             match_id: 0,
             name: Some("TEST: (One) vs (One)".to_string()),
-            mode: Mode::Osu,
+            ruleset: Ruleset::Osu,
+            verification_status: Verified,
             start_time: Some(start_time),
             end_time: None,
             games
@@ -2019,7 +2114,7 @@ mod tests {
 
         let mut copied_initial_ratings = initial_ratings.clone();
 
-        let match_rating_stats = calculate_post_match_info(&mut copied_initial_ratings, &mut processed_match_data.0);
+        let match_rating_stats = calculate_rating_stats(&mut copied_initial_ratings, &mut processed_match_data.0);
         let adjustments = calculate_player_adjustments(&initial_ratings, &copied_initial_ratings);
 
         // The amount of players that participated in the matches
@@ -2073,11 +2168,12 @@ mod tests {
         // Act
         // Set all modes in twc_data to taiko
         for m in &mut twc_data {
-            m.mode = Mode::Taiko;
+            // Set the id to something different
+            m.ruleset = Ruleset::Taiko;
             m.id += id_offset;
 
             for g in &mut m.games {
-                g.ruleset = Mode::Taiko;
+                g.ruleset = Ruleset::Taiko;
             }
         }
 
@@ -2134,11 +2230,11 @@ mod tests {
         combined_initial_ratings.extend(initial_ratings_std.clone());
 
         // Calculating correct ranking placements after extending
-        calculate_global_ranks(&mut combined_initial_ratings, Mode::Osu);
-        calculate_global_ranks(&mut combined_initial_ratings, Mode::Taiko);
+        calculate_global_ranks(&mut combined_initial_ratings, Ruleset::Osu);
+        calculate_global_ranks(&mut combined_initial_ratings, Ruleset::Taiko);
 
-        calculate_country_ranks(&mut combined_initial_ratings, Mode::Osu);
-        calculate_country_ranks(&mut combined_initial_ratings, Mode::Taiko);
+        calculate_country_ranks(&mut combined_initial_ratings, Ruleset::Osu);
+        calculate_country_ranks(&mut combined_initial_ratings, Ruleset::Taiko);
 
         let combined_res = calculate_ratings(combined_initial_ratings, &combined_match_data, &plackett_luce);
 
@@ -2186,7 +2282,7 @@ mod tests {
         let initial_ratings = vec![
             PlayerRating {
                 player_id: 1,
-                mode: Mode::Osu,
+                mode: Ruleset::Osu,
                 rating: Rating {
                     mu: 1500.0,
                     sigma: 200.0
@@ -2197,7 +2293,7 @@ mod tests {
             },
             PlayerRating {
                 player_id: 1,
-                mode: Mode::Taiko,
+                mode: Ruleset::Taiko,
                 rating: Rating {
                     mu: 800.0,
                     sigma: 200.0
@@ -2208,7 +2304,7 @@ mod tests {
             },
             PlayerRating {
                 player_id: 2,
-                mode: Mode::Taiko,
+                mode: Ruleset::Taiko,
                 rating: Rating {
                     mu: 1500.0,
                     sigma: 200.0
@@ -2219,7 +2315,7 @@ mod tests {
             },
             PlayerRating {
                 player_id: 2,
-                mode: Mode::Osu,
+                mode: Ruleset::Osu,
                 rating: Rating {
                     mu: 800.0,
                     sigma: 200.0
@@ -2238,12 +2334,13 @@ mod tests {
                 id: 1,
                 match_id: 123,
                 name: Some("Osu game".to_owned()),
-                mode: Mode::Osu,
+                ruleset: Ruleset::Osu,
+                verification_status: Verified,
                 start_time: Some(Utc::now().with_timezone(&FixedOffset::east_opt(0).unwrap())),
                 end_time: None,
                 games: vec![Game {
                     id: 123,
-                    ruleset: Mode::Osu,
+                    ruleset: Ruleset::Osu,
                     scoring_type: ScoringType::Score,
                     team_type: TeamType::TeamVs,
                     mods: 0,
@@ -2281,12 +2378,13 @@ mod tests {
                 id: 2,
                 match_id: 124,
                 name: Some("Taiko game".to_owned()),
-                mode: Mode::Taiko,
+                ruleset: Ruleset::Taiko,
+                verification_status: Verified,
                 start_time: Some(Utc::now().with_timezone(&FixedOffset::east_opt(0).unwrap())),
                 end_time: None,
                 games: vec![Game {
                     id: 123,
-                    ruleset: Mode::Taiko,
+                    ruleset: Ruleset::Taiko,
                     scoring_type: ScoringType::Score,
                     team_type: TeamType::TeamVs,
                     mods: 0,
@@ -2327,7 +2425,7 @@ mod tests {
         let plackett_luce = create_model();
         let (mut processed_match_data, adjustments) = calculate_processed_match_data(&copied, &matches, &plackett_luce);
 
-        let match_info = calculate_post_match_info(&mut copied, &mut processed_match_data);
+        let match_info = calculate_rating_stats(&mut copied, &mut processed_match_data);
 
         // Sanity checks to make sure there are no weird
         // global/country ranks assinged
@@ -2354,23 +2452,23 @@ mod tests {
         let p1_osu = result
             .player_ratings
             .iter()
-            .find(|x| x.player_id == 1 && x.mode == Mode::Osu)
+            .find(|x| x.player_id == 1 && x.mode == Ruleset::Osu)
             .unwrap();
         let p2_osu = result
             .player_ratings
             .iter()
-            .find(|x| x.player_id == 2 && x.mode == Mode::Osu)
+            .find(|x| x.player_id == 2 && x.mode == Ruleset::Osu)
             .unwrap();
 
         let p1_taiko = result
             .player_ratings
             .iter()
-            .find(|x| x.player_id == 1 && x.mode == Mode::Taiko)
+            .find(|x| x.player_id == 1 && x.mode == Ruleset::Taiko)
             .unwrap();
         let p2_taiko = result
             .player_ratings
             .iter()
-            .find(|x| x.player_id == 2 && x.mode == Mode::Taiko)
+            .find(|x| x.player_id == 2 && x.mode == Ruleset::Taiko)
             .unwrap();
 
         assert_eq!(p2_taiko.global_ranking, 1);
@@ -2385,7 +2483,7 @@ mod tests {
         let mut players = vec![
             PlayerRating {
                 player_id: 1,
-                mode: Mode::Osu,
+                mode: Ruleset::Osu,
                 rating: Rating {
                     mu: 1500.0,
                     sigma: 200.0
@@ -2396,7 +2494,7 @@ mod tests {
             },
             PlayerRating {
                 player_id: 1,
-                mode: Mode::Taiko,
+                mode: Ruleset::Taiko,
                 rating: Rating {
                     mu: 800.0,
                     sigma: 200.0
@@ -2407,7 +2505,7 @@ mod tests {
             },
             PlayerRating {
                 player_id: 2,
-                mode: Mode::Taiko,
+                mode: Ruleset::Taiko,
                 rating: Rating {
                     mu: 1500.0,
                     sigma: 200.0
@@ -2418,7 +2516,7 @@ mod tests {
             },
             PlayerRating {
                 player_id: 2,
-                mode: Mode::Osu,
+                mode: Ruleset::Osu,
                 rating: Rating {
                     mu: 800.0,
                     sigma: 200.0
@@ -2429,15 +2527,15 @@ mod tests {
             },
         ];
 
-        calculate_global_ranks(&mut players, Mode::Osu);
-        calculate_global_ranks(&mut players, Mode::Taiko);
-        calculate_global_ranks(&mut players, Mode::Mania);
-        calculate_global_ranks(&mut players, Mode::Catch);
+        calculate_global_ranks(&mut players, Ruleset::Osu);
+        calculate_global_ranks(&mut players, Ruleset::Taiko);
+        calculate_global_ranks(&mut players, Ruleset::Mania);
+        calculate_global_ranks(&mut players, Ruleset::Catch);
 
         assert_eq!(
             players
                 .iter()
-                .find(|x| x.player_id == 1 && x.mode == Mode::Osu)
+                .find(|x| x.player_id == 1 && x.mode == Ruleset::Osu)
                 .unwrap()
                 .global_ranking,
             1
@@ -2446,7 +2544,7 @@ mod tests {
         assert_eq!(
             players
                 .iter()
-                .find(|x| x.player_id == 1 && x.mode == Mode::Taiko)
+                .find(|x| x.player_id == 1 && x.mode == Ruleset::Taiko)
                 .unwrap()
                 .global_ranking,
             2
@@ -2455,7 +2553,7 @@ mod tests {
         assert_eq!(
             players
                 .iter()
-                .find(|x| x.player_id == 2 && x.mode == Mode::Osu)
+                .find(|x| x.player_id == 2 && x.mode == Ruleset::Osu)
                 .unwrap()
                 .global_ranking,
             2
@@ -2464,7 +2562,7 @@ mod tests {
         assert_eq!(
             players
                 .iter()
-                .find(|x| x.player_id == 2 && x.mode == Mode::Taiko)
+                .find(|x| x.player_id == 2 && x.mode == Ruleset::Taiko)
                 .unwrap()
                 .global_ranking,
             1
@@ -2476,7 +2574,7 @@ mod tests {
         let mut players = vec![
             PlayerRating {
                 player_id: 200,
-                mode: Mode::Osu,
+                mode: Ruleset::Osu,
                 rating: Rating {
                     mu: 1500.0,
                     sigma: 200.0
@@ -2487,7 +2585,7 @@ mod tests {
             },
             PlayerRating {
                 player_id: 100,
-                mode: Mode::Taiko,
+                mode: Ruleset::Taiko,
                 rating: Rating {
                     mu: 1500.0,
                     sigma: 200.0
@@ -2498,7 +2596,7 @@ mod tests {
             },
             PlayerRating {
                 player_id: 102,
-                mode: Mode::Taiko,
+                mode: Ruleset::Taiko,
                 rating: Rating {
                     mu: 1000.0,
                     sigma: 200.0
@@ -2509,7 +2607,7 @@ mod tests {
             },
             PlayerRating {
                 player_id: 101,
-                mode: Mode::Taiko,
+                mode: Ruleset::Taiko,
                 rating: Rating {
                     mu: 1499.0,
                     sigma: 200.0
@@ -2520,7 +2618,7 @@ mod tests {
             },
             PlayerRating {
                 player_id: 202,
-                mode: Mode::Osu,
+                mode: Ruleset::Osu,
                 rating: Rating {
                     mu: 700.0,
                     sigma: 200.0
@@ -2531,7 +2629,7 @@ mod tests {
             },
             PlayerRating {
                 player_id: 201,
-                mode: Mode::Osu,
+                mode: Ruleset::Osu,
                 rating: Rating {
                     mu: 899.0,
                     sigma: 200.0
@@ -2542,8 +2640,8 @@ mod tests {
             },
         ];
 
-        calculate_global_ranks(&mut players, Mode::Osu);
-        calculate_global_ranks(&mut players, Mode::Taiko);
+        calculate_global_ranks(&mut players, Ruleset::Osu);
+        calculate_global_ranks(&mut players, Ruleset::Taiko);
 
         assert_eq!(players.iter().find(|x| x.player_id == 200).unwrap().global_ranking, 1);
 
@@ -2563,7 +2661,7 @@ mod tests {
         let mut players = vec![
             PlayerRating {
                 player_id: 200,
-                mode: Mode::Osu,
+                mode: Ruleset::Osu,
                 rating: Rating {
                     mu: 1500.0,
                     sigma: 200.0
@@ -2574,7 +2672,7 @@ mod tests {
             },
             PlayerRating {
                 player_id: 101,
-                mode: Mode::Taiko,
+                mode: Ruleset::Taiko,
                 rating: Rating {
                     mu: 1000.0,
                     sigma: 200.0
@@ -2585,7 +2683,7 @@ mod tests {
             },
             PlayerRating {
                 player_id: 201,
-                mode: Mode::Osu,
+                mode: Ruleset::Osu,
                 rating: Rating {
                     mu: 1449.0,
                     sigma: 200.0
@@ -2596,7 +2694,7 @@ mod tests {
             },
             PlayerRating {
                 player_id: 102,
-                mode: Mode::Taiko,
+                mode: Ruleset::Taiko,
                 rating: Rating {
                     mu: 900.0,
                     sigma: 200.0
@@ -2607,7 +2705,7 @@ mod tests {
             },
             PlayerRating {
                 player_id: 100,
-                mode: Mode::Taiko,
+                mode: Ruleset::Taiko,
                 rating: Rating {
                     mu: 1500.0,
                     sigma: 200.0
@@ -2618,8 +2716,8 @@ mod tests {
             },
         ];
 
-        calculate_country_ranks(&mut players, Mode::Osu);
-        calculate_country_ranks(&mut players, Mode::Taiko);
+        calculate_country_ranks(&mut players, Ruleset::Osu);
+        calculate_country_ranks(&mut players, Ruleset::Taiko);
 
         assert_eq!(players.iter().find(|x| x.player_id == 100).unwrap().country_ranking, 1);
 
@@ -2654,7 +2752,7 @@ mod tests {
         let game = Game {
             id: 14,
             game_id: 0,
-            ruleset: Mode::Osu,
+            ruleset: Ruleset::Osu,
             scoring_type: ScoringType::ScoreV2,
             team_type: TeamType::TeamVs,
             start_time: Utc::now().fixed_offset(),
@@ -2719,7 +2817,7 @@ mod tests {
 
         let result = game_win_record(&game);
 
-        assert_eq!(result, expected);
+        assert_eq!(result, Some(expected));
     }
 
     #[test]
@@ -2727,7 +2825,7 @@ mod tests {
         let game = Game {
             id: 14,
             game_id: 0,
-            ruleset: Mode::Osu,
+            ruleset: Ruleset::Osu,
             scoring_type: ScoringType::ScoreV2,
             team_type: TeamType::HeadToHead,
             start_time: Utc::now().fixed_offset(),
@@ -2770,7 +2868,7 @@ mod tests {
 
         let result = game_win_record(&game);
 
-        assert_eq!(result, expected);
+        assert_eq!(result, Some(expected));
     }
 
     #[test]
@@ -2781,14 +2879,15 @@ mod tests {
             id: 12,
             match_id: 0,
             name: Some("Foo".to_string()),
-            mode: Mode::Osu,
+            ruleset: Ruleset::Osu,
+            verification_status: Verified,
             start_time: None,
             end_time: None,
             games: vec![
                 // Game 1: Red wins against blue
                 Game {
                     id: 0,
-                    ruleset: Mode::Osu,
+                    ruleset: Ruleset::Osu,
                     scoring_type: ScoringType::ScoreV2,
                     team_type: TeamType::TeamVs,
                     mods: 0,
@@ -2846,7 +2945,7 @@ mod tests {
                 // Game 2: Red wins against blue
                 Game {
                     id: 1,
-                    ruleset: Mode::Osu,
+                    ruleset: Ruleset::Osu,
                     scoring_type: ScoringType::ScoreV2,
                     team_type: TeamType::TeamVs,
                     mods: 0,
@@ -2904,7 +3003,7 @@ mod tests {
                 // Game 3: Blue wins against red
                 Game {
                     id: 2,
-                    ruleset: Mode::Osu,
+                    ruleset: Ruleset::Osu,
                     scoring_type: ScoringType::ScoreV2,
                     team_type: TeamType::TeamVs,
                     mods: 0,
@@ -2962,7 +3061,7 @@ mod tests {
             ]
         };
 
-        let expected_mwr = MatchWinRecord {
+        let mut expected_mwr = MatchWinRecord {
             match_id: 12,
             loser_roster: vec![0, 1],
             winner_roster: vec![2, 3],
@@ -2997,16 +3096,113 @@ mod tests {
             },
         ];
 
-        let (actual_mwr, actual_gwrs) = calculate_match_win_records(&vec![match_data]);
+        let (mut actual_mwr, actual_gwrs) = calculate_match_win_records(&vec![match_data]);
 
         assert_eq!(actual_mwr.len(), 1);
         assert_eq!(actual_gwrs.len(), 3);
+
+        let act_mwr = &mut actual_mwr[0];
+
+        act_mwr.loser_roster.sort_unstable();
+        act_mwr.winner_roster.sort_unstable();
+
+        expected_mwr.loser_roster.sort_unstable();
+        expected_mwr.winner_roster.sort_unstable();
 
         assert_eq!(actual_mwr[0], expected_mwr);
 
         for i in 0..3 {
             assert_eq!(actual_gwrs[i], expected_gwrs[i]);
         }
+    }
+
+    #[test]
+    fn test_match_win_record_does_not_panic_when_no_games() {
+        let match_data = Match {
+            id: 12,
+            match_id: 0,
+            name: Some("Foo".to_string()),
+            ruleset: Ruleset::Osu,
+            verification_status: Verified,
+            start_time: None,
+            end_time: None,
+            games: vec![]
+        };
+
+        let (actual_mwr, actual_gwrs) = calculate_match_win_records(&vec![match_data]);
+
+        assert_eq!(actual_mwr.len(), 0);
+        assert_eq!(actual_gwrs.len(), 0);
+    }
+
+    #[test]
+    fn test_create_match_win_record() {
+        let game_win_records = vec![
+            GameWinRecord {
+                game_id: 1,
+                winners: vec![1, 2, 3],
+                losers: vec![4, 5, 6],
+                winner_team: 1,
+                loser_team: 2
+            },
+            GameWinRecord {
+                game_id: 2,
+                winners: vec![4, 5, 7],
+                losers: vec![1, 2, 8],
+                winner_team: 2,
+                loser_team: 1
+            },
+            GameWinRecord {
+                game_id: 3,
+                winners: vec![4, 5, 6],
+                losers: vec![1, 2, 8],
+                winner_team: 2,
+                loser_team: 1
+            },
+        ];
+
+        let team_types = vec![TeamType::HeadToHead, TeamType::TeamVs, TeamType::TeamVs];
+
+        let expected_match_win_record = MatchWinRecord {
+            match_id: 1,
+            loser_roster: vec![1, 2, 3, 8],
+            winner_roster: vec![4, 5, 6, 7],
+            loser_points: 1,  // Team 1 won 1 game
+            winner_points: 2, // Team 2 won 2 games
+            winner_team: Some(2),
+            loser_team: Some(1),
+            match_type: Some(MatchType::Team as i32)
+        };
+
+        let match_win_record = create_match_win_record(1, &game_win_records, &team_types).unwrap();
+
+        assert_eq!(match_win_record.match_id, expected_match_win_record.match_id);
+        assert_eq!(
+            match_win_record.loser_roster.len(),
+            expected_match_win_record.loser_roster.len()
+        );
+        assert_eq!(
+            match_win_record.winner_roster.len(),
+            expected_match_win_record.winner_roster.len()
+        );
+        assert_eq!(match_win_record.loser_points, expected_match_win_record.loser_points);
+        assert_eq!(match_win_record.winner_points, expected_match_win_record.winner_points);
+        assert_eq!(match_win_record.winner_team, expected_match_win_record.winner_team);
+        assert_eq!(match_win_record.loser_team, expected_match_win_record.loser_team);
+        assert_eq!(match_win_record.match_type, expected_match_win_record.match_type);
+
+        let mut actual_loser_roster: Vec<i32> = match_win_record.loser_roster;
+        let mut expected_loser_roster: Vec<i32> = expected_match_win_record.loser_roster;
+
+        actual_loser_roster.sort_unstable();
+        expected_loser_roster.sort_unstable();
+        assert_eq!(expected_loser_roster, actual_loser_roster);
+
+        let mut actual_winner_roster: Vec<i32> = match_win_record.winner_roster;
+        let mut expected_winner_roster: Vec<i32> = expected_match_win_record.winner_roster;
+        actual_winner_roster.sort_unstable();
+        expected_winner_roster.sort_unstable();
+        assert_eq!(expected_winner_roster, actual_winner_roster);
     }
 
     #[test]
@@ -3017,14 +3213,15 @@ mod tests {
             id: 12,
             match_id: 0,
             name: Some("Foo".to_string()),
-            mode: Mode::Osu,
+            ruleset: Ruleset::Osu,
+            verification_status: Verified,
             start_time: None,
             end_time: None,
             games: vec![
                 // Game 1: Player 1 wins against player 0
                 Game {
                     id: 0,
-                    ruleset: Mode::Osu,
+                    ruleset: Ruleset::Osu,
                     scoring_type: ScoringType::ScoreV2,
                     team_type: TeamType::HeadToHead,
                     mods: 0,
@@ -3060,7 +3257,7 @@ mod tests {
                 // Game 2: Player 1 wins against player 0
                 Game {
                     id: 1,
-                    ruleset: Mode::Osu,
+                    ruleset: Ruleset::Osu,
                     scoring_type: ScoringType::ScoreV2,
                     team_type: TeamType::HeadToHead,
                     mods: 0,
@@ -3096,7 +3293,7 @@ mod tests {
                 // Game 3: Player 0 wins against player 1
                 Game {
                     id: 2,
-                    ruleset: Mode::Osu,
+                    ruleset: Ruleset::Osu,
                     scoring_type: ScoringType::ScoreV2,
                     team_type: TeamType::HeadToHead,
                     mods: 0,
@@ -3138,8 +3335,8 @@ mod tests {
             winner_roster: vec![1],
             loser_points: 1,
             winner_points: 2,
-            winner_team: Some(0),
-            loser_team: Some(0),
+            winner_team: None,
+            loser_team: None,
             match_type: Some(MatchType::HeadToHead as i32)
         };
 
@@ -3162,14 +3359,15 @@ mod tests {
             id: 12,
             match_id: 0,
             name: Some("Foo".to_string()),
-            mode: Mode::Osu,
+            ruleset: Ruleset::Osu,
+            verification_status: Verified,
             start_time: None,
             end_time: None,
             games: vec![
                 // Game 1: Player 0 wins
                 Game {
                     id: 0,
-                    ruleset: Mode::Osu,
+                    ruleset: Ruleset::Osu,
                     scoring_type: ScoringType::ScoreV2,
                     team_type: TeamType::HeadToHead,
                     mods: 0,
@@ -3205,7 +3403,7 @@ mod tests {
                 // Game 2: Player 1 wins
                 Game {
                     id: 1,
-                    ruleset: Mode::Osu,
+                    ruleset: Ruleset::Osu,
                     scoring_type: ScoringType::ScoreV2,
                     team_type: TeamType::HeadToHead,
                     mods: 0,
@@ -3272,7 +3470,8 @@ mod tests {
             id: 1,
             match_id: 123,
             name: Some("Osu game".to_owned()),
-            mode: Mode::Osu,
+            ruleset: Ruleset::Osu,
+            verification_status: Verified,
             start_time: Some(Utc::now().with_timezone(&FixedOffset::east_opt(0).unwrap())),
             end_time: None,
             games: vec![
@@ -3290,7 +3489,7 @@ mod tests {
                 // - P2 placing: 1
                 Game {
                     id: 123,
-                    ruleset: Mode::Osu,
+                    ruleset: Ruleset::Osu,
                     scoring_type: ScoringType::Score,
                     team_type: TeamType::TeamVs,
                     mods: 0,
@@ -3337,7 +3536,7 @@ mod tests {
                 // - P2 placing: 1
                 Game {
                     id: 2,
-                    ruleset: Mode::Osu,
+                    ruleset: Ruleset::Osu,
                     scoring_type: ScoringType::Score,
                     team_type: TeamType::TeamVs,
                     mods: 0,
@@ -3385,7 +3584,7 @@ mod tests {
                 // - P2 placing: 1
                 Game {
                     id: 3,
-                    ruleset: Mode::Osu,
+                    ruleset: Ruleset::Osu,
                     scoring_type: ScoringType::Score,
                     team_type: TeamType::TeamVs,
                     mods: 0,
@@ -3433,7 +3632,7 @@ mod tests {
                 // - P2 placing: 2
                 Game {
                     id: 4,
-                    ruleset: Mode::Osu,
+                    ruleset: Ruleset::Osu,
                     scoring_type: ScoringType::Score,
                     team_type: TeamType::TeamVs,
                     mods: 0,

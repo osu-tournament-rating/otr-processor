@@ -6,8 +6,8 @@ use openskill::rating::Rating;
 use otr_processor::{
     api::api_structs::{Match, PlayerCountryMapping},
     model::{
-        calculate_post_match_info, calculate_ratings, create_model, match_costs, ranks_from_match_costs,
-        structures::{mode::Mode, player_rating::PlayerRating, processing::ProcessedMatchData}
+        calculate_rating_stats, calculate_ratings, create_model, match_costs, ranks_from_match_costs,
+        structures::{player_rating::PlayerRating, processing::ProcessedMatchData, ruleset::Ruleset}
     }
 };
 
@@ -44,7 +44,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     for id in player_ids {
         initial_ratings.push(PlayerRating {
             player_id: id,
-            mode: Mode::Osu,
+            mode: Ruleset::Osu,
             rating: Rating {
                 mu: 1500.0 + offset,
                 sigma: 200.0
@@ -74,7 +74,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
     c.bench_with_input(BenchmarkId::new("calc_post_match", input.clone()), &input, |b, s| {
         let mut input = input.clone();
-        b.iter(|| calculate_post_match_info(&mut input.initial_ratings, &mut input.data));
+        b.iter(|| calculate_rating_stats(&mut input.initial_ratings, &mut input.data));
     });
     // c.bench_with_input(BenchmarkId::new("calc_rankings_old", input.clone()), &input, |b, s| {
     // let mut input = input.clone();

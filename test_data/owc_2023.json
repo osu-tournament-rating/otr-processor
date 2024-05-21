@@ -3,7 +3,7 @@
     "id": 53282,
     "matchId": 111534249,
     "name": "OWC2023: (Australia) VS (United States)",
-    "mode": 0,
+    "ruleset": 0,
     "startTime": "2023-12-01T21:50:13-05:00",
     "endTime": "2023-12-01T23:10:00-05:00",
     "games": [
@@ -1089,7 +1089,7 @@
     "id": 53283,
     "matchId": 111554331,
     "name": "OWC2023: (South Korea) VS (United States)",
-    "mode": 0,
+    "ruleset": 0,
     "startTime": "2023-12-02T22:49:20-05:00",
     "endTime": "2023-12-03T00:59:45-05:00",
     "games": [
@@ -2560,7 +2560,7 @@
     "id": 53284,
     "matchId": 111555364,
     "name": "OWC2023: (United States) VS (South Korea)",
-    "mode": 0,
+    "ruleset": 0,
     "startTime": "2023-12-03T00:30:05-05:00",
     "endTime": "2023-12-03T02:49:00-05:00",
     "games": [

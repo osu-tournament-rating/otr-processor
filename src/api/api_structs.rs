@@ -1,7 +1,10 @@
 use chrono::{DateTime, FixedOffset};
 use serde::{Deserialize, Serialize};
 
-use crate::model::structures::{match_type::MatchType, mode::Mode, scoring_type::ScoringType, team_type::TeamType};
+use crate::model::structures::{
+    match_verification_status::MatchVerificationStatus, ruleset::Ruleset, scoring_type::ScoringType,
+    team_type::TeamType
+};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -21,7 +24,7 @@ pub struct OAuthResponse {
 #[serde(rename_all = "camelCase")]
 pub struct RatingAdjustment {
     pub player_id: i32,
-    pub mode: Mode,
+    pub mode: Ruleset,
     pub rating_adjustment_amount: f64,
     pub volatility_adjustment_amount: f64,
     pub rating_before: f64,
@@ -81,7 +84,7 @@ pub struct BaseStats {
     pub match_cost_average: f64,
     pub rating: f64,
     pub volatility: f64,
-    pub mode: Mode,
+    pub mode: Ruleset,
     pub percentile: f64,
     pub global_rank: u32,
     pub country_rank: u32
@@ -116,7 +119,8 @@ pub struct Match {
     pub id: i32,
     pub match_id: i64,
     pub name: Option<String>,
-    pub mode: Mode,
+    pub ruleset: Ruleset,
+    pub verification_status: MatchVerificationStatus,
     pub start_time: Option<DateTime<FixedOffset>>,
     pub end_time: Option<DateTime<FixedOffset>>,
     pub games: Vec<Game>
@@ -140,7 +144,7 @@ pub struct PlayerCountryMapping {
 #[serde(rename_all = "camelCase")]
 pub struct Game {
     pub id: i32,
-    pub ruleset: Mode,
+    pub ruleset: Ruleset,
     pub scoring_type: ScoringType,
     pub team_type: TeamType,
     pub mods: i32,
@@ -203,4 +207,17 @@ pub struct Player {
     pub earliest_catch_global_rank_date: Option<DateTime<FixedOffset>>,
     pub earliest_mania_global_rank: Option<i32>,
     pub earliest_mania_global_rank_date: Option<DateTime<FixedOffset>>
+}
+
+#[derive(Debug, Deserialize, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct MatchPagedResult {
+    /// Link to the next potential page of results
+    pub next: Option<String>,
+    /// Link to the previous potential page of results
+    pub previous: Option<String>,
+    /// Number of results included
+    pub count: i32,
+    /// List of resulting data
+    pub results: Vec<Match>
 }

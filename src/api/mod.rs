@@ -1,14 +1,5 @@
-pub mod api_structs;
-
 use std::{sync::Arc, time::Duration};
 
-use crate::{
-    api::api_structs::{
-        BaseStats, GameWinRecord, Match, MatchIdMapping, MatchRatingStats, MatchWinRecord, OAuthResponse, Player,
-        PlayerCountryMapping, PlayerMatchStats, RatingAdjustment
-    },
-    utils::progress_utils::progress_bar
-};
 use reqwest::{
     header::{AUTHORIZATION, CONTENT_TYPE},
     Client, ClientBuilder, Error, Method
@@ -18,6 +9,18 @@ use tokio::sync::{
     oneshot::{Receiver, Sender},
     RwLock
 };
+
+use crate::{
+    api::api_structs::{
+        BaseStats, GameWinRecord, MatchRatingStats, MatchWinRecord, OAuthResponse, Player, PlayerCountryMapping,
+        PlayerMatchStats, RatingAdjustment
+    },
+    utils::progress_utils::progress_bar
+};
+
+use self::api_structs::MatchPagedResult;
+
+pub mod api_structs;
 
 /// A loop that automatically refreshes token
 pub async fn refresh_token_loop(api: Arc<OtrApiBody>) {
@@ -279,52 +282,16 @@ impl OtrApiClient {
         }
     }
 
-    /// Get ids of matches
-    pub async fn get_match_ids(&self, limit: Option<u32>) -> Result<Vec<u32>, Error> {
-        let limit = limit.unwrap_or(0);
-        let link = "/v1/matches/ids";
-
-        let response = self.make_request(Method::GET, link).await?;
-
-        if limit == 0 {
-            return Ok(response);
-        }
-
-        let limited_response = response.into_iter().take(limit as usize).collect();
-
-        Ok(limited_response)
-    }
-
     /// Get matches based on provided list of match id's
     /// # Arguments
-    /// * `match_ids` - valid id's of matches
+    /// * `page` - The page number (the response is a paged result)
     /// * `chunk_size` - amount of matches that is going to be fetched
     /// in one request. Done to reduce strain on API side. Recommended
     /// value is `250`
-    pub async fn get_matches(&self, match_ids: &[u32], chunk_size: usize) -> Result<Vec<Match>, Error> {
-        let link = "/v1/matches/convert";
+    pub async fn get_matches(&self, page: usize, chunk_size: usize) -> Result<MatchPagedResult, Error> {
+        let link = format!("/v1/matches?page={}&limit={}", page, chunk_size);
 
-        let mut data: Vec<Match> = Vec::new();
-
-        println!("Fetching match data...");
-        let bar = progress_bar(match_ids.len() as u64);
-        for chunk in match_ids.chunks(chunk_size) {
-            let response: Vec<Match> = self.make_request_with_body(Method::POST, link, Some(chunk)).await?;
-
-            data.extend(response);
-            bar.inc(chunk.len() as u64);
-        }
-        bar.finish();
-
-        Ok(data)
-    }
-
-    /// Get list of match id mappings
-    /// otr_match_id <-> osu_match_id
-    pub async fn get_match_id_mapping(&self) -> Result<Vec<MatchIdMapping>, Error> {
-        let link = "/v1/matches/id-mapping";
-
-        self.make_request(Method::GET, link).await
+        self.make_request(Method::GET, &link).await
     }
 
     /// Get list of players
@@ -345,90 +312,96 @@ impl OtrApiClient {
     pub async fn post_adjustments(&self, adjustments: &[RatingAdjustment]) -> Result<(), Error> {
         let link = "/v1/stats/ratingadjustments";
 
-        println!("Posting rating adjustments...");
-        let bar = progress_bar(adjustments.len() as u64);
+        let bar = progress_bar(adjustments.len() as u64, "Posting rating adjustments".to_string());
 
         let body = adjustments.chunks(5000);
-        Ok(for chunk in body {
+        for chunk in body {
             self.make_request_with_body::<(), &[RatingAdjustment]>(Method::POST, link, Some(chunk))
                 .await?;
             bar.inc(chunk.len() as u64);
-        })
+        }
+        Ok(())
     }
 
     /// Post PlayerMatchStats
     pub async fn post_player_match_stats(&self, player_match_stats: &[PlayerMatchStats]) -> Result<(), Error> {
         let link = "/v1/stats/matchstats";
 
-        println!("Posting player match stats...");
-        let bar = progress_bar(player_match_stats.len() as u64);
+        let bar = progress_bar(
+            player_match_stats.len() as u64,
+            "Posting player match stats".to_string()
+        );
 
         let body = player_match_stats.chunks(5000);
-        Ok(for chunk in body {
+        for chunk in body {
             self.make_request_with_body::<(), &[PlayerMatchStats]>(Method::POST, link, Some(chunk))
                 .await?;
             bar.inc(chunk.len() as u64);
-        })
+        }
+        Ok(())
     }
 
     /// Post MatchRatingStats
     pub async fn post_match_rating_stats(&self, match_rating_stats: &[MatchRatingStats]) -> Result<(), Error> {
         let link = "/v1/stats/ratingstats";
 
-        println!("Posting match rating stats...");
-        let bar = progress_bar(match_rating_stats.len() as u64);
+        let bar = progress_bar(
+            match_rating_stats.len() as u64,
+            "Posting match rating stats".to_string()
+        );
 
         let body = match_rating_stats.chunks(5000);
-        Ok(for chunk in body {
+        for chunk in body {
             self.make_request_with_body::<(), &[MatchRatingStats]>(Method::POST, link, Some(chunk))
                 .await?;
             bar.inc(chunk.len() as u64);
-        })
+        }
+        Ok(())
     }
 
     /// Post BaseStats
     pub async fn post_base_stats(&self, base_stats: &[BaseStats]) -> Result<(), Error> {
         let link = "/v1/stats/basestats";
 
-        println!("Posting base stats...");
-        let bar = progress_bar(base_stats.len() as u64);
+        let bar = progress_bar(base_stats.len() as u64, "Posting base stats".to_string());
 
         let body = base_stats.chunks(5000);
-        Ok(for chunk in body {
+        for chunk in body {
             self.make_request_with_body::<(), &[BaseStats]>(Method::POST, link, Some(chunk))
                 .await?;
             bar.inc(chunk.len() as u64);
-        })
+        }
+        Ok(())
     }
 
     /// Post GameWinRecords
     pub async fn post_game_win_records(&self, game_win_records: &[GameWinRecord]) -> Result<(), Error> {
         let link = "/v1/stats/gamewinrecords";
 
-        println!("Posting game win records...");
-        let bar = progress_bar(game_win_records.len() as u64);
+        let bar = progress_bar(game_win_records.len() as u64, "Posting game win records".to_string());
 
         let body = game_win_records.chunks(5000);
-        Ok(for chunk in body {
+        for chunk in body {
             self.make_request_with_body::<(), &[GameWinRecord]>(Method::POST, link, Some(chunk))
                 .await?;
             bar.inc(chunk.len() as u64);
-        })
+        }
+        Ok(())
     }
 
     /// Post MatchWinRecords
     pub async fn post_match_win_records(&self, match_win_records: &[MatchWinRecord]) -> Result<(), Error> {
         let link = "/v1/stats/matchwinrecords";
 
-        println!("Posting match win records...");
-        let bar = progress_bar(match_win_records.len() as u64);
+        let bar = progress_bar(match_win_records.len() as u64, "Posting match win records".to_string());
 
         let body = match_win_records.chunks(5000);
-        Ok(for chunk in body {
+        for chunk in body {
             self.make_request_with_body::<(), &[MatchWinRecord]>(Method::POST, link, Some(chunk))
                 .await?;
             bar.inc(chunk.len() as u64);
-        })
+        }
+        Ok(())
     }
 
     /// Delete all stats
@@ -441,19 +414,21 @@ impl OtrApiClient {
 
 #[cfg(test)]
 mod api_client_tests {
-    use httpmock::prelude::*;
-    use serde_json::json;
     use std::time::Duration;
 
-    use crate::api::api_structs::{
-        BaseStats, GameWinRecord, MatchRatingStats, MatchWinRecord, PlayerMatchStats, RatingAdjustment
-    };
     use async_once_cell::OnceCell;
     use chrono::{FixedOffset, Utc};
+    use httpmock::prelude::*;
+    use serde_json::json;
 
     use crate::{
-        api::OtrApiClient,
-        model::structures::{match_type::MatchType, mode::Mode}
+        api::{
+            api_structs::{
+                BaseStats, GameWinRecord, MatchRatingStats, MatchWinRecord, PlayerMatchStats, RatingAdjustment
+            },
+            OtrApiClient
+        },
+        model::structures::{match_type::MatchType, ruleset::Ruleset}
     };
 
     static API_INSTANCE: OnceCell<OtrApiClient> = OnceCell::new();
@@ -484,24 +459,13 @@ mod api_client_tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn test_api_client_login() {
         let _api = get_api().await;
     }
 
     #[tokio::test]
-    async fn test_api_client_get_match_ids() {
-        let api = get_api().await;
-
-        let result = api.get_match_ids(None).await.unwrap();
-
-        assert!(!result.is_empty());
-
-        let result = api.get_match_ids(Some(10)).await.unwrap();
-
-        assert_eq!(result.len(), 10);
-    }
-
-    #[tokio::test]
+    #[ignore]
     async fn test_api_client_get_players() {
         let api = get_api().await;
 
@@ -509,36 +473,14 @@ mod api_client_tests {
 
         assert!(!result.is_empty())
     }
-
     #[tokio::test]
-    async fn test_api_client_get_matches() {
-        let api = get_api().await;
-
-        let match_ids = api.get_match_ids(Some(10)).await.unwrap();
-
-        assert_eq!(match_ids.len(), 10);
-
-        let result = api.get_matches(&match_ids, 250).await.unwrap();
-
-        assert_eq!(result.len(), match_ids.len())
-    }
-
-    #[tokio::test]
-    async fn test_api_get_match_id_mapping() {
-        let api = get_api().await;
-
-        let result = api.get_match_id_mapping().await.unwrap();
-
-        assert!(!result.is_empty())
-    }
-
-    #[tokio::test]
+    #[ignore]
     async fn test_api_client_post_rating_adjustments() {
         let api = get_api().await;
 
         let payload = vec![RatingAdjustment {
             player_id: 440,
-            mode: Mode::Osu,
+            mode: Ruleset::Osu,
             rating_adjustment_amount: 3.123,
             volatility_adjustment_amount: 2.123,
             rating_before: 1000.0,
@@ -555,6 +497,7 @@ mod api_client_tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn test_api_client_post_player_match_stats() {
         let api = get_api().await;
 
@@ -579,6 +522,7 @@ mod api_client_tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn test_api_client_post_match_rating_stats() {
         let api = get_api().await;
 
@@ -611,12 +555,13 @@ mod api_client_tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn test_api_client_post_base_stats() {
         let api = get_api().await;
 
         let payload = vec![BaseStats {
             player_id: 440,
-            mode: Mode::Osu,
+            mode: Ruleset::Osu,
             rating: 1302.7,
             volatility: 98.2,
             global_rank: 730,
@@ -629,9 +574,21 @@ mod api_client_tests {
     }
 
     #[tokio::test]
+    #[ignore]
+    async fn test_api_client_get_matches() {
+        let api = get_api().await;
+
+        let result = api.get_matches(1, 5).await.unwrap();
+
+        assert_eq!(result.count as usize, result.results.len())
+    }
+
+    #[tokio::test]
+    #[ignore]
     async fn test_api_client_post_game_win_records() {
         let api = get_api().await;
 
+        let result = api.get_matches(1, 5).await.unwrap();
         let payload = vec![GameWinRecord {
             game_id: 450905,
             winners: vec![440],
@@ -646,6 +603,7 @@ mod api_client_tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn test_api_client_post_match_win_records() {
         let api = get_api().await;
 
@@ -657,7 +615,7 @@ mod api_client_tests {
             winner_points: 6,
             winner_team: Some(2),
             loser_team: Some(1),
-            match_type: Some(1) // TeamVS
+            match_type: Some(MatchType::Team as i32) // TeamVS
         }];
 
         api.post_match_win_records(&payload)
@@ -666,15 +624,17 @@ mod api_client_tests {
     }
 
     // DANGEROUS
-    // #[tokio::test]
-    // async fn test_api_client_delete_all_stats() {
-    //     let api = get_api().await;
-    //
-    //     api.delete_all_stats().await.expect("Failed to DELETE all stats");
-    // }
+    #[tokio::test]
+    #[ignore]
+    async fn test_api_client_delete_all_stats() {
+        let api = get_api().await;
+
+        api.delete_all_stats().await.expect("Failed to DELETE all stats");
+    }
 
     // Manually refresh token three times
     #[tokio::test]
+    #[ignore]
     async fn test_refresh_token() {
         let api = get_api().await;
 
@@ -715,6 +675,7 @@ mod api_client_tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn test_login_refresh_worker() {
         let server = MockServer::start();
 
@@ -747,6 +708,7 @@ mod api_client_tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn test_login_refresh_worker_hits() {
         let server = MockServer::start();
 

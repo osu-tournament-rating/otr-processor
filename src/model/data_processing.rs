@@ -11,7 +11,7 @@ fn get_mod_multipliers() -> ModMultipliers {
 pub fn apply_mod_multipliers(matches: &mut [Match]) {
     let multipliers = get_mod_multipliers();
 
-    let bar = progress_bar_spinner(matches.len() as u64);
+    let bar = progress_bar_spinner(matches.len() as u64, "Applying mod multipliers".to_string());
     bar.println("Applying mod multipliers...");
 
     for m in matches.iter_mut() {
@@ -37,7 +37,10 @@ mod tests {
         api::api_structs::{Game, Match, MatchScore},
         model::{
             data_processing::{apply_mod_multipliers, get_mod_multipliers},
-            structures::{mode::Mode, scoring_type::ScoringType, team_type::TeamType}
+            structures::{
+                match_verification_status::MatchVerificationStatus::Verified, ruleset::Ruleset,
+                scoring_type::ScoringType, team_type::TeamType
+            }
         }
     };
 
@@ -67,7 +70,7 @@ mod tests {
 
         let game = Game {
             id: 0,
-            ruleset: Mode::Osu,
+            ruleset: Ruleset::Osu,
             scoring_type: ScoringType::ScoreV2,
             team_type: TeamType::TeamVs,
             mods: 0,
@@ -82,7 +85,8 @@ mod tests {
             id: 123,
             match_id: 12345,
             name: Some("STT3: (Coffee) vs (The voices are back)".to_string()),
-            mode: Mode::Osu,
+            ruleset: Ruleset::Osu,
+            verification_status: Verified,
             start_time: None,
             end_time: None,
             games: vec![game]
