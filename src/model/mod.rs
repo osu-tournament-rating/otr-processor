@@ -1061,6 +1061,8 @@ pub fn calculate_processed_match_data(
         let flattened_ratings: Vec<Rating> = model_rating.into_iter().flatten().collect();
         for (idx, player) in to_rate.iter_mut().enumerate() {
             player.rating = flattened_ratings[idx].clone();
+            // Apply absolute rating floor
+            player.rating.mu = player.rating.mu.max(constants::ABSOLUTE_RATING_FLOOR);
         }
 
         for rate in to_rate.iter() {

@@ -8,6 +8,7 @@ pub static KAPPA: f64 = 0.0001;
 pub static DECAY_DAYS: u64 = 115;
 pub static DECAY_MINIMUM: f64 = 18.0 * MULTIPLIER;
 pub static DECAY_RATE: f64 = 0.06 * MULTIPLIER;
+pub static ABSOLUTE_RATING_FLOOR: f64 = 100.0;
 // Default rating constants for osu!
 pub static OSU_RATING_FLOOR: f64 = 5.0;
 pub static OSU_RATING_CEILING: f64 = 30.0;
