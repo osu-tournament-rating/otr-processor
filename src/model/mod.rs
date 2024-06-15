@@ -1,4 +1,9 @@
-use std::{cmp::Ordering, collections::{HashMap, HashSet}, iter::Sum, thread};
+use std::{
+    cmp::Ordering,
+    collections::{HashMap, HashSet},
+    iter::Sum,
+    thread
+};
 
 use chrono::Utc;
 use itertools::Itertools;
@@ -2694,11 +2699,17 @@ mod tests {
         // and the US players are ranked 10-1
 
         for i in 0..50 {
-            assert_eq!(players.iter().find(|x| x.player_id == i).unwrap().country_ranking, 50 - i as u32);
+            assert_eq!(
+                players.iter().find(|x| x.player_id == i).unwrap().country_ranking,
+                50 - i as u32
+            );
         }
 
         for i in 50..60 {
-            assert_eq!(players.iter().find(|x| x.player_id == i).unwrap().country_ranking, 10 - (i - 50) as u32);
+            assert_eq!(
+                players.iter().find(|x| x.player_id == i).unwrap().country_ranking,
+                10 - (i - 50) as u32
+            );
         }
     }
 
