@@ -83,7 +83,7 @@ pub fn calculate_player_adjustments(
 
         buff.push(RatingAdjustment {
             player_id: new_rating.player_id,
-            mode: new_rating.mode,
+            mode: new_rating.ruleset,
             rating_adjustment_amount: rating_change,
             volatility_adjustment_amount: volatility_change,
             rating_before,
@@ -124,7 +124,7 @@ pub fn calculate_rating_stats(
         for player_info in &mut match_info.players_stats {
             let player_idx = initial_ratings
                 .iter_mut()
-                .position(|x| x.player_id == player_info.player_id && x.mode == match_info.mode);
+                .position(|x| x.player_id == player_info.player_id && x.ruleset == match_info.mode);
 
             if player_idx.is_none() {
                 continue;
@@ -146,7 +146,7 @@ pub fn calculate_rating_stats(
         for player_info in &mut match_info.players_stats {
             let player_idx = initial_ratings
                 .iter_mut()
-                .position(|x| x.player_id == player_info.player_id && x.mode == match_info.mode);
+                .position(|x| x.player_id == player_info.player_id && x.ruleset == match_info.mode);
 
             if player_idx.is_none() {
                 continue;
@@ -211,7 +211,7 @@ pub fn calculate_rating_stats(
 /// Modifies and invalidate any existing sorting in [`PlayerRating`] slice
 pub fn calculate_global_ranks(existing_ratings: &mut [PlayerRating], mode: Ruleset) {
     existing_ratings.sort_by(|x, y| {
-        if y.mode != mode {
+        if y.ruleset != mode {
             Ordering::Less
         } else {
             Ordering::Greater
@@ -224,7 +224,7 @@ pub fn calculate_global_ranks(existing_ratings: &mut [PlayerRating], mode: Rules
 
     let gamemode_slice_end = existing_ratings
         .iter()
-        .position(|x| x.mode != mode)
+        .position(|x| x.ruleset != mode)
         .unwrap_or(existing_ratings.len());
 
     let gamemode_slice = &mut existing_ratings[gamemode_slice_start..gamemode_slice_end];
@@ -232,7 +232,7 @@ pub fn calculate_global_ranks(existing_ratings: &mut [PlayerRating], mode: Rules
     gamemode_slice.sort_by(|x, y| y.rating.mu.partial_cmp(&x.rating.mu).unwrap());
 
     gamemode_slice.iter_mut().enumerate().for_each(|(i, plr)| {
-        if plr.mode == mode {
+        if plr.ruleset == mode {
             plr.global_ranking = i as u32 + 1
         }
     });
@@ -246,13 +246,14 @@ pub fn calculate_global_ranks(existing_ratings: &mut [PlayerRating], mode: Rules
 pub fn calculate_country_ranks(existing_ratings: &mut [PlayerRating], mode: Ruleset) {
     let mut countries = HashSet::new();
 
-    // Country ranking
+    // Map countries to hashset
     existing_ratings.iter().map(|x| x.country.clone()).for_each(|x| {
         countries.insert(x);
     });
 
+    // Sort by gamemode, essentially grouping them. Useful for slicing
     existing_ratings.sort_by(|x, y| {
-        if x.mode != mode {
+        if x.ruleset != mode {
             Ordering::Less
         } else {
             Ordering::Greater
@@ -260,7 +261,7 @@ pub fn calculate_country_ranks(existing_ratings: &mut [PlayerRating], mode: Rule
     });
 
     // Finding gamemode slice
-    let gamemode_start = match existing_ratings.iter().position(|x| x.mode == mode) {
+    let gamemode_start = match existing_ratings.iter().position(|x| x.ruleset == mode) {
         Some(v) => v,
         None => return
     };
@@ -269,7 +270,7 @@ pub fn calculate_country_ranks(existing_ratings: &mut [PlayerRating], mode: Rule
 
     let gamemode_end = gamemode_slice
         .iter()
-        .position(|x| x.mode != mode)
+        .position(|x| x.ruleset != mode)
         .unwrap_or(gamemode_slice.len());
 
     let gamemode_slice = &mut gamemode_slice[..gamemode_end];
@@ -360,7 +361,7 @@ pub fn create_initial_ratings(matches: &Vec<Match>, players: &Vec<Player>) -> Ve
                 let rating = Rating::new(mu, sigma);
                 let player_rating = PlayerRating {
                     player_id: score.player_id,
-                    mode,
+                    ruleset: mode,
                     rating,
                     global_ranking: 0,
                     country_ranking: 0,
@@ -426,10 +427,10 @@ fn calculate_base_stats(
     let mut match_modes: HashMap<i32, Ruleset> = HashMap::new();
     let mut base_stats: HashMap<(i32, Ruleset), BaseStats> = HashMap::new();
 
-    let count_osu = player_ratings.iter().filter(|x| x.mode == Ruleset::Osu).count();
-    let count_taiko = player_ratings.iter().filter(|x| x.mode == Ruleset::Taiko).count();
-    let count_catch = player_ratings.iter().filter(|x| x.mode == Ruleset::Catch).count();
-    let count_mania = player_ratings.iter().filter(|x| x.mode == Ruleset::Mania).count();
+    let count_osu = player_ratings.iter().filter(|x| x.ruleset == Ruleset::Osu).count();
+    let count_taiko = player_ratings.iter().filter(|x| x.ruleset == Ruleset::Taiko).count();
+    let count_catch = player_ratings.iter().filter(|x| x.ruleset == Ruleset::Catch).count();
+    let count_mania = player_ratings.iter().filter(|x| x.ruleset == Ruleset::Mania).count();
 
     // Calculated values
     let mut match_costs: HashMap<(i32, Ruleset), Vec<f64>> = HashMap::new();
@@ -466,7 +467,7 @@ fn calculate_base_stats(
 
     let bar = progress_bar(player_ratings.len() as u64, "Calculating base stats".to_string());
     for r in player_ratings {
-        let cur_count = match r.mode {
+        let cur_count = match r.ruleset {
             Ruleset::Osu => count_osu,
             Ruleset::Taiko => count_taiko,
             Ruleset::Catch => count_catch,
@@ -477,7 +478,7 @@ fn calculate_base_stats(
             continue;
         }
 
-        let match_cost_average = match_costs.get(&(r.player_id, r.mode)).unwrap_or(&vec![0.0]).mean();
+        let match_cost_average = match_costs.get(&(r.player_id, r.ruleset)).unwrap_or(&vec![0.0]).mean();
 
         // if match_cost_average.is_nan() || match_cost_average == 0.0 {
         //     // TODO: Player has a default rating with no matches played.
@@ -486,13 +487,13 @@ fn calculate_base_stats(
 
         // Generate the final match costs list
         base_stats.insert(
-            (r.player_id, r.mode),
+            (r.player_id, r.ruleset),
             BaseStats {
                 player_id: r.player_id,
                 match_cost_average,
                 rating: r.rating.mu,
                 volatility: r.rating.sigma,
-                mode: r.mode,
+                mode: r.ruleset,
                 percentile: calc_percentile(r.global_ranking as i32, cur_count),
                 global_rank: r.global_ranking,
                 country_rank: r.country_ranking
@@ -868,7 +869,7 @@ pub fn calculate_processed_match_data(
     // Pointless cloning
     // TODO think of a way to reuse same provided list
     for r in initial_ratings {
-        ratings_hash.insert((r.player_id, r.mode), r.clone());
+        ratings_hash.insert((r.player_id, r.ruleset), r.clone());
     }
 
     let mut to_rate = Vec::with_capacity(10);
@@ -1566,7 +1567,7 @@ mod tests {
         for id in player_ids {
             initial_ratings.push(PlayerRating {
                 player_id: id,
-                mode: Ruleset::Osu,
+                ruleset: Ruleset::Osu,
                 rating: Rating {
                     mu: 1500.0 + offset,
                     sigma: 200.0
@@ -1737,7 +1738,7 @@ mod tests {
 
             initial_ratings.push(PlayerRating {
                 player_id: i,
-                mode: Ruleset::Osu,
+                ruleset: Ruleset::Osu,
                 rating: Rating {
                     // We subtract 1.0 from player 1 here because
                     // global / country ranks etc. need to be known ahead of time.
@@ -2284,7 +2285,7 @@ mod tests {
         let initial_ratings = vec![
             PlayerRating {
                 player_id: 1,
-                mode: Ruleset::Osu,
+                ruleset: Ruleset::Osu,
                 rating: Rating {
                     mu: 1500.0,
                     sigma: 200.0
@@ -2295,7 +2296,7 @@ mod tests {
             },
             PlayerRating {
                 player_id: 1,
-                mode: Ruleset::Taiko,
+                ruleset: Ruleset::Taiko,
                 rating: Rating {
                     mu: 800.0,
                     sigma: 200.0
@@ -2306,7 +2307,7 @@ mod tests {
             },
             PlayerRating {
                 player_id: 2,
-                mode: Ruleset::Taiko,
+                ruleset: Ruleset::Taiko,
                 rating: Rating {
                     mu: 1500.0,
                     sigma: 200.0
@@ -2317,7 +2318,7 @@ mod tests {
             },
             PlayerRating {
                 player_id: 2,
-                mode: Ruleset::Osu,
+                ruleset: Ruleset::Osu,
                 rating: Rating {
                     mu: 800.0,
                     sigma: 200.0
@@ -2454,23 +2455,23 @@ mod tests {
         let p1_osu = result
             .player_ratings
             .iter()
-            .find(|x| x.player_id == 1 && x.mode == Ruleset::Osu)
+            .find(|x| x.player_id == 1 && x.ruleset == Ruleset::Osu)
             .unwrap();
         let p2_osu = result
             .player_ratings
             .iter()
-            .find(|x| x.player_id == 2 && x.mode == Ruleset::Osu)
+            .find(|x| x.player_id == 2 && x.ruleset == Ruleset::Osu)
             .unwrap();
 
         let p1_taiko = result
             .player_ratings
             .iter()
-            .find(|x| x.player_id == 1 && x.mode == Ruleset::Taiko)
+            .find(|x| x.player_id == 1 && x.ruleset == Ruleset::Taiko)
             .unwrap();
         let p2_taiko = result
             .player_ratings
             .iter()
-            .find(|x| x.player_id == 2 && x.mode == Ruleset::Taiko)
+            .find(|x| x.player_id == 2 && x.ruleset == Ruleset::Taiko)
             .unwrap();
 
         assert_eq!(p2_taiko.global_ranking, 1);
@@ -2485,7 +2486,7 @@ mod tests {
         let mut players = vec![
             PlayerRating {
                 player_id: 1,
-                mode: Ruleset::Osu,
+                ruleset: Ruleset::Osu,
                 rating: Rating {
                     mu: 1500.0,
                     sigma: 200.0
@@ -2496,7 +2497,7 @@ mod tests {
             },
             PlayerRating {
                 player_id: 1,
-                mode: Ruleset::Taiko,
+                ruleset: Ruleset::Taiko,
                 rating: Rating {
                     mu: 800.0,
                     sigma: 200.0
@@ -2507,7 +2508,7 @@ mod tests {
             },
             PlayerRating {
                 player_id: 2,
-                mode: Ruleset::Taiko,
+                ruleset: Ruleset::Taiko,
                 rating: Rating {
                     mu: 1500.0,
                     sigma: 200.0
@@ -2518,7 +2519,7 @@ mod tests {
             },
             PlayerRating {
                 player_id: 2,
-                mode: Ruleset::Osu,
+                ruleset: Ruleset::Osu,
                 rating: Rating {
                     mu: 800.0,
                     sigma: 200.0
@@ -2537,7 +2538,7 @@ mod tests {
         assert_eq!(
             players
                 .iter()
-                .find(|x| x.player_id == 1 && x.mode == Ruleset::Osu)
+                .find(|x| x.player_id == 1 && x.ruleset == Ruleset::Osu)
                 .unwrap()
                 .global_ranking,
             1
@@ -2546,7 +2547,7 @@ mod tests {
         assert_eq!(
             players
                 .iter()
-                .find(|x| x.player_id == 1 && x.mode == Ruleset::Taiko)
+                .find(|x| x.player_id == 1 && x.ruleset == Ruleset::Taiko)
                 .unwrap()
                 .global_ranking,
             2
@@ -2555,7 +2556,7 @@ mod tests {
         assert_eq!(
             players
                 .iter()
-                .find(|x| x.player_id == 2 && x.mode == Ruleset::Osu)
+                .find(|x| x.player_id == 2 && x.ruleset == Ruleset::Osu)
                 .unwrap()
                 .global_ranking,
             2
@@ -2564,7 +2565,7 @@ mod tests {
         assert_eq!(
             players
                 .iter()
-                .find(|x| x.player_id == 2 && x.mode == Ruleset::Taiko)
+                .find(|x| x.player_id == 2 && x.ruleset == Ruleset::Taiko)
                 .unwrap()
                 .global_ranking,
             1
@@ -2576,7 +2577,7 @@ mod tests {
         let mut players = vec![
             PlayerRating {
                 player_id: 200,
-                mode: Ruleset::Osu,
+                ruleset: Ruleset::Osu,
                 rating: Rating {
                     mu: 1500.0,
                     sigma: 200.0
@@ -2587,7 +2588,7 @@ mod tests {
             },
             PlayerRating {
                 player_id: 100,
-                mode: Ruleset::Taiko,
+                ruleset: Ruleset::Taiko,
                 rating: Rating {
                     mu: 1500.0,
                     sigma: 200.0
@@ -2598,7 +2599,7 @@ mod tests {
             },
             PlayerRating {
                 player_id: 102,
-                mode: Ruleset::Taiko,
+                ruleset: Ruleset::Taiko,
                 rating: Rating {
                     mu: 1000.0,
                     sigma: 200.0
@@ -2609,7 +2610,7 @@ mod tests {
             },
             PlayerRating {
                 player_id: 101,
-                mode: Ruleset::Taiko,
+                ruleset: Ruleset::Taiko,
                 rating: Rating {
                     mu: 1499.0,
                     sigma: 200.0
@@ -2620,7 +2621,7 @@ mod tests {
             },
             PlayerRating {
                 player_id: 202,
-                mode: Ruleset::Osu,
+                ruleset: Ruleset::Osu,
                 rating: Rating {
                     mu: 700.0,
                     sigma: 200.0
@@ -2631,7 +2632,7 @@ mod tests {
             },
             PlayerRating {
                 player_id: 201,
-                mode: Ruleset::Osu,
+                ruleset: Ruleset::Osu,
                 rating: Rating {
                     mu: 899.0,
                     sigma: 200.0
@@ -2663,7 +2664,7 @@ mod tests {
         let mut players = vec![
             PlayerRating {
                 player_id: 200,
-                mode: Ruleset::Osu,
+                ruleset: Ruleset::Osu,
                 rating: Rating {
                     mu: 1500.0,
                     sigma: 200.0
@@ -2674,7 +2675,7 @@ mod tests {
             },
             PlayerRating {
                 player_id: 101,
-                mode: Ruleset::Taiko,
+                ruleset: Ruleset::Taiko,
                 rating: Rating {
                     mu: 1000.0,
                     sigma: 200.0
@@ -2685,7 +2686,7 @@ mod tests {
             },
             PlayerRating {
                 player_id: 201,
-                mode: Ruleset::Osu,
+                ruleset: Ruleset::Osu,
                 rating: Rating {
                     mu: 1449.0,
                     sigma: 200.0
@@ -2696,7 +2697,7 @@ mod tests {
             },
             PlayerRating {
                 player_id: 102,
-                mode: Ruleset::Taiko,
+                ruleset: Ruleset::Taiko,
                 rating: Rating {
                     mu: 900.0,
                     sigma: 200.0
@@ -2707,7 +2708,7 @@ mod tests {
             },
             PlayerRating {
                 player_id: 100,
-                mode: Ruleset::Taiko,
+                ruleset: Ruleset::Taiko,
                 rating: Rating {
                     mu: 1500.0,
                     sigma: 200.0
