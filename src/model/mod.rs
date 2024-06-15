@@ -276,7 +276,6 @@ pub fn calculate_country_ranks(existing_ratings: &mut [PlayerRating], mode: Rule
     let ruleset_slice = &mut ruleset_slice[..ruleset_end];
 
     for country in countries {
-        // TODO
         let country_start = ruleset_slice.iter().position(|x| x.country == country);
 
         if country_start.is_none() {
@@ -284,7 +283,6 @@ pub fn calculate_country_ranks(existing_ratings: &mut [PlayerRating], mode: Rule
         }
 
         let country_start = country_start.unwrap();
-
         let country_slice = &mut ruleset_slice[country_start..];
 
         let country_end = country_slice
@@ -2661,71 +2659,49 @@ mod tests {
 
     #[test]
     fn test_country_ranking() {
-        let mut players = vec![
-            PlayerRating {
-                player_id: 1,
+        let mut players = vec![];
+
+        // 50 RU players, 10 US players. Rank begins at 1500 and increases by 1.
+        for i in 0..50 {
+            players.push(PlayerRating {
+                player_id: i,
                 ruleset: Ruleset::Osu,
                 rating: Rating {
-                    mu: 1500.0,
+                    mu: 1500.0 + i as f64,
                     sigma: 200.0
                 },
                 global_ranking: 0,
                 country_ranking: 0,
                 country: "RU".to_string()
-            },
-            PlayerRating {
-                player_id: 2,
+            });
+        }
+
+        for i in 50..60 {
+            players.push(PlayerRating {
+                player_id: i,
                 ruleset: Ruleset::Osu,
                 rating: Rating {
-                    mu: 1499.0,
-                    sigma: 200.0
-                },
-                global_ranking: 0,
-                country_ranking: 0,
-                country: "RU".to_string()
-            },
-            PlayerRating {
-                player_id: 3,
-                ruleset: Ruleset::Osu,
-                rating: Rating {
-                    mu: 1498.0,
-                    sigma: 200.0
-                },
-                global_ranking: 0,
-                country_ranking: 0,
-                country: "RU".to_string()
-            },
-            PlayerRating {
-                player_id: 4,
-                ruleset: Ruleset::Osu,
-                rating: Rating {
-                    mu: 1505.0,
+                    mu: 1500.0 + i as f64,
                     sigma: 200.0
                 },
                 global_ranking: 0,
                 country_ranking: 0,
                 country: "US".to_string()
-            },
-            PlayerRating {
-                player_id: 5,
-                ruleset: Ruleset::Osu,
-                rating: Rating {
-                    mu: 1504.0,
-                    sigma: 200.0
-                },
-                global_ranking: 0,
-                country_ranking: 0,
-                country: "US".to_string()
-            },
-        ];
+            });
+        }
 
         calculate_country_ranks(&mut players, Ruleset::Osu);
 
-        assert_eq!(players.iter().find(|x| x.player_id == 1).unwrap().country_ranking, 1);
-        assert_eq!(players.iter().find(|x| x.player_id == 2).unwrap().country_ranking, 2);
-        assert_eq!(players.iter().find(|x| x.player_id == 3).unwrap().country_ranking, 3);
-        assert_eq!(players.iter().find(|x| x.player_id == 4).unwrap().country_ranking, 1);
-        assert_eq!(players.iter().find(|x| x.player_id == 5).unwrap().country_ranking, 2);
+        // Ensure that the RU players are ranked 50-1
+        // and the US players are ranked 10-1
+
+        for i in 0..50 {
+            assert_eq!(players.iter().find(|x| x.player_id == i).unwrap().country_ranking, 50 - i as u32);
+        }
+
+        for i in 50..60 {
+            assert_eq!(players.iter().find(|x| x.player_id == i).unwrap().country_ranking, 10 - (i - 50) as u32);
+        }
     }
 
     #[test]
