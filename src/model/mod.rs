@@ -1,8 +1,4 @@
-use std::{
-    cmp::Ordering,
-    collections::{HashMap, HashSet},
-    iter::Sum
-};
+use std::{cmp::Ordering, collections::{HashMap, HashSet}, iter::Sum, thread};
 
 use chrono::Utc;
 use itertools::Itertools;
@@ -101,50 +97,53 @@ pub fn calculate_player_adjustments(
 /// Calculates [`MatchRatingStats`] based on initial ratings
 /// and match adjustments
 pub fn calculate_rating_stats(
-    initial_ratings: &mut [PlayerRating],
+    player_ratings: &mut [PlayerRating],
     match_data: &mut [ProcessedMatchData]
 ) -> Vec<MatchRatingStats> {
     let bar = progress_bar(match_data.len() as u64, "Calculating match rating stats".to_string());
     let mut res = Vec::with_capacity(match_data.len());
 
-    // Calculating leadearboard for all modes
-    calculate_global_ranks(initial_ratings, Ruleset::Osu);
-    calculate_global_ranks(initial_ratings, Ruleset::Mania);
-    calculate_global_ranks(initial_ratings, Ruleset::Taiko);
-    calculate_global_ranks(initial_ratings, Ruleset::Catch);
+    // Calculating leaderboard for all modes
+    calculate_global_ranks(player_ratings, Ruleset::Osu);
+    calculate_global_ranks(player_ratings, Ruleset::Mania);
+    calculate_global_ranks(player_ratings, Ruleset::Taiko);
+    calculate_global_ranks(player_ratings, Ruleset::Catch);
 
-    calculate_country_ranks(initial_ratings, Ruleset::Osu);
-    calculate_country_ranks(initial_ratings, Ruleset::Mania);
-    calculate_country_ranks(initial_ratings, Ruleset::Taiko);
-    calculate_country_ranks(initial_ratings, Ruleset::Catch);
+    calculate_country_ranks(player_ratings, Ruleset::Osu);
+    calculate_country_ranks(player_ratings, Ruleset::Mania);
+    calculate_country_ranks(player_ratings, Ruleset::Taiko);
+    calculate_country_ranks(player_ratings, Ruleset::Catch);
 
     for match_info in match_data.iter_mut() {
         // Preparing initial_ratings with new rating
         // and extracting old country/global ranking placements
-        for player_info in &mut match_info.players_stats {
-            let player_idx = initial_ratings
+        for player_info in match_info.players_stats.iter_mut() {
+            // Fetch index of player's rating in initial_ratings for current ruleset
+            let player_idx = player_ratings
                 .iter_mut()
                 .position(|x| x.player_id == player_info.player_id && x.ruleset == match_info.mode);
 
             if player_idx.is_none() {
+                println!("Player {} not found in initial ratings", player_info.player_id);
                 continue;
             }
 
-            let player_idx = player_idx.unwrap();
-
-            let player = &mut initial_ratings[player_idx];
+            let player = &mut player_ratings[player_idx.unwrap()];
 
             player.rating = player_info.new_rating.clone();
             player_info.old_global_ranking = player.global_ranking;
             player_info.old_country_ranking = player.country_ranking;
         }
 
-        // Calculating rankings after match adjustments
-        calculate_global_ranks(initial_ratings, match_info.mode);
-        calculate_country_ranks(initial_ratings, match_info.mode);
+        // Because initial_ratings was modified above, we need to
+        // recalculate all of the global and country rankings.
+        calculate_global_ranks(player_ratings, match_info.mode);
+        calculate_country_ranks(player_ratings, match_info.mode);
 
+        // For every player in the match, set the statistics' new rankings
+        // to match what is in the newly updated initial_ratings.
         for player_info in &mut match_info.players_stats {
-            let player_idx = initial_ratings
+            let player_idx = player_ratings
                 .iter_mut()
                 .position(|x| x.player_id == player_info.player_id && x.ruleset == match_info.mode);
 
@@ -152,9 +151,7 @@ pub fn calculate_rating_stats(
                 continue;
             }
 
-            let player_idx = player_idx.unwrap();
-
-            let player = &mut initial_ratings[player_idx];
+            let player = &mut player_ratings[player_idx.unwrap()];
 
             player_info.new_global_ranking = player.global_ranking;
             player_info.new_country_ranking = player.country_ranking;
@@ -171,8 +168,8 @@ pub fn calculate_rating_stats(
             .players_stats
             .iter()
             .map(|x| {
-                let p_before = calc_percentile(x.old_global_ranking as i32, initial_ratings.len());
-                let p_after = calc_percentile(x.new_global_ranking as i32, initial_ratings.len());
+                let p_before = calc_percentile(x.old_global_ranking as i32, player_ratings.len());
+                let p_after = calc_percentile(x.new_global_ranking as i32, player_ratings.len());
 
                 bar2.inc(1);
                 MatchRatingStats {
@@ -230,7 +227,6 @@ pub fn calculate_global_ranks(existing_ratings: &mut [PlayerRating], mode: Rules
     let gamemode_slice = &mut existing_ratings[gamemode_slice_start..gamemode_slice_end];
 
     gamemode_slice.sort_by(|x, y| y.rating.mu.partial_cmp(&x.rating.mu).unwrap());
-
     gamemode_slice.iter_mut().enumerate().for_each(|(i, plr)| {
         if plr.ruleset == mode {
             plr.global_ranking = i as u32 + 1
@@ -242,7 +238,7 @@ pub fn calculate_global_ranks(existing_ratings: &mut [PlayerRating], mode: Rules
 /// based on [`PlayerRating::rating`] field
 ///
 /// # Notes
-/// Modifies and invalidate any existing sorting in [`PlayerRating`] slice
+/// Modifies and invalidates any existing sorting in [`PlayerRating`] slice
 pub fn calculate_country_ranks(existing_ratings: &mut [PlayerRating], mode: Ruleset) {
     let mut countries = HashSet::new();
 
@@ -275,6 +271,8 @@ pub fn calculate_country_ranks(existing_ratings: &mut [PlayerRating], mode: Rule
 
     let ruleset_slice = &mut ruleset_slice[..ruleset_end];
 
+    ruleset_slice.sort_by(|x, y| x.country.partial_cmp(&y.country).unwrap());
+
     for country in countries {
         let country_start = ruleset_slice.iter().position(|x| x.country == country);
 
@@ -283,19 +281,19 @@ pub fn calculate_country_ranks(existing_ratings: &mut [PlayerRating], mode: Rule
         }
 
         let country_start = country_start.unwrap();
-        let country_slice = &mut ruleset_slice[country_start..];
+        let country_slice_begin = &mut ruleset_slice[country_start..];
 
-        let country_end = country_slice
+        let country_end = country_slice_begin
             .iter()
             .position(|x| x.country != country)
-            .unwrap_or(country_slice.len());
+            .unwrap_or(country_slice_begin.len());
 
-        let country_slice = &mut country_slice[..country_end];
+        let country_slice_full = &mut country_slice_begin[..country_end];
 
         // Descending
-        country_slice.sort_by(|x, y| y.rating.mu.partial_cmp(&x.rating.mu).unwrap());
+        country_slice_full.sort_by(|x, y| y.rating.mu.partial_cmp(&x.rating.mu).unwrap());
 
-        country_slice
+        country_slice_full
             .iter_mut()
             .enumerate()
             .for_each(|(i, plr)| plr.country_ranking = i as u32 + 1);
@@ -1304,7 +1302,7 @@ fn game_win_record(game: &Game) -> Option<GameWinRecord> {
             loser_team
         }),
         None => {
-            println!("Game {} has no winners or losers, skipping", game_id);
+            // println!("Game {} has no winners or losers, skipping", game_id);
             None
         }
     }
@@ -1316,7 +1314,7 @@ fn identify_game_winners_losers(game: &Game) -> Option<(Vec<i32>, Vec<i32>, i32,
     match game.team_type {
         TeamType::HeadToHead => {
             if game.match_scores.len() != 2 {
-                println!("Head to head game must have 2 scores: {:?}", game);
+                // println!("Head to head game must have 2 scores: {:?}", game);
             }
 
             // Head to head

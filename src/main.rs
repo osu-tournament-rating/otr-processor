@@ -74,7 +74,7 @@ async fn get_all_matches() -> Vec<Match> {
 
     let chunk_size = 250;
     let mut total = chunk_size;
-    for page in 1.. {
+    for page in 1..20 {
         let mut result = client.get_matches(page, chunk_size).await.unwrap();
         matches.append(&mut result.results);
 
