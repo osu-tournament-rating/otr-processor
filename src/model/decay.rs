@@ -120,7 +120,7 @@ pub fn is_decay_possible(mu: f64) -> bool {
 }
 
 pub fn decay_sigma(sigma: f64) -> f64 {
-    let new_sigma = (sigma.powf(2.0) + *constants::VOLATILITY_GROWTH_RATE).sqrt();
+    let new_sigma = (sigma.powf(2.0) + constants::VOLATILITY_GROWTH_RATE).sqrt();
 
     new_sigma.min(constants::SIGMA)
 }
@@ -230,7 +230,7 @@ mod tests {
     fn test_decay_sigma_standard() {
         let sigma = 200.1;
         let new_sigma = decay_sigma(sigma);
-        let expected = (sigma.powf(2.0) + *constants::VOLATILITY_GROWTH_RATE).sqrt();
+        let expected = (sigma.powf(2.0) + constants::VOLATILITY_GROWTH_RATE).sqrt();
 
         assert_eq!(new_sigma, expected);
     }
