@@ -251,7 +251,7 @@ pub fn calculate_country_ranks(existing_ratings: &mut [PlayerRating], mode: Rule
         countries.insert(x);
     });
 
-    // Sort by gamemode, essentially grouping them. Useful for slicing
+    // Sort by ruleset, essentially grouping them. Useful for slicing
     existing_ratings.sort_by(|x, y| {
         if x.ruleset != mode {
             Ordering::Less
@@ -261,23 +261,23 @@ pub fn calculate_country_ranks(existing_ratings: &mut [PlayerRating], mode: Rule
     });
 
     // Finding gamemode slice
-    let gamemode_start = match existing_ratings.iter().position(|x| x.ruleset == mode) {
+    let ruleset_start = match existing_ratings.iter().position(|x| x.ruleset == mode) {
         Some(v) => v,
         None => return
     };
 
-    let gamemode_slice = &mut existing_ratings[gamemode_start..];
+    let ruleset_slice = &mut existing_ratings[ruleset_start..];
 
-    let gamemode_end = gamemode_slice
+    let ruleset_end = ruleset_slice
         .iter()
         .position(|x| x.ruleset != mode)
-        .unwrap_or(gamemode_slice.len());
+        .unwrap_or(ruleset_slice.len());
 
-    let gamemode_slice = &mut gamemode_slice[..gamemode_end];
+    let ruleset_slice = &mut ruleset_slice[..ruleset_end];
 
     for country in countries {
         // TODO
-        let country_start = gamemode_slice.iter().position(|x| x.country == country);
+        let country_start = ruleset_slice.iter().position(|x| x.country == country);
 
         if country_start.is_none() {
             continue;
@@ -285,7 +285,7 @@ pub fn calculate_country_ranks(existing_ratings: &mut [PlayerRating], mode: Rule
 
         let country_start = country_start.unwrap();
 
-        let country_slice = &mut gamemode_slice[country_start..];
+        let country_slice = &mut ruleset_slice[country_start..];
 
         let country_end = country_slice
             .iter()
@@ -2657,6 +2657,75 @@ mod tests {
         assert_eq!(players.iter().find(|x| x.player_id == 101).unwrap().global_ranking, 2);
 
         assert_eq!(players.iter().find(|x| x.player_id == 102).unwrap().global_ranking, 3);
+    }
+
+    #[test]
+    fn test_country_ranking() {
+        let mut players = vec![
+            PlayerRating {
+                player_id: 1,
+                ruleset: Ruleset::Osu,
+                rating: Rating {
+                    mu: 1500.0,
+                    sigma: 200.0
+                },
+                global_ranking: 0,
+                country_ranking: 0,
+                country: "RU".to_string()
+            },
+            PlayerRating {
+                player_id: 2,
+                ruleset: Ruleset::Osu,
+                rating: Rating {
+                    mu: 1499.0,
+                    sigma: 200.0
+                },
+                global_ranking: 0,
+                country_ranking: 0,
+                country: "RU".to_string()
+            },
+            PlayerRating {
+                player_id: 3,
+                ruleset: Ruleset::Osu,
+                rating: Rating {
+                    mu: 1498.0,
+                    sigma: 200.0
+                },
+                global_ranking: 0,
+                country_ranking: 0,
+                country: "RU".to_string()
+            },
+            PlayerRating {
+                player_id: 4,
+                ruleset: Ruleset::Osu,
+                rating: Rating {
+                    mu: 1505.0,
+                    sigma: 200.0
+                },
+                global_ranking: 0,
+                country_ranking: 0,
+                country: "US".to_string()
+            },
+            PlayerRating {
+                player_id: 5,
+                ruleset: Ruleset::Osu,
+                rating: Rating {
+                    mu: 1504.0,
+                    sigma: 200.0
+                },
+                global_ranking: 0,
+                country_ranking: 0,
+                country: "US".to_string()
+            },
+        ];
+
+        calculate_country_ranks(&mut players, Ruleset::Osu);
+
+        assert_eq!(players.iter().find(|x| x.player_id == 1).unwrap().country_ranking, 1);
+        assert_eq!(players.iter().find(|x| x.player_id == 2).unwrap().country_ranking, 2);
+        assert_eq!(players.iter().find(|x| x.player_id == 3).unwrap().country_ranking, 3);
+        assert_eq!(players.iter().find(|x| x.player_id == 4).unwrap().country_ranking, 1);
+        assert_eq!(players.iter().find(|x| x.player_id == 5).unwrap().country_ranking, 2);
     }
 
     #[test]
