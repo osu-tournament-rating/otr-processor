@@ -21,7 +21,7 @@ use crate::{
     },
     model::{
         constants::BLUE_TEAM_ID,
-        decay::{DecayTracker, is_decay_possible},
+        decay::{is_decay_possible, DecayTracker},
         structures::{
             match_cost::MatchCost,
             player_rating::PlayerRating,
@@ -1363,9 +1363,8 @@ mod tests {
     };
 
     use super::{
-        calculate_global_ranks, calculate_match_win_records,
-        calculate_processed_match_data, create_initial_ratings, create_match_win_record, create_model, game_win_record,
-        hash_country_mappings, player_match_stats
+        calculate_global_ranks, calculate_match_win_records, calculate_processed_match_data, create_initial_ratings,
+        create_match_win_record, create_model, game_win_record, hash_country_mappings, player_match_stats
     };
 
     fn match_from_json(json: &str) -> Match {
