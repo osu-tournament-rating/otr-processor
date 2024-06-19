@@ -44,7 +44,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     for id in player_ids {
         initial_ratings.push(PlayerRating {
             player_id: id,
-            mode: Ruleset::Osu,
+            ruleset: Ruleset::Osu,
             rating: Rating {
                 mu: 1500.0 + offset,
                 sigma: 200.0

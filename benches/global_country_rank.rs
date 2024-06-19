@@ -56,7 +56,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         for _ in 0..AMOUNT_OF_USERS_IN_ONE_COUNTRY {
             ratings.push(PlayerRating {
                 player_id: rng.gen_range(0..100_000), // Random player id
-                mode: Ruleset::Osu,
+                ruleset: Ruleset::Osu,
                 rating: Rating {
                     mu: rng.gen_range(0.0..2000.0),
                     sigma: 200.0
