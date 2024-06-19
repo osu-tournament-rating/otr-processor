@@ -2149,140 +2149,8 @@ mod tests {
     }
 
     #[test]
-    fn test_multiple_mode_tracking() {
-        // Load in OWC 2023 data
-        // Duplicate & change all of the ruleset values to taiko (1)
-        // we label it as twc for convenience, but it's the same exact
-        // data as OWC with a different name (and ruleset change)
-
-        // Arrange
-        let id_offset = 1000;
-        let owc_data = matches_from_json(include_str!("../../test_data/owc_2023.json"));
-        // This will be modified to have all modes set to 1 -
-        // structure of the data is identical between modes
-        let mut twc_data = matches_from_json(include_str!("../../test_data/owc_2023.json"));
-        let mut player_data = players_from_json(include_str!("../../test_data/owc_2023_players.json"));
-        let country_mapping = country_mapping_from_json(include_str!("../../test_data/country_mapping.json"));
-        let country_hash = hash_country_mappings(&country_mapping);
-
-        // Organized by country, sorted by rating
-        let country_ordering: HashMap<String, Vec<PlayerRating>> = HashMap::new();
-        let plackett_luce = create_model();
-
-        // Act
-        // Set all modes in twc_data to taiko
-        for m in &mut twc_data {
-            // Set the id to something different
-            m.ruleset = Ruleset::Taiko;
-            m.id += id_offset;
-
-            for g in &mut m.games {
-                g.ruleset = Ruleset::Taiko;
-            }
-        }
-
-        let standard_match_ids: Vec<_> = owc_data.iter().map(|x| x.id).collect();
-        let taiko_match_ids: Vec<_> = twc_data.iter().map(|x| x.id).collect();
-
-        // Set the osu ranks for taiko to be the exact same as standard
-        for player in &mut player_data {
-            player.rank_taiko = player.rank_standard;
-            player.earliest_taiko_global_rank = player.earliest_osu_global_rank;
-            player.earliest_taiko_global_rank_date = player.earliest_catch_global_rank_date;
-        }
-
-        // Scenario 1:
-        // Calculating ratings separatly for owc and twc data
-        // and making sure they are the same
-        let initial_ratings_std = create_initial_ratings(&owc_data, &player_data);
-        let initial_ratings_taiko = create_initial_ratings(&twc_data, &player_data);
-
-        let standard_res = calculate_ratings(initial_ratings_std.clone(), &owc_data, &plackett_luce);
-        let taiko_res = calculate_ratings(initial_ratings_taiko.clone(), &twc_data, &plackett_luce);
-
-        assert_eq!(standard_res.rating_stats.len(), taiko_res.rating_stats.len());
-        assert_eq!(standard_res.adjustments.len(), taiko_res.adjustments.len());
-
-        for std in &standard_res.rating_stats {
-            let taiko = taiko_res
-                .rating_stats
-                .iter()
-                .find(|x| x.player_id == std.player_id && x.match_id == std.match_id + id_offset)
-                .unwrap();
-
-            assert_eq!(std.player_id, taiko.player_id);
-            assert_eq!(std.match_id, taiko.match_id - id_offset);
-            assert_eq!(std.match_cost, taiko.match_cost);
-            assert_eq!(std.rating_before, taiko.rating_before);
-            assert_eq!(std.rating_after, taiko.rating_after);
-            assert_eq!(std.global_rank_before, taiko.global_rank_before);
-            assert_eq!(std.country_rank_before, taiko.country_rank_before);
-        }
-
-        // Scenario 2:
-        // Combining owc and twc data together and calculating results
-        // comparing that results are the same but for two modes
-        let mut combined_match_data = Vec::new();
-
-        let expected_match_results_len = standard_res.rating_stats.len() + taiko_res.rating_stats.len();
-
-        combined_match_data.extend(owc_data);
-        combined_match_data.extend(twc_data);
-
-        let mut combined_initial_ratings = Vec::new();
-        combined_initial_ratings.extend(initial_ratings_taiko.clone());
-        combined_initial_ratings.extend(initial_ratings_std.clone());
-
-        // Calculating correct ranking placements after extending
-        calculate_global_ranks(&mut combined_initial_ratings, Ruleset::Osu);
-        calculate_global_ranks(&mut combined_initial_ratings, Ruleset::Taiko);
-
-        calculate_country_ranks(&mut combined_initial_ratings, Ruleset::Osu);
-        calculate_country_ranks(&mut combined_initial_ratings, Ruleset::Taiko);
-
-        let combined_res = calculate_ratings(combined_initial_ratings, &combined_match_data, &plackett_luce);
-
-        assert_eq!(combined_res.rating_stats.len(), expected_match_results_len);
-
-        for rating in &combined_res.rating_stats {
-            let occurences: Vec<usize> = combined_res
-                .rating_stats
-                .iter()
-                .enumerate()
-                .filter_map(|(i, x)| {
-                    if x.player_id == rating.player_id
-                        && (x.match_id == rating.match_id
-                            || x.match_id == rating.match_id + id_offset
-                            || x.match_id == rating.match_id - id_offset)
-                    {
-                        Some(i)
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-
-            assert_eq!(occurences.len(), 2);
-
-            let first_idx = occurences[0];
-            let second_idx = occurences[1];
-
-            let first = &combined_res.rating_stats[first_idx];
-            let second = &combined_res.rating_stats[second_idx];
-
-            assert_eq!(first.player_id, second.player_id);
-            assert_eq!(first.match_id, second.match_id - id_offset);
-            assert_eq!(first.match_cost, second.match_cost);
-            assert_eq!(first.rating_before, second.rating_before);
-            assert_eq!(first.rating_after, second.rating_after);
-            assert_eq!(first.global_rank_before, second.global_rank_before);
-            assert_eq!(first.country_rank_before, second.country_rank_before);
-        }
-    }
-
-    #[test]
-    fn test_multiple_gamemodes_calculation_minimal() {
-        // Two 1v1 matches of same players but in different gamemodes
+    fn test_multiple_rulesets_calculation_minimal() {
+        // Two 1v1 matches of same players but in different rulesets
         let initial_ratings = vec![
             PlayerRating {
                 player_id: 1,
@@ -2291,8 +2159,8 @@ mod tests {
                     mu: 1500.0,
                     sigma: 200.0
                 },
-                global_ranking: 1,
-                country_ranking: 1,
+                global_ranking: 0,
+                country_ranking: 0,
                 country: "US".to_owned()
             },
             PlayerRating {
@@ -2302,8 +2170,8 @@ mod tests {
                     mu: 800.0,
                     sigma: 200.0
                 },
-                global_ranking: 2,
-                country_ranking: 2,
+                global_ranking: 0,
+                country_ranking: 0,
                 country: "US".to_owned()
             },
             PlayerRating {
@@ -2313,8 +2181,8 @@ mod tests {
                     mu: 1500.0,
                     sigma: 200.0
                 },
-                global_ranking: 1,
-                country_ranking: 1,
+                global_ranking: 0,
+                country_ranking: 0,
                 country: "US".to_owned()
             },
             PlayerRating {
@@ -2324,14 +2192,14 @@ mod tests {
                     mu: 800.0,
                     sigma: 200.0
                 },
-                global_ranking: 2,
-                country_ranking: 2,
+                global_ranking: 0,
+                country_ranking: 0,
                 country: "US".to_owned()
             },
         ];
 
-        // Osu match: player 2 is winner
-        // Taiko match: player 1 is winner
+        // Osu match: player 2 is winner (upset)
+        // Taiko match: player 1 is winner (upset)
         let matches = vec![
             // Osu match
             Match {
@@ -2480,10 +2348,16 @@ mod tests {
 
         assert_eq!(p1_osu.global_ranking, 1);
         assert_eq!(p2_osu.global_ranking, 2);
+
+        assert_eq!(p2_taiko.country_ranking, 1);
+        assert_eq!(p1_taiko.country_ranking, 2);
+
+        assert_eq!(p1_osu.country_ranking, 1);
+        assert_eq!(p2_osu.country_ranking, 2);
     }
 
     #[test]
-    fn test_global_ranking_calculation_different_gamemodes2() {
+    fn test_global_ranking_calculation_different_rulesets2() {
         let mut players = vec![
             PlayerRating {
                 player_id: 1,
@@ -2574,7 +2448,7 @@ mod tests {
     }
 
     #[test]
-    fn test_global_ranking_calculation_different_gamemodes() {
+    fn test_global_ranking_calculation_different_rulesets() {
         let mut players = vec![
             PlayerRating {
                 player_id: 200,
