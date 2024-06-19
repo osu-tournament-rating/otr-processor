@@ -333,14 +333,9 @@ pub fn create_initial_ratings(matches: &Vec<Match>, players: &Vec<Player>) -> Ve
                 }
 
                 // Create ratings using the earliest known rank
-                let player = player_hashmap.get(&score.player_id);
-
-                if player.is_none() {
-                    // Player not found, skip
-                    continue;
-                }
-
-                let player = player.unwrap();
+                let player = player_hashmap
+                    .get(&score.player_id)
+                    .expect("Player should be present in the hashmap.");
                 let rank: Option<i32> = match mode {
                     Ruleset::Osu => player.earliest_osu_global_rank.or(player.rank_standard),
                     Ruleset::Taiko => player.earliest_taiko_global_rank.or(player.rank_taiko),
