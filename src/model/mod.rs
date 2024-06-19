@@ -1,11 +1,9 @@
 use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet},
-    iter::Sum,
-    thread
+    iter::Sum
 };
 
-use chrono::Utc;
 use itertools::Itertools;
 use openskill::{
     model::{model::Model, plackett_luce::PlackettLuce},
@@ -52,51 +50,6 @@ pub mod structures;
 
 pub fn create_model() -> PlackettLuce {
     PlackettLuce::new(constants::BETA, constants::KAPPA, default_gamma)
-}
-
-/// Calculates [`RatingAdjustment`] based on initial ratings
-/// and new ratings (after all match changes applied)
-pub fn calculate_player_adjustments(
-    initial_ratings: &[PlayerRating],
-    new_ratings: &[PlayerRating]
-) -> Vec<RatingAdjustment> {
-    let mut buff = Vec::with_capacity(new_ratings.len());
-
-    for new_rating in new_ratings.iter() {
-        let old_rating_idx = initial_ratings.iter().position(|x| x.player_id == new_rating.player_id);
-
-        if old_rating_idx.is_none() {
-            // TODO log here?
-            continue;
-        }
-
-        let old_rating_idx = old_rating_idx.unwrap();
-
-        let old_rating = &initial_ratings[old_rating_idx];
-
-        let rating_before = old_rating.rating.mu;
-        let rating_after = new_rating.rating.mu;
-        let volatility_before = old_rating.rating.sigma;
-        let volatility_after = new_rating.rating.sigma;
-
-        let rating_change = rating_after - rating_before;
-        let volatility_change = volatility_after - volatility_before;
-
-        buff.push(RatingAdjustment {
-            player_id: new_rating.player_id,
-            mode: new_rating.ruleset,
-            rating_adjustment_amount: rating_change,
-            volatility_adjustment_amount: volatility_change,
-            rating_before,
-            rating_after,
-            volatility_before,
-            volatility_after,
-            rating_adjustment_type: 0,
-            timestamp: Utc::now().into()
-        })
-    }
-
-    buff
 }
 
 /// Calculates [`MatchRatingStats`] based on initial ratings
@@ -1298,19 +1251,13 @@ fn game_win_record(game: &Game) -> Option<GameWinRecord> {
         return None;
     }
 
-    match identify_game_winners_losers(game) {
-        Some((winners, losers, winner_team, loser_team)) => Some(GameWinRecord {
-            game_id,
-            winners,
-            losers,
-            winner_team,
-            loser_team
-        }),
-        None => {
-            // println!("Game {} has no winners or losers, skipping", game_id);
-            None
-        }
-    }
+    identify_game_winners_losers(game).map(|(winners, losers, winner_team, loser_team)| GameWinRecord {
+        game_id,
+        winners,
+        losers,
+        winner_team,
+        loser_team
+    })
 }
 
 /// Identifies the winners and losers of a game.
@@ -1416,9 +1363,8 @@ mod tests {
     };
 
     use super::{
-        calculate_global_ranks, calculate_match_win_records, calculate_player_adjustments,
-        calculate_processed_match_data, create_initial_ratings, create_match_win_record, create_model, game_win_record,
-        hash_country_mappings, player_match_stats
+        calculate_global_ranks, calculate_match_win_records, calculate_processed_match_data, create_initial_ratings,
+        create_match_win_record, create_model, game_win_record, hash_country_mappings, player_match_stats
     };
 
     fn match_from_json(json: &str) -> Match {
@@ -1706,21 +1652,21 @@ mod tests {
             let actual_country_rank_change = stat.country_rank_change;
             let actual_percentile_change = stat.percentile_change;
 
-            assert!((expected_starting_mu - actual_starting_mu).abs() < f64::EPSILON);
-            assert!((expected_starting_sigma - actual_starting_sigma).abs() < f64::EPSILON);
-            assert!((expected_after_mu - actual_after_mu).abs() < f64::EPSILON);
-            assert!((expected_after_sigma - actual_after_sigma).abs() < f64::EPSILON);
-            assert!((expected_mu_change - actual_mu_change).abs() < f64::EPSILON);
-            assert!((expected_sigma_change - actual_sigma_change).abs() < f64::EPSILON);
+            assert_eq!(expected_starting_mu.to_bits(), actual_starting_mu.to_bits());
+            assert_eq!(expected_starting_sigma.to_bits(), actual_starting_sigma.to_bits());
+            assert_eq!(expected_after_mu.to_bits(), actual_after_mu.to_bits());
+            assert_eq!(expected_after_sigma.to_bits(), actual_after_sigma.to_bits());
+            assert_eq!(expected_mu_change.to_bits(), actual_mu_change.to_bits());
+            assert_eq!(expected_sigma_change.to_bits(), actual_sigma_change.to_bits());
             assert_eq!(expected_global_rank_before, actual_global_rank_before);
             assert_eq!(expected_country_rank_before, actual_country_rank_before);
-            assert!((expected_percentile_before - actual_percentile_before).abs() < f64::EPSILON);
+            assert_eq!(expected_percentile_before.to_bits(), actual_percentile_before.to_bits());
             assert_eq!(expected_global_rank_after, actual_global_rank_after);
             assert_eq!(expected_country_rank_after, actual_country_rank_after);
-            assert!((expected_percentile_after - actual_percentile_after).abs() < f64::EPSILON);
+            assert_eq!(expected_percentile_after.to_bits(), actual_percentile_after.to_bits());
             assert_eq!(expected_global_rank_change, actual_global_rank_change);
             assert_eq!(expected_country_rank_change, actual_country_rank_change);
-            assert!((expected_percentile_change - actual_percentile_change).abs() < f64::EPSILON);
+            assert_eq!(expected_percentile_change.to_bits(), actual_percentile_change.to_bits());
         }
     }
 
@@ -2119,7 +2065,6 @@ mod tests {
         let mut copied_initial_ratings = initial_ratings.clone();
 
         let match_rating_stats = calculate_rating_stats(&mut copied_initial_ratings, &mut processed_match_data.0);
-        let adjustments = calculate_player_adjustments(&initial_ratings, &copied_initial_ratings);
 
         // The amount of players that participated in the matches
         let mut players_count = 0;
