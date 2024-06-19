@@ -165,31 +165,17 @@ pub fn calculate_rating_stats(
 /// # Notes
 /// Modifies and invalidate any existing sorting in [`PlayerRating`] slice
 pub fn calculate_global_ranks(existing_ratings: &mut [PlayerRating], mode: Ruleset) {
-    existing_ratings.sort_by(|x, y| {
-        if y.ruleset != mode {
-            Ordering::Less
-        } else {
-            Ordering::Greater
-        }
-    });
+    // Filter and sort in one step
+    let mut filtered_ratings: Vec<&mut PlayerRating> =
+        existing_ratings.iter_mut().filter(|x| x.ruleset == mode).collect();
 
-    // According to previous sorting we can make the assumption that
-    // first element is always start of current gamemode slice
-    let gamemode_slice_start = 0;
+    // Sort by rating in descending order
+    filtered_ratings.sort_by(|x, y| y.rating.mu.partial_cmp(&x.rating.mu).unwrap());
 
-    let gamemode_slice_end = existing_ratings
-        .iter()
-        .position(|x| x.ruleset != mode)
-        .unwrap_or(existing_ratings.len());
-
-    let gamemode_slice = &mut existing_ratings[gamemode_slice_start..gamemode_slice_end];
-
-    gamemode_slice.sort_by(|x, y| y.rating.mu.partial_cmp(&x.rating.mu).unwrap());
-    gamemode_slice.iter_mut().enumerate().for_each(|(i, plr)| {
-        if plr.ruleset == mode {
-            plr.global_ranking = i as u32 + 1
-        }
-    });
+    // Assign global rankings
+    for (i, plr) in filtered_ratings.iter_mut().enumerate() {
+        plr.global_ranking = i as u32 + 1;
+    }
 }
 
 /// Calculates country ranking for each individual player
@@ -1503,7 +1489,7 @@ mod tests {
         match_data.start_time = Some(chrono::offset::Utc::now().fixed_offset());
         match_data.end_time = Some(chrono::offset::Utc::now().fixed_offset());
 
-        let match_costs = super::match_costs(&match_data.games).unwrap();
+        let match_costs = super::match_costs(&match_data.games).expect("Failed to calculate match costs");
         let ranks = super::ranks_from_match_costs(&match_costs);
 
         let player_ids = match_costs.iter().map(|mc| mc.player_id).collect::<Vec<i32>>();
@@ -1545,15 +1531,15 @@ mod tests {
 
         println!("Expected outcome:");
         for i in 0..expected.len() {
-            let team = expected.get(i).unwrap();
+            let team = expected.get(i).expect("Failed to get expected team rating");
 
-            let mc = match_costs.get(i).unwrap();
-            let expected_rating = team.first().unwrap();
+            let mc = match_costs.get(i).expect("Failed to get match cost");
+            let expected_rating = team.first().expect("Expected rating not found");
             let actual_rating = result
                 .player_ratings
                 .iter()
                 .find(|x| x.player_id == mc.player_id)
-                .unwrap();
+                .expect("Actual rating not found");
 
             println!("Player id: {} Rating: {}", mc.player_id, expected_rating);
 
@@ -1581,22 +1567,23 @@ mod tests {
         // Test stats
         for stat in &result.rating_stats {
             let player_id = stat.player_id;
-            let expected_starting_rating = initial_ratings.iter().find(|x| x.player_id == player_id).unwrap();
+            let expected_starting_rating = initial_ratings
+                .iter()
+                .find(|x| x.player_id == player_id)
+                .expect("Expected starting rating not found");
+
+            let actual_player_rating = result
+                .player_ratings
+                .iter()
+                .find(|y| y.player_id == player_id)
+                .expect("Actual player rating not found");
+
             let expected_evaluation = expected
                 .iter()
-                .find(|x| {
-                    x[0].mu
-                        == result
-                            .player_ratings
-                            .iter()
-                            .find(|y| y.player_id == player_id)
-                            .unwrap()
-                            .rating
-                            .mu
-                })
-                .unwrap()
+                .find(|x| x[0].mu == actual_player_rating.rating.mu)
+                .expect("Expected evaluation not found")
                 .first()
-                .unwrap();
+                .expect("Expected evaluation rating not found");
 
             let expected_starting_mu = expected_starting_rating.rating.mu;
             let expected_starting_sigma = expected_starting_rating.rating.sigma;
