@@ -3,7 +3,8 @@ use std::convert::TryFrom;
 
 #[derive(Deserialize_repr, Serialize_repr, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
-pub enum RatingSource { // AKA RatingAdjustmentType
+pub enum RatingSource {
+    // AKA RatingAdjustmentType
     Decay = 0,
     Match = 1
 }

@@ -8,7 +8,7 @@ pub enum Ruleset {
     Taiko = 1,
     Catch = 2,
     Mania4k = 3,
-    Mania7k = 4,
+    Mania7k = 4
 }
 
 impl TryFrom<i32> for Ruleset {

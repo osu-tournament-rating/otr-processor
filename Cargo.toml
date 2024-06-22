@@ -40,13 +40,5 @@ serde_json = "1.0.114"
 dead_code = "allow"
 unused_variables = "allow"
 
-[[bench]]
-name = "global_country_rank"
-harness = false
-
-[[bench]]
-name = "calc_rating"
-harness = false
-
 [profile.release]
 debug = true

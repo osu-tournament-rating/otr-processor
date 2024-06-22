@@ -10,7 +10,7 @@ use tokio::sync::{
     RwLock
 };
 
-use crate::{api::api_structs::OAuthResponse, utils::progress_utils::progress_bar};
+use crate::api::api_structs::OAuthResponse;
 
 use self::api_structs::MatchPagedResult;
 
@@ -294,13 +294,11 @@ mod api_client_tests {
     use std::time::Duration;
 
     use async_once_cell::OnceCell;
-    use chrono::{FixedOffset, Utc};
     use httpmock::prelude::*;
     use serde_json::json;
 
     use crate::{
-        api::{api_structs::RatingAdjustment, OtrApiClient},
-        model::structures::ruleset::Ruleset
+        api::{OtrApiClient},
     };
 
     static API_INSTANCE: OnceCell<OtrApiClient> = OnceCell::new();

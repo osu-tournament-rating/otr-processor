@@ -1,7 +1,7 @@
 mod constants;
 mod decay;
 mod rating_tracker;
-pub(crate) mod structures;
+pub mod structures;
 
 use openskill::{
     constant::{DEFAULT_BETA, KAPPA},

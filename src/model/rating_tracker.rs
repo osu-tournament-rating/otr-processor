@@ -1,8 +1,10 @@
 use crate::{api::api_structs::PlayerRating, model::structures::ruleset::Ruleset};
 use indexmap::IndexMap;
-use std::cmp::Ordering;
-use std::collections::{HashMap, HashSet};
 use itertools::Itertools;
+use std::{
+    cmp::Ordering,
+    collections::{HashMap, HashSet}
+};
 
 pub struct RatingTracker {
     // Global leaderboard, used as a reference for country leaderboards also.
@@ -27,24 +29,24 @@ impl RatingTracker {
         }
     }
 
-    fn track_country(&mut self, country: &String) {
-        self.country_change_tracker.insert(country.clone());
+    fn track_country(&mut self, country: &str) {
+        self.country_change_tracker.insert(country.to_owned());
     }
 
     /// Inserts or updates a player rating in the leaderboard and rating history.
     /// The `sort` function must be called after any insertions or updates to update rankings and percentiles.
-    pub fn insert_or_update(&mut self, rating: &PlayerRating, country: &String) {
+    pub fn insert_or_update(&mut self, rating: &PlayerRating, country: &str) {
         self.leaderboard
             .insert((rating.player_id, rating.ruleset), rating.clone());
 
         self.country_leaderboards
-            .entry(country.clone())
-            .or_insert_with(IndexMap::new)
+            .entry(country.to_owned())
+            .or_default()
             .insert((rating.player_id, rating.ruleset), rating.clone());
 
         self.rating_history
             .entry((rating.player_id, rating.ruleset))
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(rating.clone());
 
         self.track_country(country);
@@ -62,41 +64,60 @@ impl RatingTracker {
     /// Sorts and updates the PlayerRating global_rank, country_rank, and percentile values.
     pub fn sort(&mut self) {
         // Sort leaderboard by rating
-        self.leaderboard.sort_by(|k1, v1, k2, v2| v2.rating.partial_cmp(&v1.rating).unwrap());
+        self.leaderboard
+            .sort_by(|k1, v1, k2, v2| v2.rating.partial_cmp(&v1.rating).unwrap());
 
         // Iterate updating global rankings and percentiles
-        let rulesets = [Ruleset::Osu, Ruleset::Taiko, Ruleset::Catch, Ruleset::Mania4k, Ruleset::Mania7k];
+        let rulesets = [
+            Ruleset::Osu,
+            Ruleset::Taiko,
+            Ruleset::Catch,
+            Ruleset::Mania4k,
+            Ruleset::Mania7k
+        ];
 
         for ruleset in rulesets.iter() {
             let mut global_rank = 1;
 
             // Clone the iterator to get the count without consuming it
-            let ruleset_leaderboard: Vec<_> = self.leaderboard.iter_mut().filter(|(_, player)| player.ruleset == *ruleset).collect();
+            let ruleset_leaderboard: Vec<_> = self
+                .leaderboard
+                .iter_mut()
+                .filter(|(_, player)| player.ruleset == *ruleset)
+                .collect();
             let count = ruleset_leaderboard.len() as i32;
 
             for (_, rating) in ruleset_leaderboard {
                 rating.global_rank = global_rank;
-                rating.percentile = RatingTracker::percentile(global_rank, count).expect("Failed to calculate percentile");
+                rating.percentile =
+                    RatingTracker::percentile(global_rank, count).expect("Failed to calculate percentile");
                 global_rank += 1;
             }
         }
 
         // Update country rankings
         let changed_countries: Vec<&String> = self.country_change_tracker.iter().collect();
-        let country_leaderboards = self.country_leaderboards.iter_mut().filter(|(country, _)| changed_countries.contains(country));
+        let country_leaderboards = self
+            .country_leaderboards
+            .iter_mut()
+            .filter(|(country, _)| changed_countries.contains(country));
         for (_, country_leaderboard) in country_leaderboards {
             for ruleset in rulesets.iter() {
                 let mut country_rank = 1;
 
                 // Clone the iterator to get the count without consuming it
-                let country_ruleset_leaderboard: Vec<_> = country_leaderboard.iter_mut()
+                let country_ruleset_leaderboard: Vec<_> = country_leaderboard
+                    .iter_mut()
                     .filter(|(_, player)| player.ruleset == *ruleset)
                     .sorted_by(|(_, a), (_, b)| b.rating.partial_cmp(&a.rating).unwrap())
                     .collect();
 
                 for (_, rating) in country_ruleset_leaderboard {
                     // This tracks the item in the appropriate "primary" leaderboard.
-                    let associated_entry = self.leaderboard.get_mut(&(rating.player_id, rating.ruleset)).expect("Failed to find associated entry in global leaderboard");
+                    let associated_entry = self
+                        .leaderboard
+                        .get_mut(&(rating.player_id, rating.ruleset))
+                        .expect("Failed to find associated entry in global leaderboard");
                     associated_entry.country_rank = country_rank;
 
                     country_rank += 1;
@@ -110,7 +131,7 @@ impl RatingTracker {
     /// `P = n/N * 100`
     fn percentile(rank: i32, total: i32) -> Option<f64> {
         match rank.cmp(&1) {
-            Ordering::Less => return None,
+            Ordering::Less => None,
             _ => {
                 match total.cmp(&1) {
                     Ordering::Greater => {
@@ -125,9 +146,11 @@ impl RatingTracker {
 }
 
 mod tests {
-    use approx::{assert_abs_diff_eq, relative_eq};
+    use approx::assert_abs_diff_eq;
+    use crate::api::api_structs::PlayerRating;
+    use crate::model::rating_tracker::RatingTracker;
     use crate::model::structures::rating_adjustment_type::RatingSource;
-    use super::*;
+    use crate::model::structures::ruleset::Ruleset;
 
     #[test]
     fn test_track_player() {
@@ -159,31 +182,37 @@ mod tests {
         let mut rating_tracker = RatingTracker::new();
         let country = "US".to_string();
 
-        rating_tracker.insert_or_update(&PlayerRating {
-            player_id: 1,
-            ruleset: Ruleset::Osu,
-            rating: 100.0,
-            volatility: 0.0,
-            percentile: 0.0,
-            global_rank: 0,
-            country_rank: 0,
-            timestamp: Default::default(),
-            source: RatingSource::Match,
-            adjustments: vec![],
-        }, &country);
+        rating_tracker.insert_or_update(
+            &PlayerRating {
+                player_id: 1,
+                ruleset: Ruleset::Osu,
+                rating: 100.0,
+                volatility: 0.0,
+                percentile: 0.0,
+                global_rank: 0,
+                country_rank: 0,
+                timestamp: Default::default(),
+                source: RatingSource::Match,
+                adjustments: vec![]
+            },
+            &country
+        );
 
-        rating_tracker.insert_or_update(&PlayerRating {
-            player_id: 2,
-            ruleset: Ruleset::Osu,
-            rating: 200.0,
-            volatility: 0.0,
-            percentile: 0.0,
-            global_rank: 0,
-            country_rank: 0,
-            timestamp: Default::default(),
-            source: RatingSource::Match,
-            adjustments: vec![],
-        }, &country);
+        rating_tracker.insert_or_update(
+            &PlayerRating {
+                player_id: 2,
+                ruleset: Ruleset::Osu,
+                rating: 200.0,
+                volatility: 0.0,
+                percentile: 0.0,
+                global_rank: 0,
+                country_rank: 0,
+                timestamp: Default::default(),
+                source: RatingSource::Match,
+                adjustments: vec![]
+            },
+            &country
+        );
 
         rating_tracker.sort();
 
@@ -192,8 +221,12 @@ mod tests {
         assert_abs_diff_eq!(rating_tracker.leaderboard.get_index(0).unwrap().1.rating, 200.0);
         assert_abs_diff_eq!(rating_tracker.leaderboard.get_index(1).unwrap().1.rating, 100.0);
 
-        let p1 = rating_tracker.get_rating(1, Ruleset::Osu).expect("Expected to find rating for Player 1 in ruleset Osu");
-        let p2 = rating_tracker.get_rating(2, Ruleset::Osu).expect("Expected to find rating for Player 2 in ruleset Osu");
+        let p1 = rating_tracker
+            .get_rating(1, Ruleset::Osu)
+            .expect("Expected to find rating for Player 1 in ruleset Osu");
+        let p2 = rating_tracker
+            .get_rating(2, Ruleset::Osu)
+            .expect("Expected to find rating for Player 2 in ruleset Osu");
 
         assert_eq!(p1.global_rank, 2);
         assert_eq!(p2.global_rank, 1);
@@ -220,7 +253,11 @@ mod tests {
         assert_abs_diff_eq!(RatingTracker::percentile(1, 1000).unwrap(), 99.9, epsilon = 0.0001);
         assert_abs_diff_eq!(RatingTracker::percentile(1, 10000).unwrap(), 99.99, epsilon = 0.0001);
         assert_abs_diff_eq!(RatingTracker::percentile(1, 100000).unwrap(), 99.999, epsilon = 0.0001);
-        assert_abs_diff_eq!(RatingTracker::percentile(1, 1000000).unwrap(), 99.9999, epsilon = 0.0001);
+        assert_abs_diff_eq!(
+            RatingTracker::percentile(1, 1000000).unwrap(),
+            99.9999,
+            epsilon = 0.0001
+        );
     }
 
     #[test]
@@ -228,31 +265,37 @@ mod tests {
         let mut rating_tracker = RatingTracker::new();
         let country = "US".to_string();
 
-        rating_tracker.insert_or_update(&PlayerRating {
-            player_id: 1,
-            ruleset: Ruleset::Osu,
-            rating: 100.0,
-            volatility: 0.0,
-            percentile: 0.0,
-            global_rank: 0,
-            country_rank: 0,
-            timestamp: Default::default(),
-            source: RatingSource::Decay,
-            adjustments: vec![],
-        }, &country);
+        rating_tracker.insert_or_update(
+            &PlayerRating {
+                player_id: 1,
+                ruleset: Ruleset::Osu,
+                rating: 100.0,
+                volatility: 0.0,
+                percentile: 0.0,
+                global_rank: 0,
+                country_rank: 0,
+                timestamp: Default::default(),
+                source: RatingSource::Decay,
+                adjustments: vec![]
+            },
+            &country
+        );
 
-        rating_tracker.insert_or_update(&PlayerRating {
-            player_id: 2,
-            ruleset: Ruleset::Osu,
-            rating: 200.0,
-            volatility: 0.0,
-            percentile: 0.0,
-            global_rank: 0,
-            country_rank: 0,
-            timestamp: Default::default(),
-            source: RatingSource::Decay,
-            adjustments: vec![],
-        }, &country);
+        rating_tracker.insert_or_update(
+            &PlayerRating {
+                player_id: 2,
+                ruleset: Ruleset::Osu,
+                rating: 200.0,
+                volatility: 0.0,
+                percentile: 0.0,
+                global_rank: 0,
+                country_rank: 0,
+                timestamp: Default::default(),
+                source: RatingSource::Decay,
+                adjustments: vec![]
+            },
+            &country
+        );
 
         assert_eq!(rating_tracker.country_change_tracker.len(), 1);
 

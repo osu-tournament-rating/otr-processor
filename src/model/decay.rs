@@ -1,13 +1,12 @@
 use crate::{
-    api::api_structs::RatingAdjustment,
+    api::api_structs::PlayerRating,
     model::{
         constants,
+        rating_tracker::RatingTracker,
         structures::{rating_adjustment_type::RatingSource, ruleset::Ruleset}
     }
 };
 use chrono::{DateTime, FixedOffset};
-use crate::api::api_structs::PlayerRating;
-use crate::model::rating_tracker::RatingTracker;
 
 /// Tracks decay activity for players
 pub struct DecayTracker;
@@ -32,7 +31,7 @@ impl DecayTracker {
         &self,
         rating_tracker: &mut RatingTracker,
         player_id: i32,
-        country: &String,
+        country: &str,
         ruleset: Ruleset,
         d: DateTime<FixedOffset>
     ) {
@@ -128,17 +127,19 @@ pub fn decay_rating(mu: f64) -> f64 {
 
 #[cfg(test)]
 mod tests {
-    use crate::model::{
-        constants,
-        constants::MULTIPLIER,
-        decay::{decay_rating, decay_volatility, is_decay_possible, DecayTracker},
-        structures::{rating_adjustment_type::RatingSource::Decay, ruleset::Ruleset}
+    use crate::{
+        api::api_structs::PlayerRating,
+        model::{
+            constants,
+            constants::MULTIPLIER,
+            decay::{decay_rating, decay_volatility, is_decay_possible, DecayTracker},
+            rating_tracker::RatingTracker,
+            structures::{rating_adjustment_type::RatingSource::Decay, ruleset::Ruleset}
+        }
     };
+    use approx::{assert_abs_diff_eq, assert_abs_diff_ne};
     use chrono::DateTime;
-    use std::ops::{Add, Sub};
-    use approx::{assert_abs_diff_eq, assert_abs_diff_ne, relative_eq};
-    use crate::api::api_structs::PlayerRating;
-    use crate::model::rating_tracker::RatingTracker;
+    use std::ops::{Add};
 
     #[test]
     fn test_decay() {
@@ -159,23 +160,32 @@ mod tests {
             let player_id = i;
             // ID 0 will have decay applied
             // Other IDs will not have decay applied
-            rating_tracker.insert_or_update(&PlayerRating {
-                player_id,
-                ruleset,
-                rating,
-                volatility,
-                percentile: 0.0,
-                global_rank: 0,
-                country_rank: 0,
-                timestamp: t,
-                source: Decay,
-                adjustments: Vec::new()
-            }, &country);
+            rating_tracker.insert_or_update(
+                &PlayerRating {
+                    player_id,
+                    ruleset,
+                    rating,
+                    volatility,
+                    percentile: 0.0,
+                    global_rank: 0,
+                    country_rank: 0,
+                    timestamp: t,
+                    source: Decay,
+                    adjustments: Vec::new()
+                },
+                &country
+            );
         }
 
-        let mut decay_tracker = DecayTracker;
+        let decay_tracker = DecayTracker;
         decay_tracker.decay(&mut rating_tracker, 0, &country, ruleset, d);
-        decay_tracker.decay(&mut rating_tracker, 1, &country, ruleset, d.add(chrono::Duration::days(10)));
+        decay_tracker.decay(
+            &mut rating_tracker,
+            1,
+            &country,
+            ruleset,
+            d.add(chrono::Duration::days(10))
+        );
 
         let decayed_rating = rating_tracker.get_rating(0, ruleset).unwrap();
         let non_decay_rating = rating_tracker.get_rating(1, ruleset).unwrap();
