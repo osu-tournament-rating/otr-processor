@@ -1,5 +1,6 @@
 use chrono::{DateTime, FixedOffset};
 use serde::{Deserialize, Serialize};
+use crate::model::structures::rating_adjustment_type::RatingAdjustmentType;
 
 use crate::model::structures::ruleset::Ruleset;
 
@@ -17,19 +18,40 @@ pub struct OAuthResponse {
     pub expire_in: u64
 }
 
+// POSTS data to the API
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlayerRating {
+    pub player_id: i32,
+    pub ruleset: Ruleset,
+    pub rating: f64,
+    pub volatility: f64,
+    pub percentile: f64,
+    pub global_rank: i32,
+    pub country_rank: i32,
+    pub adjustments: Vec<RatingAdjustment>
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RatingAdjustment {
-    pub player_id: i32,
-    pub mode: Ruleset,
-    pub rating_adjustment_amount: f64,
-    pub volatility_adjustment_amount: f64,
+    pub adjustment_type: RatingAdjustmentType,
+    pub match_id: Option<i32>,
+    pub rating_delta: f64,
     pub rating_before: f64,
     pub rating_after: f64,
+    pub volatility_delta: f64,
     pub volatility_before: f64,
     pub volatility_after: f64,
-    pub rating_adjustment_type: i32,
-    pub timestamp: DateTime<FixedOffset>
+    pub percentile_delta: f64,
+    pub percentile_before: f64,
+    pub percentile_after: f64,
+    pub global_rank_delta: i32,
+    pub global_rank_before: i32,
+    pub global_rank_after: i32,
+    pub country_rank_delta: i32,
+    pub country_rank_before: i32,
+    pub country_rank_after: i32,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
