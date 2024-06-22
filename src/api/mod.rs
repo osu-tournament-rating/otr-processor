@@ -297,9 +297,7 @@ mod api_client_tests {
     use httpmock::prelude::*;
     use serde_json::json;
 
-    use crate::{
-        api::{OtrApiClient},
-    };
+    use crate::api::OtrApiClient;
 
     static API_INSTANCE: OnceCell<OtrApiClient> = OnceCell::new();
 

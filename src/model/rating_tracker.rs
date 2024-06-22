@@ -145,12 +145,16 @@ impl RatingTracker {
     }
 }
 
+#[cfg(test)]
 mod tests {
+    use crate::{
+        api::api_structs::PlayerRating,
+        model::{
+            rating_tracker::RatingTracker,
+            structures::{rating_adjustment_type::RatingSource, ruleset::Ruleset}
+        }
+    };
     use approx::assert_abs_diff_eq;
-    use crate::api::api_structs::PlayerRating;
-    use crate::model::rating_tracker::RatingTracker;
-    use crate::model::structures::rating_adjustment_type::RatingSource;
-    use crate::model::structures::ruleset::Ruleset;
 
     #[test]
     fn test_track_player() {

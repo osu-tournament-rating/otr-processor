@@ -139,7 +139,7 @@ mod tests {
     };
     use approx::{assert_abs_diff_eq, assert_abs_diff_ne};
     use chrono::DateTime;
-    use std::ops::{Add};
+    use std::ops::Add;
 
     #[test]
     fn test_decay() {
