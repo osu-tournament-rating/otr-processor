@@ -1,14 +1,14 @@
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::convert::TryFrom;
 
-#[derive(Deserialize_repr, Serialize_repr, Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[derive(Deserialize_repr, Serialize_repr, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum Ruleset {
-    #[default]
     Osu = 0,
     Taiko = 1,
     Catch = 2,
-    Mania = 3
+    Mania4k = 3,
+    Mania7k = 4,
 }
 
 impl TryFrom<i32> for Ruleset {
@@ -19,7 +19,8 @@ impl TryFrom<i32> for Ruleset {
             0 => Ok(Ruleset::Osu),
             1 => Ok(Ruleset::Taiko),
             2 => Ok(Ruleset::Catch),
-            3 => Ok(Ruleset::Mania),
+            3 => Ok(Ruleset::Mania4k),
+            4 => Ok(Ruleset::Mania7k),
             _ => Err(())
         }
     }
