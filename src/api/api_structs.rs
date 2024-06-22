@@ -1,4 +1,4 @@
-use crate::model::structures::rating_adjustment_type::RatingAdjustmentType;
+use crate::model::structures::rating_adjustment_type::RatingSource;
 use chrono::{DateTime, FixedOffset};
 use serde::{Deserialize, Serialize};
 
@@ -18,7 +18,8 @@ pub struct OAuthResponse {
     pub expire_in: u64
 }
 
-// POSTS data to the API
+// POSTS data to the API.
+// Simultaneously used as a record of a player's rating, regardless of source.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerRating {
@@ -29,13 +30,19 @@ pub struct PlayerRating {
     pub percentile: f64,
     pub global_rank: i32,
     pub country_rank: i32,
+    #[serde(skip_serializing)]
+    pub timestamp: DateTime<FixedOffset>,
+    #[serde(skip_serializing)]
+    pub source: RatingSource,
+    // Adjustments are only populated when sending to the API (e.g. only a single,
+    // current PlayerRating is expected to have this populated.
     pub adjustments: Vec<RatingAdjustment>
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct RatingAdjustment {
-    pub adjustment_type: RatingAdjustmentType,
+    pub adjustment_type: RatingSource,
     pub match_id: Option<i32>,
     pub rating_delta: f64,
     pub rating_before: f64,

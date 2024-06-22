@@ -50,6 +50,7 @@ impl RatingTracker {
         self.track_country(country);
     }
 
+    /// Returns the current rating value for the player and the ruleset.
     pub fn get_rating(&self, player_id: i32, ruleset: Ruleset) -> Option<&PlayerRating> {
         self.leaderboard.get(&(player_id, ruleset))
     }
@@ -124,7 +125,8 @@ impl RatingTracker {
 }
 
 mod tests {
-    use approx::relative_eq;
+    use approx::{assert_abs_diff_eq, relative_eq};
+    use crate::model::structures::rating_adjustment_type::RatingSource;
     use super::*;
 
     #[test]
@@ -138,6 +140,8 @@ mod tests {
             percentile: 0.5,
             global_rank: 0,
             country_rank: 0,
+            timestamp: Default::default(),
+            source: RatingSource::Match,
             adjustments: vec![]
         };
 
@@ -163,6 +167,8 @@ mod tests {
             percentile: 0.0,
             global_rank: 0,
             country_rank: 0,
+            timestamp: Default::default(),
+            source: RatingSource::Match,
             adjustments: vec![],
         }, &country);
 
@@ -174,6 +180,8 @@ mod tests {
             percentile: 0.0,
             global_rank: 0,
             country_rank: 0,
+            timestamp: Default::default(),
+            source: RatingSource::Match,
             adjustments: vec![],
         }, &country);
 
@@ -181,8 +189,8 @@ mod tests {
 
         // Assert sorted by rating descending
         assert_eq!(rating_tracker.leaderboard.len(), 2);
-        relative_eq!(rating_tracker.leaderboard.get_index(0).unwrap().1.rating, 200.0);
-        relative_eq!(rating_tracker.leaderboard.get_index(1).unwrap().1.rating, 100.0);
+        assert_abs_diff_eq!(rating_tracker.leaderboard.get_index(0).unwrap().1.rating, 200.0);
+        assert_abs_diff_eq!(rating_tracker.leaderboard.get_index(1).unwrap().1.rating, 100.0);
 
         let p1 = rating_tracker.get_rating(1, Ruleset::Osu).expect("Expected to find rating for Player 1 in ruleset Osu");
         let p2 = rating_tracker.get_rating(2, Ruleset::Osu).expect("Expected to find rating for Player 2 in ruleset Osu");
@@ -193,8 +201,8 @@ mod tests {
         assert_eq!(p1.country_rank, 2);
         assert_eq!(p2.country_rank, 1);
 
-        relative_eq!(p1.percentile, RatingTracker::percentile(2, 2).unwrap());
-        relative_eq!(p2.percentile, RatingTracker::percentile(1, 2).unwrap());
+        assert_abs_diff_eq!(p1.percentile, RatingTracker::percentile(2, 2).unwrap());
+        assert_abs_diff_eq!(p2.percentile, RatingTracker::percentile(1, 2).unwrap());
     }
 
     #[test]
@@ -204,15 +212,15 @@ mod tests {
         assert_eq!(RatingTracker::percentile(1, 1), None);
         assert_eq!(RatingTracker::percentile(-1, 10), None);
 
-        relative_eq!(RatingTracker::percentile(1, 2).unwrap(), 50.0);
-        relative_eq!(RatingTracker::percentile(2, 2).unwrap(), 0.0);
+        assert_abs_diff_eq!(RatingTracker::percentile(1, 2).unwrap(), 50.0, epsilon = 0.0001);
+        assert_abs_diff_eq!(RatingTracker::percentile(2, 2).unwrap(), 0.0, epsilon = 0.0001);
 
-        relative_eq!(RatingTracker::percentile(1, 10).unwrap(), 90.0);
-        relative_eq!(RatingTracker::percentile(1, 100).unwrap(), 99.0);
-        relative_eq!(RatingTracker::percentile(1, 1000).unwrap(), 99.9);
-        relative_eq!(RatingTracker::percentile(1, 10000).unwrap(), 99.99);
-        relative_eq!(RatingTracker::percentile(1, 100000).unwrap(), 99.999);
-        relative_eq!(RatingTracker::percentile(1, 1000000).unwrap(), 99.9999);
+        assert_abs_diff_eq!(RatingTracker::percentile(1, 10).unwrap(), 90.0, epsilon = 0.0001);
+        assert_abs_diff_eq!(RatingTracker::percentile(1, 100).unwrap(), 99.0, epsilon = 0.0001);
+        assert_abs_diff_eq!(RatingTracker::percentile(1, 1000).unwrap(), 99.9, epsilon = 0.0001);
+        assert_abs_diff_eq!(RatingTracker::percentile(1, 10000).unwrap(), 99.99, epsilon = 0.0001);
+        assert_abs_diff_eq!(RatingTracker::percentile(1, 100000).unwrap(), 99.999, epsilon = 0.0001);
+        assert_abs_diff_eq!(RatingTracker::percentile(1, 1000000).unwrap(), 99.9999, epsilon = 0.0001);
     }
 
     #[test]
@@ -228,6 +236,8 @@ mod tests {
             percentile: 0.0,
             global_rank: 0,
             country_rank: 0,
+            timestamp: Default::default(),
+            source: RatingSource::Decay,
             adjustments: vec![],
         }, &country);
 
@@ -239,6 +249,8 @@ mod tests {
             percentile: 0.0,
             global_rank: 0,
             country_rank: 0,
+            timestamp: Default::default(),
+            source: RatingSource::Decay,
             adjustments: vec![],
         }, &country);
 
