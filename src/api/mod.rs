@@ -10,13 +10,7 @@ use tokio::sync::{
     RwLock
 };
 
-use crate::{
-    api::api_structs::{
-        BaseStats, GameWinRecord, MatchRatingStats, MatchWinRecord, OAuthResponse, Player, PlayerCountryMapping,
-        PlayerMatchStats, RatingAdjustment
-    },
-    utils::progress_utils::progress_bar
-};
+use crate::{api::api_structs::OAuthResponse, utils::progress_utils::progress_bar};
 
 use self::api_structs::MatchPagedResult;
 
@@ -293,123 +287,6 @@ impl OtrApiClient {
 
         self.make_request(Method::GET, &link).await
     }
-
-    /// Get list of players
-    pub async fn get_players(&self) -> Result<Vec<Player>, Error> {
-        let link = "/v1/players/ranks/all";
-
-        self.make_request(Method::GET, link).await
-    }
-
-    /// Get list of player country mappings
-    pub async fn get_player_country_mapping(&self) -> Result<Vec<PlayerCountryMapping>, Error> {
-        let link = "/v1/players/country-mapping";
-
-        self.make_request(Method::GET, link).await
-    }
-
-    /// Post RatingAdjustments
-    pub async fn post_adjustments(&self, adjustments: &[RatingAdjustment]) -> Result<(), Error> {
-        let link = "/v1/stats/ratingadjustments";
-
-        let bar = progress_bar(adjustments.len() as u64, "Posting rating adjustments".to_string());
-
-        let body = adjustments.chunks(5000);
-        for chunk in body {
-            self.make_request_with_body::<(), &[RatingAdjustment]>(Method::POST, link, Some(chunk))
-                .await?;
-            bar.inc(chunk.len() as u64);
-        }
-        Ok(())
-    }
-
-    /// Post PlayerMatchStats
-    pub async fn post_player_match_stats(&self, player_match_stats: &[PlayerMatchStats]) -> Result<(), Error> {
-        let link = "/v1/stats/matchstats";
-
-        let bar = progress_bar(
-            player_match_stats.len() as u64,
-            "Posting player match stats".to_string()
-        );
-
-        let body = player_match_stats.chunks(5000);
-        for chunk in body {
-            self.make_request_with_body::<(), &[PlayerMatchStats]>(Method::POST, link, Some(chunk))
-                .await?;
-            bar.inc(chunk.len() as u64);
-        }
-        Ok(())
-    }
-
-    /// Post MatchRatingStats
-    pub async fn post_match_rating_stats(&self, match_rating_stats: &[MatchRatingStats]) -> Result<(), Error> {
-        let link = "/v1/stats/ratingstats";
-
-        let bar = progress_bar(
-            match_rating_stats.len() as u64,
-            "Posting match rating stats".to_string()
-        );
-
-        let body = match_rating_stats.chunks(5000);
-        for chunk in body {
-            self.make_request_with_body::<(), &[MatchRatingStats]>(Method::POST, link, Some(chunk))
-                .await?;
-            bar.inc(chunk.len() as u64);
-        }
-        Ok(())
-    }
-
-    /// Post BaseStats
-    pub async fn post_base_stats(&self, base_stats: &[BaseStats]) -> Result<(), Error> {
-        let link = "/v1/stats/basestats";
-
-        let bar = progress_bar(base_stats.len() as u64, "Posting base stats".to_string());
-
-        let body = base_stats.chunks(5000);
-        for chunk in body {
-            self.make_request_with_body::<(), &[BaseStats]>(Method::POST, link, Some(chunk))
-                .await?;
-            bar.inc(chunk.len() as u64);
-        }
-        Ok(())
-    }
-
-    /// Post GameWinRecords
-    pub async fn post_game_win_records(&self, game_win_records: &[GameWinRecord]) -> Result<(), Error> {
-        let link = "/v1/stats/gamewinrecords";
-
-        let bar = progress_bar(game_win_records.len() as u64, "Posting game win records".to_string());
-
-        let body = game_win_records.chunks(5000);
-        for chunk in body {
-            self.make_request_with_body::<(), &[GameWinRecord]>(Method::POST, link, Some(chunk))
-                .await?;
-            bar.inc(chunk.len() as u64);
-        }
-        Ok(())
-    }
-
-    /// Post MatchWinRecords
-    pub async fn post_match_win_records(&self, match_win_records: &[MatchWinRecord]) -> Result<(), Error> {
-        let link = "/v1/stats/matchwinrecords";
-
-        let bar = progress_bar(match_win_records.len() as u64, "Posting match win records".to_string());
-
-        let body = match_win_records.chunks(5000);
-        for chunk in body {
-            self.make_request_with_body::<(), &[MatchWinRecord]>(Method::POST, link, Some(chunk))
-                .await?;
-            bar.inc(chunk.len() as u64);
-        }
-        Ok(())
-    }
-
-    /// Delete all stats
-    pub async fn delete_all_stats(&self) -> Result<(), Error> {
-        let link = "/v1/stats";
-
-        self.make_request::<()>(Method::DELETE, link).await
-    }
 }
 
 #[cfg(test)]
@@ -422,13 +299,8 @@ mod api_client_tests {
     use serde_json::json;
 
     use crate::{
-        api::{
-            api_structs::{
-                BaseStats, GameWinRecord, MatchRatingStats, MatchWinRecord, PlayerMatchStats, RatingAdjustment
-            },
-            OtrApiClient
-        },
-        model::structures::{match_type::MatchType, ruleset::Ruleset}
+        api::{api_structs::RatingAdjustment, OtrApiClient},
+        model::structures::ruleset::Ruleset
     };
 
     static API_INSTANCE: OnceCell<OtrApiClient> = OnceCell::new();
@@ -466,170 +338,12 @@ mod api_client_tests {
 
     #[tokio::test]
     #[ignore]
-    async fn test_api_client_get_players() {
-        let api = get_api().await;
-
-        let result = api.get_players().await.unwrap();
-
-        assert!(!result.is_empty())
-    }
-    #[tokio::test]
-    #[ignore]
-    async fn test_api_client_post_rating_adjustments() {
-        let api = get_api().await;
-
-        let payload = vec![RatingAdjustment {
-            player_id: 440,
-            mode: Ruleset::Osu,
-            rating_adjustment_amount: 3.123,
-            volatility_adjustment_amount: 2.123,
-            rating_before: 1000.0,
-            rating_after: 1003.123,
-            volatility_before: 100.0,
-            volatility_after: 102.123,
-            rating_adjustment_type: 0,
-            timestamp: Utc::now().with_timezone(&FixedOffset::east_opt(0).unwrap())
-        }];
-
-        api.post_adjustments(&payload)
-            .await
-            .expect("Failed to POST adjustments");
-    }
-
-    #[tokio::test]
-    #[ignore]
-    async fn test_api_client_post_player_match_stats() {
-        let api = get_api().await;
-
-        let payload = vec![PlayerMatchStats {
-            player_id: 440,
-            match_id: 1,
-            won: true,
-            average_score: 502013.15,
-            average_misses: 3.2,
-            average_accuracy: 97.32,
-            average_placement: 2.1,
-            games_won: 5,
-            games_lost: 3,
-            games_played: 6,
-            teammate_ids: vec![6666],
-            opponent_ids: vec![334]
-        }];
-
-        api.post_player_match_stats(&payload)
-            .await
-            .expect("Failed to POST player match stats");
-    }
-
-    #[tokio::test]
-    #[ignore]
-    async fn test_api_client_post_match_rating_stats() {
-        let api = get_api().await;
-
-        let payload = vec![MatchRatingStats {
-            match_id: 1,
-            match_cost: 1.754,
-            rating_before: 1270.3,
-            rating_after: 1302.7,
-            rating_change: 1302.7 - 1270.3,
-            volatility_before: 104.23,
-            volatility_after: 98.2,
-            volatility_change: 104.23 - 98.2,
-            global_rank_before: 743,
-            global_rank_after: 730,
-            global_rank_change: -13,
-            country_rank_before: 30,
-            country_rank_after: 20,
-            country_rank_change: -10,
-            percentile_before: 93.0,
-            percentile_after: 93.6,
-            percentile_change: 0.6,
-            average_teammate_rating: Some(1125.4),
-            player_id: 440,
-            average_opponent_rating: Some(1420.5)
-        }];
-
-        api.post_match_rating_stats(&payload)
-            .await
-            .expect("Failed to POST match rating stats");
-    }
-
-    #[tokio::test]
-    #[ignore]
-    async fn test_api_client_post_base_stats() {
-        let api = get_api().await;
-
-        let payload = vec![BaseStats {
-            player_id: 440,
-            mode: Ruleset::Osu,
-            rating: 1302.7,
-            volatility: 98.2,
-            global_rank: 730,
-            country_rank: 20,
-            percentile: 93.6,
-            match_cost_average: 1.375
-        }];
-
-        api.post_base_stats(&payload).await.expect("Failed to POST base stats");
-    }
-
-    #[tokio::test]
-    #[ignore]
     async fn test_api_client_get_matches() {
         let api = get_api().await;
 
         let result = api.get_matches(1, 5).await.unwrap();
 
         assert_eq!(result.count as usize, result.results.len())
-    }
-
-    #[tokio::test]
-    #[ignore]
-    async fn test_api_client_post_game_win_records() {
-        let api = get_api().await;
-
-        let result = api.get_matches(1, 5).await.unwrap();
-        let payload = vec![GameWinRecord {
-            game_id: 450905,
-            winners: vec![440],
-            losers: vec![6666],
-            winner_team: 1,
-            loser_team: 2
-        }];
-
-        api.post_game_win_records(&payload)
-            .await
-            .expect("Failed to POST game win records");
-    }
-
-    #[tokio::test]
-    #[ignore]
-    async fn test_api_client_post_match_win_records() {
-        let api = get_api().await;
-
-        let payload = vec![MatchWinRecord {
-            match_id: 57243,
-            loser_roster: vec![440],
-            winner_roster: vec![6666],
-            loser_points: 0,
-            winner_points: 6,
-            winner_team: Some(2),
-            loser_team: Some(1),
-            match_type: Some(MatchType::Team as i32) // TeamVS
-        }];
-
-        api.post_match_win_records(&payload)
-            .await
-            .expect("Failed to POST match win records");
-    }
-
-    // DANGEROUS
-    #[tokio::test]
-    #[ignore]
-    async fn test_api_client_delete_all_stats() {
-        let api = get_api().await;
-
-        api.delete_all_stats().await.expect("Failed to DELETE all stats");
     }
 
     // Manually refresh token three times
@@ -650,6 +364,29 @@ mod api_client_tests {
         assert_ne!(first_token, second_token);
         assert_ne!(second_token, third_token);
     }
+
+    // #[tokio::test]
+    // #[ignore]
+    // async fn test_api_post_rating_adjustments() {
+    //     let api = get_api().await;
+    //
+    //     let payload = vec![RatingAdjustment {
+    //         player_id: 440,
+    //         mode: Ruleset::Osu,
+    //         rating_adjustment_amount: 10.5,
+    //         volatility_adjustment_amount: 0.4,
+    //         rating_before: 1000.0,
+    //         rating_after: 1010.5,
+    //         volatility_before: 100.0,
+    //         volatility_after: 100.4,
+    //         rating_adjustment_type: 0,
+    //         timestamp: Default::default(),
+    //     }];
+    //
+    //     api.post_match_rating_stats(&payload)
+    //         .await
+    //         .expect("Failed to POST rating adjustments");
+    // }
 
     #[tokio::test]
     async fn test_login_mocked() {

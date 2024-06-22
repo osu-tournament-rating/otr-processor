@@ -1,6 +1,6 @@
+use crate::model::structures::rating_adjustment_type::RatingAdjustmentType;
 use chrono::{DateTime, FixedOffset};
 use serde::{Deserialize, Serialize};
-use crate::model::structures::rating_adjustment_type::RatingAdjustmentType;
 
 use crate::model::structures::ruleset::Ruleset;
 
@@ -19,7 +19,7 @@ pub struct OAuthResponse {
 }
 
 // POSTS data to the API
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerRating {
     pub player_id: i32,
@@ -32,7 +32,7 @@ pub struct PlayerRating {
     pub adjustments: Vec<RatingAdjustment>
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct RatingAdjustment {
     pub adjustment_type: RatingAdjustmentType,
@@ -52,6 +52,7 @@ pub struct RatingAdjustment {
     pub country_rank_delta: i32,
     pub country_rank_before: i32,
     pub country_rank_after: i32,
+    pub timestamp: DateTime<FixedOffset>
 }
 
 #[derive(Debug, Serialize, Deserialize)]

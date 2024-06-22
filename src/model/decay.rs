@@ -1,9 +1,13 @@
 use crate::{
     api::api_structs::RatingAdjustment,
-    model::{constants, structures::ruleset::Ruleset}
+    model::{
+        constants,
+        structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
+    }
 };
 use chrono::{DateTime, FixedOffset};
 use std::collections::HashMap;
+
 /// Tracks decay activity for players
 pub struct DecayTracker {
     last_play_time: HashMap<(i32, Ruleset), DateTime<FixedOffset>>
@@ -41,6 +45,7 @@ impl DecayTracker {
     pub fn decay(
         &self,
         player_id: i32,
+        match_id: i32,
         mode: Ruleset,
         mu: f64,
         sigma: f64,
@@ -77,15 +82,24 @@ impl DecayTracker {
             new_sigma = decay_sigma(new_sigma);
 
             let adjustment = RatingAdjustment {
-                player_id,
-                mode,
-                rating_adjustment_amount: new_mu - old_mu,
-                volatility_adjustment_amount: new_sigma - old_sigma,
-                rating_before: old_mu,
-                rating_after: new_mu,
-                volatility_before: old_sigma,
-                volatility_after: new_sigma,
-                rating_adjustment_type: 0,
+                adjustment_type: RatingAdjustmentType::Decay,
+                match_id: Some(match_id),
+                // TODO: Implement
+                rating_delta: 0.0,
+                rating_before: 0.0,
+                rating_after: 0.0,
+                volatility_delta: 0.0,
+                volatility_before: 0.0,
+                volatility_after: 0.0,
+                percentile_delta: 0.0,
+                percentile_before: 0.0,
+                percentile_after: 0.0,
+                global_rank_delta: 0,
+                global_rank_before: 0,
+                global_rank_after: 0,
+                country_rank_delta: 0,
+                country_rank_before: 0,
+                country_rank_after: 0,
                 timestamp: now
             };
 
@@ -137,14 +151,15 @@ mod tests {
         constants,
         constants::MULTIPLIER,
         decay::{decay_mu, decay_sigma, is_decay_possible, DecayTracker},
-        structures::ruleset::Ruleset
+        structures::{rating_adjustment_type::RatingAdjustmentType::Decay, ruleset::Ruleset}
     };
     use chrono::DateTime;
     use std::ops::Add;
 
     #[test]
     fn test_decay() {
-        let id = 1;
+        let player_id = 1;
+        let match_id = 1;
         let mode = Ruleset::Osu;
         let mu = 1000.0;
         let sigma = 200.0;
@@ -170,15 +185,15 @@ mod tests {
             expected_sigma = decay_sigma(expected_sigma);
         }
 
-        tracker.record_activity(id, mode, t);
+        tracker.record_activity(player_id, mode, t);
 
-        let adjustments = tracker.decay(id, mode, mu, sigma, d).unwrap();
+        let adjustments = tracker.decay(player_id, match_id, mode, mu, sigma, d).unwrap();
 
         assert_eq!(adjustments.len() as i64, n_decay);
 
         // Ensure all adjustments are of type 0
         for a in adjustments.iter() {
-            assert_eq!(a.rating_adjustment_type, 0);
+            assert_eq!(a.adjustment_type, Decay);
         }
 
         // Ensure adjustment timestamps are correct
