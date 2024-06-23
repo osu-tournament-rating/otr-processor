@@ -82,7 +82,7 @@ pub struct Game {
     pub placements: Vec<PlayerPlacement>
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerPlacement {
     pub player_id: i32,

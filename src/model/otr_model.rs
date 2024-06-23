@@ -31,7 +31,11 @@ impl OtrModel {
         }
     }
 
-    pub fn process(&self, matches: &[Match]) {}
+    pub fn process(&self, matches: &[Match]) {
+        for m in matches {
+            self.process_match(m);
+        }
+    }
 
     /// # o!TR Match Processing
     ///
@@ -84,7 +88,7 @@ impl OtrModel {
 
         for i in 0..ratings.len() {
             let p_rating = ratings.get(i).unwrap();
-            let result = results.get(i).unwrap().get(0).unwrap();
+            let result = results.get(i).unwrap().first().unwrap();
 
             changes.insert(p_rating.unwrap().player_id, (result.mu, result.sigma));
         }
@@ -112,82 +116,37 @@ impl OtrModel {
 
 #[cfg(test)]
 mod tests {
-    use crate::api::api_structs::{Game, PlayerPlacement, PlayerRating};
-    use crate::model::model::OtrModel;
-    use crate::model::structures::rating_adjustment_type::RatingSource;
-    use crate::model::structures::ruleset::Ruleset;
+    use crate::{
+        api::api_structs::{Game, PlayerPlacement, PlayerRating},
+        model::{
+            otr_model::OtrModel,
+            structures::{rating_adjustment_type::RatingSource, ruleset::Ruleset}
+        }
+    };
+    use std::collections::HashMap;
 
     #[test]
     fn test_rate() {
         let mut model = OtrModel::new();
 
         // Add 3 players to model
-        model.rating_tracker.insert_or_update(
-            &PlayerRating {
-                player_id: 1,
-                ruleset: Ruleset::Osu,
-                rating: 1000.0,
-                volatility: 100.0,
-                percentile: 0.0,
-                global_rank: 0,
-                country_rank: 0,
-                timestamp: Default::default(),
-                source: RatingSource::Match,
-                adjustments: Vec::new()
-            },
-            &"US".to_string()
-        );
-        model.rating_tracker.insert_or_update(
-            &PlayerRating {
-                player_id: 2,
-                ruleset: Ruleset::Osu,
-                rating: 1000.0,
-                volatility: 100.0,
-                percentile: 0.0,
-                global_rank: 0,
-                country_rank: 0,
-                timestamp: Default::default(),
-                source: RatingSource::Match,
-                adjustments: Vec::new()
-            },
-            &"US".to_string()
-        );
-        model.rating_tracker.insert_or_update(
-            &PlayerRating {
-                player_id: 3,
-                ruleset: Ruleset::Osu,
-                rating: 1000.0,
-                volatility: 100.0,
-                percentile: 0.0,
-                global_rank: 0,
-                country_rank: 0,
-                timestamp: Default::default(),
-                source: RatingSource::Match,
-                adjustments: Vec::new()
-            },
-            &"US".to_string()
-        );
+        let player_ratings = vec![
+            generate_player_ratings(1, 1000.0, 100.0),
+            generate_player_ratings(2, 1000.0, 100.0),
+            generate_player_ratings(3, 1000.0, 100.0),
+        ];
 
-        let game = Game {
-            id: 0,
-            game_id: 0,
-            start_time: Default::default(),
-            end_time: None,
-            placements: vec![
-                PlayerPlacement {
-                    player_id: 1,
-                    placement: 2
-                },
-                PlayerPlacement {
-                    player_id: 2,
-                    placement: 1
-                },
-                PlayerPlacement {
-                    player_id: 3,
-                    placement: 3
-                },
-            ]
-        };
+        let placements = vec![
+            generate_placement(1, 2),
+            generate_placement(2, 1),
+            generate_placement(3, 3),
+        ];
+
+        for p in player_ratings {
+            model.rating_tracker.insert_or_update(&p, "US");
+        }
+
+        let game = generate_game(1, &placements);
 
         let rating_result = model.rate(&game, Ruleset::Osu);
 
@@ -198,5 +157,65 @@ mod tests {
 
         assert!(result_2 > result_1);
         assert!(result_1 > result_3);
+    }
+
+    #[test]
+    fn test_rate_match() {
+        let mut model = OtrModel::new();
+
+        // Add 4 players to model
+        let player_ratings = vec![
+            generate_player_ratings(1, 1000.0, 100.0),
+            generate_player_ratings(2, 1000.0, 100.0),
+            generate_player_ratings(3, 1000.0, 100.0),
+            generate_player_ratings(4, 1000.0, 100.0),
+        ];
+
+        for p in player_ratings {
+            model.rating_tracker.insert_or_update(&p, "US");
+        }
+
+        let placements = vec![
+            generate_placement(1, 4),
+            generate_placement(2, 3),
+            generate_placement(3, 2),
+            generate_placement(4, 1),
+        ];
+
+        let games = vec![
+            generate_game(1, &placements),
+            generate_game(2, &placements),
+            generate_game(3, &placements),
+        ];
+        let game_results: Vec<HashMap<i32, (f64, f64)>> = games.iter().map(|g| model.rate(g, Ruleset::Osu)).collect();
+    }
+
+    fn generate_player_ratings(id: i32, rating: f64, volatility: f64) -> PlayerRating {
+        PlayerRating {
+            player_id: id,
+            ruleset: Ruleset::Osu,
+            rating,
+            volatility,
+            percentile: 0.0,
+            global_rank: 0,
+            country_rank: 0,
+            timestamp: Default::default(),
+            source: RatingSource::Match,
+            adjustments: Vec::new()
+        }
+    }
+
+    fn generate_placement(player_id: i32, placement: i32) -> PlayerPlacement {
+        PlayerPlacement { player_id, placement }
+    }
+
+    fn generate_game(id: i32, placements: &[PlayerPlacement]) -> Game {
+        Game {
+            id,
+            game_id: 0,
+            start_time: Default::default(),
+            end_time: None,
+            placements: placements.to_vec()
+        }
     }
 }
