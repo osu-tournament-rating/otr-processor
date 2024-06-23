@@ -21,7 +21,12 @@ impl OtrModel {
         let mut tracker = RatingTracker::new();
 
         for p in player_ratings {
-            tracker.insert_or_update(p, country_mapping.get(&p.player_id).expect("Player must have a country mapping!"));
+            tracker.insert_or_update(
+                p,
+                country_mapping
+                    .get(&p.player_id)
+                    .expect("Player must have a country mapping!")
+            );
         }
 
         tracker.sort();
@@ -126,8 +131,8 @@ mod tests {
             structures::{rating_adjustment_type::RatingSource, ruleset::Ruleset}
         }
     };
-    use std::collections::HashMap;
     use approx::assert_abs_diff_eq;
+    use std::collections::HashMap;
 
     #[test]
     fn test_rate() {
