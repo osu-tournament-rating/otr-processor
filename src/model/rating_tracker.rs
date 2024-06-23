@@ -19,6 +19,12 @@ pub struct RatingTracker {
     country_change_tracker: HashSet<String> // This is so we don't have to update EVERY country with each update
 }
 
+impl Default for RatingTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RatingTracker {
     pub fn new() -> RatingTracker {
         RatingTracker {
