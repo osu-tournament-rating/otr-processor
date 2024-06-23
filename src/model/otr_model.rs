@@ -16,16 +16,18 @@ pub struct OtrModel {
     pub decay_tracker: DecayTracker
 }
 
-impl Default for OtrModel {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl OtrModel {
-    pub fn new() -> OtrModel {
+    pub fn new(player_ratings: &[PlayerRating], country_mapping: &HashMap<i32, String>) -> OtrModel {
+        let mut tracker = RatingTracker::new();
+
+        for p in player_ratings {
+            tracker.insert_or_update(p, country_mapping.get(&p.player_id).expect("Player must have a country mapping!"));
+        }
+
+        tracker.sort();
+
         OtrModel {
-            rating_tracker: RatingTracker::new(),
+            rating_tracker: tracker,
             decay_tracker: DecayTracker,
             model: PlackettLuce::new(DEFAULT_BETA, KAPPA, default_gamma)
         }
@@ -110,7 +112,8 @@ impl OtrModel {
 
         // Rating differential is used with a scaling factor
         // to determine final rating change
-        rating.rating = scaling * (rating_diff * (games_played as f64 / games_total as f64))
+        let prior_rating = rating.rating;
+        rating.rating = prior_rating - (scaling * (rating_diff.abs() * (games_played as f64 / games_total as f64)))
     }
 }
 
@@ -124,11 +127,10 @@ mod tests {
         }
     };
     use std::collections::HashMap;
+    use approx::assert_abs_diff_eq;
 
     #[test]
     fn test_rate() {
-        let mut model = OtrModel::new();
-
         // Add 3 players to model
         let player_ratings = vec![
             generate_player_ratings(1, 1000.0, 100.0),
@@ -136,15 +138,15 @@ mod tests {
             generate_player_ratings(3, 1000.0, 100.0),
         ];
 
+        let countries = generate_country_mapping(player_ratings.as_slice(), "US");
+
+        let model = OtrModel::new(player_ratings.as_slice(), &countries);
+
         let placements = vec![
             generate_placement(1, 2),
             generate_placement(2, 1),
             generate_placement(3, 3),
         ];
-
-        for p in player_ratings {
-            model.rating_tracker.insert_or_update(&p, "US");
-        }
 
         let game = generate_game(1, &placements);
 
@@ -161,8 +163,6 @@ mod tests {
 
     #[test]
     fn test_rate_match() {
-        let mut model = OtrModel::new();
-
         // Add 4 players to model
         let player_ratings = vec![
             generate_player_ratings(1, 1000.0, 100.0),
@@ -171,9 +171,9 @@ mod tests {
             generate_player_ratings(4, 1000.0, 100.0),
         ];
 
-        for p in player_ratings {
-            model.rating_tracker.insert_or_update(&p, "US");
-        }
+        let countries = generate_country_mapping(player_ratings.as_slice(), "US");
+
+        let model = OtrModel::new(player_ratings.as_slice(), &countries);
 
         let placements = vec![
             generate_placement(1, 4),
@@ -187,7 +187,23 @@ mod tests {
             generate_game(2, &placements),
             generate_game(3, &placements),
         ];
+
         let game_results: Vec<HashMap<i32, (f64, f64)>> = games.iter().map(|g| model.rate(g, Ruleset::Osu)).collect();
+    }
+
+    #[test]
+    fn test_negative_performance_scaling() {
+        let mut rating = generate_player_ratings(1, 1000.0, 100.0);
+        let rating_diff = -100.0;
+        let games_played = 1;
+        let games_total = 10;
+        let scaling = 1.0;
+
+        // User should lose 10% of what they would have lost as they only participated in 1/10 of the maps.
+
+        OtrModel::apply_negative_performance_scaling(&mut rating, rating_diff, games_played, games_total, scaling);
+
+        assert_abs_diff_eq!(rating.rating, 990.0);
     }
 
     fn generate_player_ratings(id: i32, rating: f64, volatility: f64) -> PlayerRating {
@@ -217,5 +233,14 @@ mod tests {
             end_time: None,
             placements: placements.to_vec()
         }
+    }
+
+    fn generate_country_mapping(player_ratings: &[PlayerRating], country: &str) -> HashMap<i32, String> {
+        let mut mapping = HashMap::new();
+        for p in player_ratings {
+            mapping.insert(p.player_id, country.to_string());
+        }
+
+        mapping
     }
 }
