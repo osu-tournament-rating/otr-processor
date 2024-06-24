@@ -1,4 +1,7 @@
-use crate::{api::api_structs::PlayerRating, model::structures::ruleset::Ruleset};
+use crate::{
+    api::api_structs::{PlayerRating, RatingAdjustment},
+    model::structures::ruleset::Ruleset
+};
 use indexmap::IndexMap;
 use itertools::Itertools;
 use std::{
@@ -16,6 +19,7 @@ pub struct RatingTracker {
     // other values are affected by `insert_or_updated`.
     country_leaderboards: HashMap<String, IndexMap<(i32, Ruleset), PlayerRating>>,
     rating_history: HashMap<(i32, Ruleset), Vec<PlayerRating>>,
+    adjustments: HashMap<(i32, Ruleset), Vec<RatingAdjustment>>,
     country_change_tracker: HashSet<String> // This is so we don't have to update EVERY country with each update
 }
 
@@ -31,6 +35,7 @@ impl RatingTracker {
             leaderboard: IndexMap::new(),
             country_leaderboards: HashMap::new(),
             rating_history: HashMap::new(),
+            adjustments: HashMap::new(),
             country_change_tracker: HashSet::new()
         }
     }
@@ -54,6 +59,8 @@ impl RatingTracker {
             .entry((rating.player_id, rating.ruleset))
             .or_default()
             .push(rating.clone());
+
+        self.adjustments.insert((rating.player_id, rating.ruleset), Vec::new());
 
         self.track_country(country);
     }
@@ -158,7 +165,8 @@ mod tests {
         model::{
             rating_tracker::RatingTracker,
             structures::{rating_adjustment_type::RatingSource, ruleset::Ruleset}
-        }
+        },
+        utils::test_utils::generate_player_rating
     };
     use approx::assert_abs_diff_eq;
 
@@ -174,8 +182,7 @@ mod tests {
             global_rank: 0,
             country_rank: 0,
             timestamp: Default::default(),
-            source: RatingSource::Match,
-            adjustments: vec![]
+            source: RatingSource::Match
         };
 
         rating_tracker.insert_or_update(&player, &"US".to_string());
@@ -192,37 +199,11 @@ mod tests {
         let mut rating_tracker = RatingTracker::new();
         let country = "US".to_string();
 
-        rating_tracker.insert_or_update(
-            &PlayerRating {
-                player_id: 1,
-                ruleset: Ruleset::Osu,
-                rating: 100.0,
-                volatility: 0.0,
-                percentile: 0.0,
-                global_rank: 0,
-                country_rank: 0,
-                timestamp: Default::default(),
-                source: RatingSource::Match,
-                adjustments: vec![]
-            },
-            &country
-        );
+        let p1 = generate_player_rating(1, 100.0, 100.0);
+        let p2 = generate_player_rating(2, 200.0, 100.0);
 
-        rating_tracker.insert_or_update(
-            &PlayerRating {
-                player_id: 2,
-                ruleset: Ruleset::Osu,
-                rating: 200.0,
-                volatility: 0.0,
-                percentile: 0.0,
-                global_rank: 0,
-                country_rank: 0,
-                timestamp: Default::default(),
-                source: RatingSource::Match,
-                adjustments: vec![]
-            },
-            &country
-        );
+        rating_tracker.insert_or_update(&p1, &country);
+        rating_tracker.insert_or_update(&p2, &country);
 
         rating_tracker.sort();
 
@@ -275,37 +256,11 @@ mod tests {
         let mut rating_tracker = RatingTracker::new();
         let country = "US".to_string();
 
-        rating_tracker.insert_or_update(
-            &PlayerRating {
-                player_id: 1,
-                ruleset: Ruleset::Osu,
-                rating: 100.0,
-                volatility: 0.0,
-                percentile: 0.0,
-                global_rank: 0,
-                country_rank: 0,
-                timestamp: Default::default(),
-                source: RatingSource::Decay,
-                adjustments: vec![]
-            },
-            &country
-        );
+        let p1 = generate_player_rating(1, 100.0, 100.0);
+        let p2 = generate_player_rating(2, 200.0, 100.0);
 
-        rating_tracker.insert_or_update(
-            &PlayerRating {
-                player_id: 2,
-                ruleset: Ruleset::Osu,
-                rating: 200.0,
-                volatility: 0.0,
-                percentile: 0.0,
-                global_rank: 0,
-                country_rank: 0,
-                timestamp: Default::default(),
-                source: RatingSource::Decay,
-                adjustments: vec![]
-            },
-            &country
-        );
+        rating_tracker.insert_or_update(&p1, &country);
+        rating_tracker.insert_or_update(&p2, &country);
 
         assert_eq!(rating_tracker.country_change_tracker.len(), 1);
 

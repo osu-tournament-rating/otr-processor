@@ -125,11 +125,11 @@ impl OtrModel {
 #[cfg(test)]
 mod tests {
     use crate::{
-        api::api_structs::{Game, PlayerPlacement, PlayerRating},
         model::{
             otr_model::OtrModel,
-            structures::{rating_adjustment_type::RatingSource, ruleset::Ruleset}
-        }
+            structures::{ruleset::Ruleset}
+        },
+        utils::test_utils::*
     };
     use approx::assert_abs_diff_eq;
     use std::collections::HashMap;
@@ -138,9 +138,9 @@ mod tests {
     fn test_rate() {
         // Add 3 players to model
         let player_ratings = vec![
-            generate_player_ratings(1, 1000.0, 100.0),
-            generate_player_ratings(2, 1000.0, 100.0),
-            generate_player_ratings(3, 1000.0, 100.0),
+            generate_player_rating(1, 1000.0, 100.0),
+            generate_player_rating(2, 1000.0, 100.0),
+            generate_player_rating(3, 1000.0, 100.0),
         ];
 
         let countries = generate_country_mapping(player_ratings.as_slice(), "US");
@@ -170,10 +170,10 @@ mod tests {
     fn test_rate_match() {
         // Add 4 players to model
         let player_ratings = vec![
-            generate_player_ratings(1, 1000.0, 100.0),
-            generate_player_ratings(2, 1000.0, 100.0),
-            generate_player_ratings(3, 1000.0, 100.0),
-            generate_player_ratings(4, 1000.0, 100.0),
+            generate_player_rating(1, 1000.0, 100.0),
+            generate_player_rating(2, 1000.0, 100.0),
+            generate_player_rating(3, 1000.0, 100.0),
+            generate_player_rating(4, 1000.0, 100.0),
         ];
 
         let countries = generate_country_mapping(player_ratings.as_slice(), "US");
@@ -198,7 +198,7 @@ mod tests {
 
     #[test]
     fn test_negative_performance_scaling() {
-        let mut rating = generate_player_ratings(1, 1000.0, 100.0);
+        let mut rating = generate_player_rating(1, 1000.0, 100.0);
         let rating_diff = -100.0;
         let games_played = 1;
         let games_total = 10;
@@ -209,43 +209,5 @@ mod tests {
         OtrModel::apply_negative_performance_scaling(&mut rating, rating_diff, games_played, games_total, scaling);
 
         assert_abs_diff_eq!(rating.rating, 990.0);
-    }
-
-    fn generate_player_ratings(id: i32, rating: f64, volatility: f64) -> PlayerRating {
-        PlayerRating {
-            player_id: id,
-            ruleset: Ruleset::Osu,
-            rating,
-            volatility,
-            percentile: 0.0,
-            global_rank: 0,
-            country_rank: 0,
-            timestamp: Default::default(),
-            source: RatingSource::Match,
-            adjustments: Vec::new()
-        }
-    }
-
-    fn generate_placement(player_id: i32, placement: i32) -> PlayerPlacement {
-        PlayerPlacement { player_id, placement }
-    }
-
-    fn generate_game(id: i32, placements: &[PlayerPlacement]) -> Game {
-        Game {
-            id,
-            game_id: 0,
-            start_time: Default::default(),
-            end_time: None,
-            placements: placements.to_vec()
-        }
-    }
-
-    fn generate_country_mapping(player_ratings: &[PlayerRating], country: &str) -> HashMap<i32, String> {
-        let mut mapping = HashMap::new();
-        for p in player_ratings {
-            mapping.insert(p.player_id, country.to_string());
-        }
-
-        mapping
     }
 }

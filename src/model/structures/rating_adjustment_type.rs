@@ -6,7 +6,8 @@ use std::convert::TryFrom;
 pub enum RatingSource {
     // AKA RatingAdjustmentType
     Decay = 0,
-    Match = 1
+    Match = 1,
+    Initial = 2
 }
 
 impl TryFrom<i32> for RatingSource {

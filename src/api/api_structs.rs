@@ -33,10 +33,7 @@ pub struct PlayerRating {
     #[serde(skip_serializing)]
     pub timestamp: DateTime<FixedOffset>,
     #[serde(skip_serializing)]
-    pub source: RatingSource,
-    // Adjustments are only populated when sending to the API (e.g. only a single,
-    // current PlayerRating is expected to have this populated.
-    pub adjustments: Vec<RatingAdjustment>
+    pub source: RatingSource
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

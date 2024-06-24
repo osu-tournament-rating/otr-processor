@@ -1,9 +1,9 @@
 // Model constants
-pub const MULTIPLIER: f64 = 45.0;
-pub const SIGMA: f64 = 5.0 * MULTIPLIER;
-pub const MU: f64 = 15.0 * MULTIPLIER;
-pub const TAU: f64 = SIGMA / 100.0;
-pub const BETA: f64 = SIGMA / 2.0;
+pub const MULTIPLIER: f64 = 60.0;
+pub const DEFAULT_VOLATILITY: f64 = 5.0 * MULTIPLIER;
+pub const DEFAULT_RATING: f64 = 15.0 * MULTIPLIER;
+pub const TAU: f64 = DEFAULT_VOLATILITY / 100.0;
+pub const BETA: f64 = DEFAULT_VOLATILITY / 2.0;
 pub const KAPPA: f64 = 0.0001;
 pub const DECAY_DAYS: u64 = 115;
 pub const DECAY_MINIMUM: f64 = 18.0 * MULTIPLIER;

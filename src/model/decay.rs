@@ -79,8 +79,7 @@ impl DecayTracker {
                 global_rank: 0,
                 country_rank: 0,
                 timestamp: now,
-                source,
-                adjustments: Vec::new()
+                source
             };
 
             rating_tracker.insert_or_update(&new_rating, country)
@@ -113,13 +112,13 @@ pub fn is_decay_possible(mu: f64) -> bool {
     mu > constants::DECAY_MINIMUM
 }
 
-pub fn decay_volatility(sigma: f64) -> f64 {
+fn decay_volatility(sigma: f64) -> f64 {
     let new_sigma = (sigma.powf(2.0) + constants::VOLATILITY_GROWTH_RATE).sqrt();
 
-    new_sigma.min(constants::SIGMA)
+    new_sigma.min(constants::DEFAULT_VOLATILITY)
 }
 
-pub fn decay_rating(mu: f64) -> f64 {
+fn decay_rating(mu: f64) -> f64 {
     let new_mu = mu - constants::DECAY_RATE;
 
     new_mu.max(constants::DECAY_MINIMUM)
@@ -140,6 +139,7 @@ mod tests {
     use approx::{assert_abs_diff_eq, assert_abs_diff_ne};
     use chrono::DateTime;
     use std::ops::Add;
+    use crate::utils::test_utils::generate_player_rating;
 
     #[test]
     fn test_decay() {
@@ -157,24 +157,10 @@ mod tests {
         for i in 0..10 {
             // ID 0 has the best starting rating, ID 9 has the worst. Useful for asserting ranking updates
             let rating = initial_rating - (i as f64 * 20.0);
-            let player_id = i;
             // ID 0 will have decay applied
             // Other IDs will not have decay applied
-            rating_tracker.insert_or_update(
-                &PlayerRating {
-                    player_id,
-                    ruleset,
-                    rating,
-                    volatility,
-                    percentile: 0.0,
-                    global_rank: 0,
-                    country_rank: 0,
-                    timestamp: t,
-                    source: Decay,
-                    adjustments: Vec::new()
-                },
-                &country
-            );
+            let player_rating = generate_player_rating(i, rating, volatility);
+            rating_tracker.insert_or_update(&player_rating, &country);
         }
 
         let decay_tracker = DecayTracker;
@@ -191,16 +177,16 @@ mod tests {
         let non_decay_rating = rating_tracker.get_rating(1, ruleset).unwrap();
 
         let n_decay = DecayTracker::n_decay(d, t);
-        let mut dec_rating = initial_rating;
-        let mut dec_volatility = volatility;
+        let mut expected_decay_rating = initial_rating;
+        let mut expected_decay_volatility = volatility;
 
         for i in 0..n_decay {
-            dec_rating = decay_rating(dec_rating);
-            dec_volatility = decay_volatility(dec_volatility);
+            expected_decay_rating = decay_rating(expected_decay_rating);
+            expected_decay_volatility = decay_volatility(expected_decay_volatility);
         }
 
-        assert_abs_diff_eq!(decayed_rating.rating, dec_rating);
-        assert_abs_diff_eq!(decayed_rating.volatility, dec_volatility);
+        assert_abs_diff_eq!(decayed_rating.rating, expected_decay_rating);
+        assert_abs_diff_eq!(decayed_rating.volatility, expected_decay_volatility);
 
         assert_abs_diff_ne!(non_decay_rating.rating, 1000.0);
         assert_abs_diff_ne!(non_decay_rating.volatility, 100.0);
@@ -263,7 +249,7 @@ mod tests {
     fn test_decay_sigma_maximum_default() {
         let sigma = 999.0;
         let new_sigma = decay_volatility(sigma);
-        let expected = constants::SIGMA;
+        let expected = constants::DEFAULT_VOLATILITY;
 
         assert_eq!(new_sigma, expected);
     }
