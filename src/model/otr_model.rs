@@ -9,6 +9,7 @@ use crate::{
     api::api_structs::{Game, Match, PlayerRating},
     model::{decay::DecayTracker, rating_tracker::RatingTracker, structures::ruleset::Ruleset}
 };
+use crate::model::structures::rating_adjustment_type::RatingAdjustmentType;
 
 pub struct OtrModel {
     pub model: PlackettLuce,
@@ -17,15 +18,21 @@ pub struct OtrModel {
 }
 
 impl OtrModel {
-    pub fn new(player_ratings: &[PlayerRating], country_mapping: &HashMap<i32, String>) -> OtrModel {
+    pub fn new(initial_player_ratings: &[PlayerRating], country_mapping: &HashMap<i32, String>) -> OtrModel {
         let mut tracker = RatingTracker::new();
 
-        for p in player_ratings {
+        for p in initial_player_ratings {
+            match p.adjustment_type {
+                RatingAdjustmentType::Initial => (),
+                _ => panic!("Expected rating adjustment type to be Initial!")
+            }
+
             tracker.insert_or_update(
                 p,
                 country_mapping
                     .get(&p.player_id)
-                    .expect("Player must have a country mapping!")
+                    .expect("Player must have a country mapping!"),
+                None
             );
         }
 
@@ -133,14 +140,15 @@ mod tests {
     };
     use approx::assert_abs_diff_eq;
     use std::collections::HashMap;
+    use crate::model::structures::rating_adjustment_type::RatingAdjustmentType;
 
     #[test]
     fn test_rate() {
         // Add 3 players to model
         let player_ratings = vec![
-            generate_player_rating(1, 1000.0, 100.0),
-            generate_player_rating(2, 1000.0, 100.0),
-            generate_player_rating(3, 1000.0, 100.0),
+            generate_player_rating(1, 1000.0, 100.0, RatingAdjustmentType::Initial),
+            generate_player_rating(2, 1000.0, 100.0, RatingAdjustmentType::Initial),
+            generate_player_rating(3, 1000.0, 100.0, RatingAdjustmentType::Initial),
         ];
 
         let countries = generate_country_mapping(player_ratings.as_slice(), "US");
@@ -170,10 +178,10 @@ mod tests {
     fn test_rate_match() {
         // Add 4 players to model
         let player_ratings = vec![
-            generate_player_rating(1, 1000.0, 100.0),
-            generate_player_rating(2, 1000.0, 100.0),
-            generate_player_rating(3, 1000.0, 100.0),
-            generate_player_rating(4, 1000.0, 100.0),
+            generate_player_rating(1, 1000.0, 100.0, RatingAdjustmentType::Initial),
+            generate_player_rating(2, 1000.0, 100.0, RatingAdjustmentType::Initial),
+            generate_player_rating(3, 1000.0, 100.0, RatingAdjustmentType::Initial),
+            generate_player_rating(4, 1000.0, 100.0, RatingAdjustmentType::Initial),
         ];
 
         let countries = generate_country_mapping(player_ratings.as_slice(), "US");
@@ -198,7 +206,7 @@ mod tests {
 
     #[test]
     fn test_negative_performance_scaling() {
-        let mut rating = generate_player_rating(1, 1000.0, 100.0);
+        let mut rating = generate_player_rating(1, 1000.0, 100.0, RatingAdjustmentType::Initial);
         let rating_diff = -100.0;
         let games_played = 1;
         let games_total = 10;

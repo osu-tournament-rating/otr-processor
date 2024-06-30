@@ -1,4 +1,4 @@
-use crate::model::structures::rating_adjustment_type::RatingSource;
+use crate::model::structures::rating_adjustment_type::RatingAdjustmentType;
 use chrono::{DateTime, FixedOffset};
 use serde::{Deserialize, Serialize};
 
@@ -33,13 +33,13 @@ pub struct PlayerRating {
     #[serde(skip_serializing)]
     pub timestamp: DateTime<FixedOffset>,
     #[serde(skip_serializing)]
-    pub source: RatingSource
+    pub adjustment_type: RatingAdjustmentType
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct RatingAdjustment {
-    pub adjustment_type: RatingSource,
+    pub adjustment_type: RatingAdjustmentType,
     pub match_id: Option<i32>,
     pub rating_delta: f64,
     pub rating_before: f64,

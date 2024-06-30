@@ -7,15 +7,15 @@ use crate::{
     model::{
         constants,
         constants::{DEFAULT_RATING, DEFAULT_VOLATILITY},
-        structures::{rating_adjustment_type::RatingSource, ruleset::Ruleset}
+        structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
     }
 };
 
-pub fn initial_ratings(players: &[Player]) -> HashMap<(i32, Ruleset), PlayerRating> {
-    let mut map = HashMap::new();
-
-    map
-}
+// pub fn initial_ratings(players: &[Player]) -> HashMap<(i32, Ruleset), PlayerRating> {
+//     let mut map = HashMap::new();
+//
+//     map
+// }
 
 fn create_rating(player: &Player, ruleset: &Ruleset) -> PlayerRating {
     let timestamp: DateTime<FixedOffset> = "2007-09-17T00:00:00".parse().unwrap();
@@ -29,7 +29,7 @@ fn create_rating(player: &Player, ruleset: &Ruleset) -> PlayerRating {
         global_rank: 0,
         country_rank: 0,
         timestamp,
-        source: RatingSource::Initial
+        adjustment_type: RatingAdjustmentType::Initial
     }
 }
 
