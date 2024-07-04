@@ -14,7 +14,6 @@ name = "otr-processor-cli"
 path = "src/main.rs"
 
 [dependencies]
-clap = "4.4.18"
 dotenv = "0.15.0"
 indicatif = "0.17.7"
 reqwest = { version = "0.11.24", features = ["json"] }
@@ -29,7 +28,6 @@ itertools = "0.12.1"
 indexmap = "2.2.6"
 approx = "0.5.1"
 log = "0.4.22"
-env_logger = "0.11.3"
 
 [dev-dependencies]
 async-once-cell = "0.5.3"
