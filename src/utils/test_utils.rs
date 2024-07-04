@@ -2,9 +2,16 @@ use crate::{
     api::api_structs::{Game, PlayerPlacement, PlayerRating},
     model::structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
 };
+use chrono::{DateTime, FixedOffset};
 use std::collections::HashMap;
 
-pub fn generate_player_rating(id: i32, rating: f64, volatility: f64, adjustment_type: RatingAdjustmentType) -> PlayerRating {
+pub fn generate_player_rating(
+    id: i32,
+    rating: f64,
+    volatility: f64,
+    adjustment_type: RatingAdjustmentType,
+    timestamp: Option<DateTime<FixedOffset>>
+) -> PlayerRating {
     PlayerRating {
         player_id: id,
         ruleset: Ruleset::Osu,
@@ -13,7 +20,7 @@ pub fn generate_player_rating(id: i32, rating: f64, volatility: f64, adjustment_
         percentile: 0.0,
         global_rank: 0,
         country_rank: 0,
-        timestamp: Default::default(),
+        timestamp: timestamp.unwrap_or_default(),
         adjustment_type
     }
 }

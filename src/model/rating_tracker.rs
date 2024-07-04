@@ -8,9 +8,8 @@ use itertools::Itertools;
 
 use crate::{
     api::api_structs::{PlayerRating, RatingAdjustment},
-    model::structures::ruleset::Ruleset
+    model::structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
 };
-use crate::model::structures::rating_adjustment_type::RatingAdjustmentType;
 
 pub struct RatingTracker {
     // Global leaderboard, used as a reference for country leaderboards also.
@@ -45,36 +44,83 @@ impl RatingTracker {
         self.country_change_tracker.insert(country.to_owned());
     }
 
-    /// Inserts or updates a player rating in the leaderboard and rating history.
-    /// The `sort` function must be called after any insertions or updates to update rankings and percentiles.
-    pub fn insert_or_update(&mut self, rating: &PlayerRating, country: &str, match_id: Option<i32>) {
-        self.initialize_or_insert_adjustments(rating, match_id);
+    /// Inserts or updates a set of player ratings.
+    /// For each rating, leaderboards are updated. The rankings are then sorted once.
+    /// Finally, the adjustments are updated.
+    ///
+    /// Ratings are assumed to be inserted on a per-match basis.
+    pub fn insert_or_update(
+        &mut self,
+        ratings: &[PlayerRating],
+        country_mapping: &HashMap<i32, String>,
+        match_id: Option<i32>
+    ) {
+        let countries: HashSet<&String> = country_mapping.values().collect();
 
-        self.leaderboard
-            .insert((rating.player_id, rating.ruleset), rating.clone());
+        for country in countries {
+            self.track_country(country.as_str());
+        }
 
-        self.country_leaderboards
-            .entry(country.to_owned())
-            .or_default()
-            .insert((rating.player_id, rating.ruleset), rating.clone());
+        for rating in ratings {
+            self.leaderboard
+                .insert((rating.player_id, rating.ruleset), rating.clone());
 
-        self.track_country(country);
+            let player_country = country_mapping.get(&rating.player_id).unwrap();
+            self.country_leaderboards
+                .entry(player_country.to_string())
+                .or_default()
+                .insert((rating.player_id, rating.ruleset), rating.clone());
+        }
+
+        self.sort();
+
+        for rating in ratings {
+            self.update_adjustments(rating.player_id, rating.ruleset, match_id);
+        }
     }
 
-    /// Initializes an empty vector of RatingAdjustments for the player and ruleset.
-    /// If the vector exists,
-    fn initialize_or_insert_adjustments(&mut self, player_rating: &PlayerRating, match_id: Option<i32>) {
+    /// Updates the adjustments for a given player and ruleset. This must be called
+    /// after the `sort` function, otherwise the global rank and percentile values
+    /// will not be correct.
+    fn update_adjustments(&mut self, player_id: i32, ruleset: Ruleset, match_id: Option<i32>) {
+        // We call get_rating here as it's a wrapper for the leaderboard.
+        // The leaderboard is what contains updated global rank information.
+        let player_rating = self.get_rating(player_id, ruleset).unwrap().clone();
         match player_rating.adjustment_type {
             RatingAdjustmentType::Initial => {
-                self.adjustments
-                    .insert((player_rating.player_id, player_rating.ruleset), Vec::new());
+                self.adjustments.insert(
+                    (player_rating.player_id, player_rating.ruleset),
+                    vec![RatingAdjustment {
+                        adjustment_type: RatingAdjustmentType::Initial,
+                        match_id,
+                        rating_delta: 0.0,
+                        rating_before: player_rating.rating,
+                        rating_after: player_rating.rating,
+                        volatility_delta: 0.0,
+                        volatility_before: player_rating.volatility,
+                        volatility_after: player_rating.volatility,
+                        percentile_delta: 0.0,
+                        percentile_before: player_rating.percentile,
+                        percentile_after: player_rating.percentile,
+                        global_rank_delta: 0,
+                        global_rank_before: player_rating.global_rank,
+                        global_rank_after: player_rating.global_rank,
+                        country_rank_delta: 0,
+                        country_rank_before: player_rating.country_rank,
+                        country_rank_after: player_rating.country_rank,
+                        timestamp: player_rating.timestamp
+                    }]
+                );
             }
             _ => {
-                let prior_adjustments = self.adjustments.get_mut(&(player_rating.player_id, player_rating.ruleset));
-
+                // This is not an initial adjustment. Calculate global rank diff, etc.
+                let prior_adjustments = self
+                    .adjustments
+                    .get_mut(&(player_rating.player_id, player_rating.ruleset));
                 if let Some(adjustments) = prior_adjustments {
                     // Calculate the difference between the last adjustment and this new rating value.
-                    let recent_rating =
+                    let most_recent_adjustment = adjustments.last().unwrap();
+
                     adjustments.push(RatingAdjustment {
                         adjustment_type: player_rating.adjustment_type,
                         match_id,
@@ -84,18 +130,17 @@ impl RatingTracker {
                         volatility_delta: player_rating.volatility - most_recent_adjustment.volatility_after,
                         volatility_before: most_recent_adjustment.volatility_after,
                         volatility_after: player_rating.volatility,
-                        // Other fields are handled by the rating tracker (rating_tracker.sort())
-                        percentile_delta: 0.0,
-                        percentile_before: 0.0,
-                        percentile_after: 0.0,
-                        global_rank_delta: 0,
-                        global_rank_before: 0,
-                        global_rank_after: 0,
-                        country_rank_delta: 0,
-                        country_rank_before: 0,
-                        country_rank_after: 0,
+                        percentile_delta: player_rating.percentile - most_recent_adjustment.percentile_after,
+                        percentile_before: most_recent_adjustment.percentile_after,
+                        percentile_after: player_rating.percentile,
+                        global_rank_delta: player_rating.global_rank - most_recent_adjustment.global_rank_after,
+                        global_rank_before: most_recent_adjustment.global_rank_after,
+                        global_rank_after: player_rating.global_rank,
+                        country_rank_delta: player_rating.country_rank - most_recent_adjustment.country_rank_after,
+                        country_rank_before: most_recent_adjustment.country_rank_after,
+                        country_rank_after: player_rating.country_rank,
                         timestamp: player_rating.timestamp
-                    })
+                    });
                 }
             }
         }
@@ -111,7 +156,7 @@ impl RatingTracker {
     }
 
     /// Sorts and updates the PlayerRating global_rank, country_rank, and percentile values.
-    pub fn sort(&mut self) {
+    fn sort(&mut self) {
         // Sort leaderboard by rating
         self.leaderboard
             .sort_by(|k1, v1, k2, v2| v2.rating.partial_cmp(&v1.rating).unwrap());
@@ -177,18 +222,13 @@ impl RatingTracker {
         self.country_change_tracker.clear();
     }
 
-    /// `P = n/N * 100`
+    /// `P = (n/N) * 100`
     fn percentile(rank: i32, total: i32) -> Option<f64> {
         match rank.cmp(&1) {
             Ordering::Less => None,
             _ => {
-                match total.cmp(&1) {
-                    Ordering::Greater => {
-                        let n = total - rank; // The number of players below the player
-                        Some(n as f64 / total as f64 * 100.0)
-                    }
-                    _ => None
-                }
+                let n = total - rank; // The number of players below the player
+                Some(n as f64 / total as f64 * 100.0)
             }
         }
     }
@@ -199,34 +239,44 @@ mod tests {
     use approx::assert_abs_diff_eq;
 
     use crate::{
-        api::api_structs::PlayerRating,
         model::{
             rating_tracker::RatingTracker,
             structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
         },
-        utils::test_utils::generate_player_rating
+        utils::test_utils::{generate_country_mapping, generate_player_rating}
     };
 
     #[test]
-    fn test_track_player() {
+    fn test_track_player_initial_rating_and_match_update() {
         let mut rating_tracker = RatingTracker::new();
 
         // Initialize new player
-        let player = generate_player_rating(1, 100.0, 100.0, RatingAdjustmentType::Initial);
-        rating_tracker.insert_or_update(&player, &"US".to_string(), None);
+        let players = vec![generate_player_rating(
+            1,
+            100.0,
+            100.0,
+            RatingAdjustmentType::Initial,
+            None
+        )];
+        let country_mapping = generate_country_mapping(players.as_slice(), "US");
+        rating_tracker.insert_or_update(&players, &country_mapping, None);
 
         // Verify the player was added to the leaderboard and does not have data for another ruleset
         let player = rating_tracker.get_rating(1, Ruleset::Osu).unwrap();
-        let player_no_ruleset = rating_tracker.get_rating(1, Ruleset::Taiko);
         let player_adjustments = rating_tracker.adjustments.get(&(1, Ruleset::Osu)).unwrap();
 
         assert_eq!(player.player_id, 1);
-        assert_eq!(player_no_ruleset, None);
-        assert_eq!(player_adjustments.len(), 0);
+        assert_eq!(player_adjustments.len(), 1); // First adjustment contains the default adjustment
 
         // Update player with a new match result
-        let player = generate_player_rating(1, 200.0, 85.0, RatingAdjustmentType::Match);
-        rating_tracker.insert_or_update(&player, &"US".to_string(), Some(1));
+        let players = vec![generate_player_rating(
+            1,
+            200.0,
+            85.0,
+            RatingAdjustmentType::Match,
+            None
+        )];
+        rating_tracker.insert_or_update(&players, &country_mapping, Some(1));
 
         // Verify the player was updated with the new rating and has an adjustment
         let player = rating_tracker.get_rating(1, Ruleset::Osu).unwrap();
@@ -235,23 +285,21 @@ mod tests {
         assert_eq!(player.rating, 200.0);
         assert_eq!(player.volatility, 85.0);
 
-        assert_eq!(player_adjustments.len(), 1);
-        assert_eq!(player_adjustments[0].rating_delta, 100.0);
-        assert_eq!(player_adjustments[0].volatility_delta, -15.0);
+        assert_eq!(player_adjustments.len(), 2);
+        assert_eq!(player_adjustments.last().unwrap().rating_delta, 100.0);
+        assert_eq!(player_adjustments.last().unwrap().volatility_delta, -15.0);
     }
 
     #[test]
     fn test_leaderboard_update() {
         let mut rating_tracker = RatingTracker::new();
-        let country = "US".to_string();
+        let players = vec![
+            generate_player_rating(1, 100.0, 100.0, RatingAdjustmentType::Initial, None),
+            generate_player_rating(2, 200.0, 100.0, RatingAdjustmentType::Initial, None),
+        ];
 
-        let p1 = generate_player_rating(1, 100.0, 100.0, RatingAdjustmentType::Initial);
-        let p2 = generate_player_rating(2, 200.0, 100.0, RatingAdjustmentType::Initial);
-
-        rating_tracker.insert_or_update(&p1, &country, None);
-        rating_tracker.insert_or_update(&p2, &country, None);
-
-        rating_tracker.sort();
+        let country_mapping = generate_country_mapping(&players, "US");
+        rating_tracker.insert_or_update(&players, &country_mapping, None);
 
         // Assert sorted by rating descending
         assert_eq!(rating_tracker.leaderboard.len(), 2);
@@ -278,25 +326,61 @@ mod tests {
     #[test]
     fn test_initial_rating_adjustment() {
         let mut rating_tracker = RatingTracker::new();
-        let country = "US".to_string();
+        let players = vec![
+            generate_player_rating(1, 100.0, 100.0, RatingAdjustmentType::Initial, None),
+            generate_player_rating(2, 200.0, 100.0, RatingAdjustmentType::Initial, None),
+        ];
+        let country_mapping = generate_country_mapping(&players, "US");
 
-        let p1 = generate_player_rating(1, 100.0, 100.0, RatingAdjustmentType::Initial);
-        let p2 = generate_player_rating(2, 200.0, 100.0, RatingAdjustmentType::Initial);
+        rating_tracker.insert_or_update(&players, &country_mapping, None);
 
-        rating_tracker.insert_or_update(&p1, &country, None);
-        rating_tracker.insert_or_update(&p2, &country, None);
+        let adj_1 = rating_tracker.get_rating_adjustments(1, Ruleset::Osu).unwrap();
+        let adj_2 = rating_tracker.get_rating_adjustments(2, Ruleset::Osu).unwrap();
 
-        rating_tracker.sort();
+        assert_eq!(rating_tracker.adjustments.len(), 2);
+        assert_eq!(adj_1.len(), 1);
+        assert_eq!(adj_2.len(), 1);
 
-        assert_eq!(rating_tracker.adjustments.len(), 0);
+        assert_eq!(adj_1[0].rating_delta, 0.0);
+        assert_eq!(adj_1[0].rating_before, 100.0);
+        assert_eq!(adj_1[0].rating_after, 100.0);
+        assert_eq!(adj_1[0].volatility_delta, 0.0);
+        assert_eq!(adj_1[0].volatility_before, 100.0);
+        assert_eq!(adj_1[0].volatility_after, 100.0);
+        assert_eq!(adj_1[0].percentile_delta, 0.0);
+        assert_abs_diff_eq!(adj_1[0].percentile_before, 0.0);
+        assert_abs_diff_eq!(adj_1[0].percentile_after, 0.0);
+        assert_eq!(adj_1[0].global_rank_delta, 0);
+        assert_eq!(adj_1[0].global_rank_before, 2);
+        assert_eq!(adj_1[0].global_rank_after, 2);
+        assert_eq!(adj_1[0].country_rank_delta, 0);
+        assert_eq!(adj_1[0].country_rank_before, 2);
+        assert_eq!(adj_1[0].country_rank_after, 2);
+
+        assert_eq!(adj_2[0].rating_delta, 0.0);
+        assert_eq!(adj_2[0].rating_before, 200.0);
+        assert_eq!(adj_2[0].rating_after, 200.0);
+        assert_eq!(adj_2[0].volatility_delta, 0.0);
+        assert_eq!(adj_2[0].volatility_before, 100.0);
+        assert_eq!(adj_2[0].volatility_after, 100.0);
+        assert_eq!(adj_2[0].percentile_delta, 0.0);
+        // 50.0 because there are 2 players and the player is in the first position (1 / 2) * 100
+        assert_abs_diff_eq!(adj_2[0].percentile_before, 50.0);
+        assert_abs_diff_eq!(adj_2[0].percentile_after, 50.0);
+        assert_eq!(adj_2[0].global_rank_delta, 0);
+        assert_eq!(adj_2[0].global_rank_before, 1);
+        assert_eq!(adj_2[0].global_rank_after, 1);
+        assert_eq!(adj_2[0].country_rank_delta, 0);
+        assert_eq!(adj_2[0].country_rank_before, 1);
+        assert_eq!(adj_2[0].country_rank_after, 1);
     }
 
     #[test]
     fn test_percentile() {
         assert_eq!(RatingTracker::percentile(0, 10), None);
-
-        assert_eq!(RatingTracker::percentile(1, 1), None);
         assert_eq!(RatingTracker::percentile(-1, 10), None);
+
+        assert_eq!(RatingTracker::percentile(1, 1), Some(0.0));
 
         assert_abs_diff_eq!(RatingTracker::percentile(1, 2).unwrap(), 50.0, epsilon = 0.0001);
         assert_abs_diff_eq!(RatingTracker::percentile(2, 2).unwrap(), 0.0, epsilon = 0.0001);
@@ -316,18 +400,13 @@ mod tests {
     #[test]
     fn test_country_change_tracker() {
         let mut rating_tracker = RatingTracker::new();
-        let country = "US".to_string();
+        let players = vec![
+            generate_player_rating(1, 100.0, 100.0, RatingAdjustmentType::Initial, None),
+            generate_player_rating(2, 200.0, 100.0, RatingAdjustmentType::Initial, None),
+        ];
+        let country_mapping = generate_country_mapping(&players, "US");
 
-        let p1 = generate_player_rating(1, 100.0, 100.0, RatingAdjustmentType::Initial);
-        let p2 = generate_player_rating(2, 200.0, 100.0, RatingAdjustmentType::Initial);
-
-        rating_tracker.insert_or_update(&p1, &country, None);
-        rating_tracker.insert_or_update(&p2, &country, None);
-
-        assert_eq!(rating_tracker.country_change_tracker.len(), 1);
-
-        rating_tracker.sort();
-
+        rating_tracker.insert_or_update(&players, &country_mapping, None);
         assert_eq!(rating_tracker.country_change_tracker.len(), 0);
     }
 }

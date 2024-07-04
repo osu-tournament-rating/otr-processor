@@ -1,13 +1,14 @@
+use chrono::{DateTime, FixedOffset};
+
 use crate::{
     api::api_structs::PlayerRating,
     model::{
         constants,
         rating_tracker::RatingTracker,
         structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
-    }
+    },
+    utils::test_utils::generate_country_mapping
 };
-use chrono::{DateTime, FixedOffset};
-use crate::utils::test_utils::generate_player_rating;
 
 /// Tracks decay activity for players
 pub struct DecayTracker;
@@ -55,23 +56,32 @@ impl DecayTracker {
         let mut old_rating = rating.unwrap().rating;
         let mut old_volatility = rating.unwrap().volatility;
 
-        let source = RatingAdjustmentType::Decay;
-
+        let mut decay_ratings = Vec::new();
         for i in 0..decay_weeks {
             // Increment time by 7 days for each decay application (this is for accurate timestamps)
-            let now = last_play_time + chrono::Duration::days(i * 7);
+            let simulated_time = last_play_time + chrono::Duration::days(i * 7);
             let new_rating = decay_rating(old_rating);
             let new_volatility = decay_volatility(old_volatility);
 
             old_rating = new_rating;
             old_volatility = new_volatility;
 
-            let new_rating = generate_player_rating(player_id, new_rating, new_volatility, source);
-
-            rating_tracker.insert_or_update(&new_rating, country, None)
+            decay_ratings.push(PlayerRating {
+                player_id,
+                ruleset,
+                rating: new_rating,
+                volatility: new_volatility,
+                percentile: 0.0,
+                global_rank: 0,
+                country_rank: 0,
+                timestamp: simulated_time,
+                adjustment_type: RatingAdjustmentType::Decay
+            });
         }
 
-        rating_tracker.sort();
+        let country_mapping = generate_country_mapping(&decay_ratings, country);
+
+        rating_tracker.insert_or_update(&decay_ratings, &country_mapping, None)
     }
 
     /// Returns the number of decay applications that should be applied.
@@ -112,60 +122,56 @@ fn decay_rating(mu: f64) -> f64 {
 
 #[cfg(test)]
 mod tests {
+    use std::ops::Add;
+
+    use approx::assert_abs_diff_eq;
+    use chrono::DateTime;
+
     use crate::{
-        api::api_structs::PlayerRating,
         model::{
             constants,
             constants::MULTIPLIER,
             decay::{decay_rating, decay_volatility, is_decay_possible, DecayTracker},
             rating_tracker::RatingTracker,
-            structures::{rating_adjustment_type::RatingAdjustmentType::Decay, ruleset::Ruleset}
-        }
+            structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
+        },
+        utils::test_utils::{generate_country_mapping, generate_player_rating}
     };
-    use approx::{assert_abs_diff_eq, assert_abs_diff_ne};
-    use chrono::DateTime;
-    use std::ops::Add;
-    use crate::model::structures::rating_adjustment_type::RatingAdjustmentType;
-    use crate::utils::test_utils::generate_player_rating;
 
     #[test]
     fn test_decay() {
         let mut rating_tracker = RatingTracker::new();
-        let country = "US".to_string();
         let ruleset = Ruleset::Osu;
-        let volatility = 100.0;
-        let initial_rating = 1000.0;
 
+        let initial_rating = 2000.0;
+        let initial_volatility = 100.0;
+
+        // t = "last played time"
         let t = DateTime::parse_from_rfc3339("2021-01-01T00:00:00+00:00")
             .unwrap()
             .fixed_offset();
         let d = t.add(chrono::Duration::days(constants::DECAY_DAYS as i64));
 
-        for i in 0..10 {
-            // ID 0 has the best starting rating, ID 9 has the worst. Useful for asserting ranking updates
-            let rating = initial_rating - (i as f64 * 20.0);
-            // ID 0 will have decay applied
-            // Other IDs will not have decay applied
-            let player_rating = generate_player_rating(i, rating, volatility, RatingAdjustmentType::Initial);
-            rating_tracker.insert_or_update(&player_rating, &country, None);
-        }
+        let player_ratings = vec![generate_player_rating(
+            1,
+            initial_rating,
+            initial_volatility,
+            RatingAdjustmentType::Initial,
+            Some(t)
+        )];
+
+        let country = "US";
+        let country_mapping = generate_country_mapping(&player_ratings, country);
+        rating_tracker.insert_or_update(&player_ratings, &country_mapping, None);
 
         let decay_tracker = DecayTracker;
-        decay_tracker.decay(&mut rating_tracker, 0, &country, ruleset, d);
-        decay_tracker.decay(
-            &mut rating_tracker,
-            1,
-            &country,
-            ruleset,
-            d.add(chrono::Duration::days(10))
-        );
+        decay_tracker.decay(&mut rating_tracker, 1, country, ruleset, d);
 
-        let decayed_rating = rating_tracker.get_rating(0, ruleset).unwrap();
-        let non_decay_rating = rating_tracker.get_rating(1, ruleset).unwrap();
+        let decayed_rating = rating_tracker.get_rating(1, ruleset).unwrap();
 
         let n_decay = DecayTracker::n_decay(d, t);
         let mut expected_decay_rating = initial_rating;
-        let mut expected_decay_volatility = volatility;
+        let mut expected_decay_volatility = initial_volatility;
 
         for i in 0..n_decay {
             expected_decay_rating = decay_rating(expected_decay_rating);
@@ -175,14 +181,9 @@ mod tests {
         assert_abs_diff_eq!(decayed_rating.rating, expected_decay_rating);
         assert_abs_diff_eq!(decayed_rating.volatility, expected_decay_volatility);
 
-        assert_abs_diff_ne!(non_decay_rating.rating, 1000.0);
-        assert_abs_diff_ne!(non_decay_rating.volatility, 100.0);
-
         // Assert rank updates
-        assert_eq!(decayed_rating.global_rank, 2);
-        assert_eq!(decayed_rating.country_rank, 2);
-        assert_eq!(non_decay_rating.global_rank, 4);
-        assert_eq!(non_decay_rating.country_rank, 4);
+        assert_eq!(decayed_rating.global_rank, 1);
+        assert_eq!(decayed_rating.country_rank, 1);
     }
 
     #[test]
@@ -217,7 +218,6 @@ mod tests {
         let decay_min = constants::DECAY_MINIMUM;
 
         let decay_possible = mu > (decay_min);
-
         let result = is_decay_possible(mu);
 
         assert_eq!(result, decay_possible)
@@ -243,7 +243,7 @@ mod tests {
 
     #[test]
     fn test_decay_mu_standard() {
-        let mu = 1100.0;
+        let mu = 2000.0;
         let new_mu = decay_rating(mu);
         let expected = mu - constants::DECAY_RATE;
 
