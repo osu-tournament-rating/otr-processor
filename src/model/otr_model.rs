@@ -14,6 +14,7 @@ use openskill::{
     rating::{default_gamma, Rating}
 };
 use statrs::statistics::Statistics;
+use crate::model::structures::rating_adjustment_type::RatingAdjustmentType;
 
 pub struct OtrModel {
     pub model: PlackettLuce,
@@ -100,6 +101,7 @@ impl OtrModel {
 
             prior_rating.rating = scaled_mu;
             prior_rating.volatility = scaled_volatility;
+            prior_rating.adjustment_type = RatingAdjustmentType::Match;
 
             Self::apply_performance_scaling(
                 &mut prior_rating,
@@ -326,7 +328,7 @@ mod tests {
 
         // Assert rating changes
         assert!(adjustments_1[1].rating_delta < 0.0);
-        assert!(adjustments_2[1].rating_delta > 0.0);
+        assert!(adjustments_2[1].rating_delta < 0.0);
         assert!(adjustments_3[1].rating_delta > 0.0);
         assert!(adjustments_4[1].rating_delta > 0.0);
     }

@@ -262,15 +262,15 @@ mod tests {
         let mut rating_tracker = RatingTracker::new();
 
         // Initialize new player
-        let players = vec![generate_player_rating(
+        let player_ratings = vec![generate_player_rating(
             1,
             100.0,
             100.0,
             RatingAdjustmentType::Initial,
             None
         )];
-        let country_mapping = generate_country_mapping(players.as_slice(), "US");
-        rating_tracker.insert_or_update(&players, &country_mapping, None);
+        let country_mapping = generate_country_mapping(player_ratings.as_slice(), "US");
+        rating_tracker.insert_or_update(&player_ratings, &country_mapping, None);
 
         // Verify the player was added to the leaderboard and does not have data for another ruleset
         let player = rating_tracker.get_rating(1, Ruleset::Osu).unwrap();
@@ -280,14 +280,14 @@ mod tests {
         assert_eq!(player_adjustments.len(), 1); // First adjustment contains the default adjustment
 
         // Update player with a new match result
-        let players = vec![generate_player_rating(
+        let player_ratings = vec![generate_player_rating(
             1,
             200.0,
             85.0,
             RatingAdjustmentType::Match,
             None
         )];
-        rating_tracker.insert_or_update(&players, &country_mapping, Some(1));
+        rating_tracker.insert_or_update(&player_ratings, &country_mapping, Some(1));
 
         // Verify the player was updated with the new rating and has an adjustment
         let player = rating_tracker.get_rating(1, Ruleset::Osu).unwrap();
@@ -304,13 +304,13 @@ mod tests {
     #[test]
     fn test_leaderboard_update() {
         let mut rating_tracker = RatingTracker::new();
-        let players = vec![
+        let player_ratings = vec![
             generate_player_rating(1, 100.0, 100.0, RatingAdjustmentType::Initial, None),
             generate_player_rating(2, 200.0, 100.0, RatingAdjustmentType::Initial, None),
         ];
 
-        let country_mapping = generate_country_mapping(&players, "US");
-        rating_tracker.insert_or_update(&players, &country_mapping, None);
+        let country_mapping = generate_country_mapping(&player_ratings, "US");
+        rating_tracker.insert_or_update(&player_ratings, &country_mapping, None);
 
         // Assert sorted by rating descending
         assert_eq!(rating_tracker.leaderboard.len(), 2);
@@ -337,13 +337,13 @@ mod tests {
     #[test]
     fn test_initial_rating_adjustment() {
         let mut rating_tracker = RatingTracker::new();
-        let players = vec![
+        let player_ratings = vec![
             generate_player_rating(1, 100.0, 100.0, RatingAdjustmentType::Initial, None),
             generate_player_rating(2, 200.0, 100.0, RatingAdjustmentType::Initial, None),
         ];
-        let country_mapping = generate_country_mapping(&players, "US");
+        let country_mapping = generate_country_mapping(&player_ratings, "US");
 
-        rating_tracker.insert_or_update(&players, &country_mapping, None);
+        rating_tracker.insert_or_update(&player_ratings, &country_mapping, None);
 
         let adj_1 = rating_tracker.get_rating_adjustments(1, Ruleset::Osu).unwrap();
         let adj_2 = rating_tracker.get_rating_adjustments(2, Ruleset::Osu).unwrap();
@@ -411,13 +411,13 @@ mod tests {
     #[test]
     fn test_country_change_tracker() {
         let mut rating_tracker = RatingTracker::new();
-        let players = vec![
+        let player_ratings = vec![
             generate_player_rating(1, 100.0, 100.0, RatingAdjustmentType::Initial, None),
             generate_player_rating(2, 200.0, 100.0, RatingAdjustmentType::Initial, None),
         ];
-        let country_mapping = generate_country_mapping(&players, "US");
+        let country_mapping = generate_country_mapping(&player_ratings, "US");
 
-        rating_tracker.insert_or_update(&players, &country_mapping, None);
+        rating_tracker.insert_or_update(&player_ratings, &country_mapping, None);
         assert_eq!(rating_tracker.country_change_tracker.len(), 0);
     }
 }
