@@ -212,7 +212,6 @@ mod tests {
         utils::test_utils::*
     };
     use approx::assert_abs_diff_eq;
-    use criterion::Bencher;
 
     #[test]
     fn test_rate() {
@@ -346,16 +345,5 @@ mod tests {
         OtrModel::apply_performance_scaling(&mut rating, rating_diff, games_played, games_total, scaling);
 
         assert_abs_diff_eq!(rating.rating, 990.0);
-    }
-
-    // #[bench]
-    fn bench_match_processing(b: &mut Bencher) {
-        let initial_ratings = generate_default_initial_ratings(1000);
-        let matches = generate_matches(100, initial_ratings.as_slice());
-        let country_mapping = generate_country_mapping(initial_ratings.as_slice(), "US");
-
-        let mut model = OtrModel::new(initial_ratings.as_slice(), &country_mapping);
-
-        b.iter(|| model.process(matches.as_slice()));
     }
 }
