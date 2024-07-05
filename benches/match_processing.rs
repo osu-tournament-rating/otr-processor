@@ -1,6 +1,8 @@
-use criterion::{Criterion, criterion_group, criterion_main};
-use otr_processor::model::otr_model::OtrModel;
-use otr_processor::utils::test_utils::{generate_country_mapping, generate_default_initial_ratings, generate_matches};
+use criterion::{criterion_group, criterion_main, Criterion};
+use otr_processor::{
+    model::otr_model::OtrModel,
+    utils::test_utils::{generate_country_mapping, generate_default_initial_ratings, generate_matches}
+};
 
 fn process_matches(count_players: usize, count_matches: usize) {
     let initial_ratings = generate_default_initial_ratings(count_players.try_into().unwrap());

@@ -3,8 +3,10 @@ use std::collections::HashMap;
 use crate::{
     api::api_structs::{Game, Match, PlayerRating},
     model::{
-        constants::PERFORMANCE_SCALING_FACTOR, decay::DecayTracker, rating_tracker::RatingTracker,
-        structures::ruleset::Ruleset
+        constants::PERFORMANCE_SCALING_FACTOR,
+        decay::DecayTracker,
+        rating_tracker::RatingTracker,
+        structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
     },
     utils::progress_utils::progress_bar
 };
@@ -14,7 +16,6 @@ use openskill::{
     rating::{default_gamma, Rating}
 };
 use statrs::statistics::Statistics;
-use crate::model::structures::rating_adjustment_type::RatingAdjustmentType;
 
 pub struct OtrModel {
     pub model: PlackettLuce,
@@ -57,16 +58,16 @@ impl OtrModel {
     /// end of the match.
     fn process_match(&mut self, m: &Match) {
         // Apply decay to all players
-        self.apply_decay(&m);
+        self.apply_decay(m);
 
         let n_games = m.games.len() as i32;
         let mut rating_changes: HashMap<i32, Vec<Rating>> = HashMap::new();
         let mut country_mapping: HashMap<i32, String> = HashMap::new();
         for game in &m.games {
-            let game_ratings = self.rate(&game, m.ruleset);
+            let game_ratings = self.rate(game, m.ruleset);
 
             for (player_id, rating) in game_ratings {
-                let player_ratings = rating_changes.entry(player_id).or_insert(Vec::new());
+                let player_ratings = rating_changes.entry(player_id).or_default();
                 player_ratings.push(rating);
                 country_mapping.insert(
                     player_id,
@@ -80,7 +81,7 @@ impl OtrModel {
             let mut prior_rating = self.rating_tracker.get_rating(*p_id, m.ruleset).unwrap().clone();
             let performances = rating_changes
                 .get(p_id)
-                .expect(format!("Expected player {} to have performances for this match {}!", p_id, m.id).as_str());
+                .unwrap_or_else(|| panic!("Expected player {} to have performances for this match {}!", p_id, m.id));
 
             let n_performances = performances.len() as i32;
 
@@ -115,7 +116,7 @@ impl OtrModel {
         }
 
         self.rating_tracker
-            .insert_or_update(&ratings_to_update.as_slice(), &country_mapping, Some(m.id))
+            .insert_or_update(ratings_to_update.as_slice(), &country_mapping, Some(m.id))
     }
 
     /// Applies decay to all players who participated in this match.
@@ -123,8 +124,7 @@ impl OtrModel {
         let player_ids: Vec<i32> = m
             .games
             .iter()
-            .map(|g| g.placements.iter().map(|p| p.player_id).collect::<Vec<i32>>())
-            .flatten()
+            .flat_map(|g| g.placements.iter().map(|p| p.player_id).collect::<Vec<i32>>())
             .collect();
 
         for p_id in player_ids {
@@ -192,7 +192,7 @@ impl OtrModel {
         scaling: f64
     ) {
         if rating_diff >= 0.0 {
-            return
+            return;
         }
 
         // Rating differential is used with a scaling factor
