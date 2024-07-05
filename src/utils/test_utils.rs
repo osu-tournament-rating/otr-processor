@@ -1,9 +1,15 @@
-use crate::{
-    api::api_structs::{Game, PlayerPlacement, PlayerRating},
-    model::structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
-};
-use chrono::{DateTime, FixedOffset};
 use std::collections::HashMap;
+
+use chrono::{DateTime, FixedOffset};
+use rand::{seq::SliceRandom, thread_rng};
+
+use crate::{
+    api::api_structs::{Game, Match, PlayerPlacement, PlayerRating},
+    model::{
+        constants::{DEFAULT_RATING, DEFAULT_VOLATILITY},
+        structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
+    }
+};
 
 pub fn generate_player_rating(
     id: i32,
@@ -46,4 +52,68 @@ pub fn generate_country_mapping(player_ratings: &[PlayerRating], country: &str) 
     }
 
     mapping
+}
+
+pub fn generate_match(id: i32, ruleset: Ruleset, games: &[Game], start_time: Option<DateTime<FixedOffset>>) -> Match {
+    Match {
+        id,
+        ruleset,
+        start_time,
+        end_time: None,
+        games: games.to_vec()
+    }
+}
+
+pub fn generate_matches(n: i32, player_ratings: &[PlayerRating]) -> Vec<Match> {
+    let mut matches = Vec::new();
+    let mut rng = thread_rng();
+    for i in 1..=n {
+        let game_count = [3, 5, 7, 9, 11, 13, 15].choose(&mut rng).unwrap();
+        matches.push(generate_match(
+            i,
+            Ruleset::Osu,
+            &generate_games(*game_count, random_placements(*game_count, player_ratings).as_slice()),
+            Some(chrono::Utc::now().fixed_offset())
+        ));
+    }
+
+    matches
+}
+
+fn generate_games(n: i32, placements: &[PlayerPlacement]) -> Vec<Game> {
+    let mut games = Vec::new();
+    for i in 1..=n {
+        games.push(generate_game(i, placements));
+    }
+
+    games
+}
+
+fn random_placements(size: i32, player_ratings: &[PlayerRating]) -> Vec<PlayerPlacement> {
+    let mut rng = thread_rng();
+    let mut placements = Vec::new();
+
+    // Select random placements for each player (1 to size)
+    for i in 1..=size {
+        let random_rating = player_ratings.choose(&mut rng).unwrap();
+        placements.push(generate_placement(random_rating.player_id, i));
+    }
+
+    placements
+}
+
+/// Generates `n` player ratings with default values
+pub fn generate_default_initial_ratings(n: i32) -> Vec<PlayerRating> {
+    let mut players = Vec::new();
+    for i in 1..=n {
+        players.push(generate_player_rating(
+            i,
+            DEFAULT_RATING,
+            DEFAULT_VOLATILITY,
+            RatingAdjustmentType::Initial,
+            None
+        ));
+    }
+
+    players
 }

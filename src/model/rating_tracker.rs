@@ -21,7 +21,8 @@ pub struct RatingTracker {
     // other values are affected by `insert_or_updated`.
     country_leaderboards: HashMap<String, IndexMap<(i32, Ruleset), PlayerRating>>,
     adjustments: HashMap<(i32, Ruleset), Vec<RatingAdjustment>>,
-    country_change_tracker: HashSet<String> // This is so we don't have to update EVERY country with each update
+    country_change_tracker: HashSet<String>, // This is so we don't have to update EVERY country with each update
+    country_mapping: HashMap<i32, String>
 }
 
 impl Default for RatingTracker {
@@ -36,7 +37,8 @@ impl RatingTracker {
             leaderboard: IndexMap::new(),
             country_leaderboards: HashMap::new(),
             adjustments: HashMap::new(),
-            country_change_tracker: HashSet::new()
+            country_change_tracker: HashSet::new(),
+            country_mapping: HashMap::new()
         }
     }
 
@@ -59,6 +61,11 @@ impl RatingTracker {
 
         for country in countries {
             self.track_country(country.as_str());
+        }
+
+        for id in country_mapping.keys() {
+            self.country_mapping
+                .insert(*id, country_mapping.get(id).unwrap().to_string());
         }
 
         for rating in ratings {
@@ -149,6 +156,10 @@ impl RatingTracker {
     /// Returns the current rating value for the player and the ruleset.
     pub fn get_rating(&self, player_id: i32, ruleset: Ruleset) -> Option<&PlayerRating> {
         self.leaderboard.get(&(player_id, ruleset))
+    }
+
+    pub fn get_country(&self, player_id: i32) -> Option<&String> {
+        self.country_mapping.get(&player_id)
     }
 
     pub fn get_rating_adjustments(&self, player_id: i32, ruleset: Ruleset) -> Option<&Vec<RatingAdjustment>> {

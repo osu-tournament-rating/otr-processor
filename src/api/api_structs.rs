@@ -1,8 +1,6 @@
-use crate::model::structures::rating_adjustment_type::RatingAdjustmentType;
+use crate::model::structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset};
 use chrono::{DateTime, FixedOffset};
 use serde::{Deserialize, Serialize};
-
-use crate::model::structures::ruleset::Ruleset;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -69,7 +67,7 @@ pub struct Match {
     pub games: Vec<Game>
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Game {
     pub id: i32,

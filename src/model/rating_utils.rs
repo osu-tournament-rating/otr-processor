@@ -1,22 +1,30 @@
-use chrono::{DateTime, FixedOffset};
-
 use crate::{
     api::api_structs::{Player, PlayerRating},
     model::{
         constants,
-        constants::{DEFAULT_RATING, DEFAULT_VOLATILITY},
+        constants::{DEFAULT_RATING, DEFAULT_VOLATILITY, MULTIPLIER, OSU_RATING_CEILING},
         structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
     }
 };
+use chrono::{DateTime, FixedOffset};
+use constants::OSU_RATING_FLOOR;
+use std::collections::HashMap;
+use strum::IntoEnumIterator;
 
-// pub fn initial_ratings(players: &[Player]) -> HashMap<(i32, Ruleset), PlayerRating> {
-//     let mut map = HashMap::new();
-//
-//     map
-// }
+pub fn initial_ratings(players: &[Player]) -> HashMap<(i32, Ruleset), PlayerRating> {
+    let mut map = HashMap::new();
 
-fn create_rating(player: &Player, ruleset: &Ruleset) -> PlayerRating {
-    let timestamp: DateTime<FixedOffset> = "2007-09-17T00:00:00".parse().unwrap();
+    for player in players {
+        for ruleset in Ruleset::iter() {
+            map.insert((player.id, ruleset), create_initial_rating(player, &ruleset));
+        }
+    }
+
+    map
+}
+
+fn create_initial_rating(player: &Player, ruleset: &Ruleset) -> PlayerRating {
+    let timestamp: DateTime<FixedOffset> = "2007-09-16T00:00:00".parse().unwrap();
 
     PlayerRating {
         player_id: player.id,
@@ -41,22 +49,46 @@ fn initial_mu(player: &Player, ruleset: &Ruleset) -> f64 {
     };
 
     match rank {
-        Some(r) => mu_from_rank(r),
+        Some(r) => mu_from_rank(r, *ruleset),
         None => DEFAULT_RATING
     }
 }
 
-fn mu_from_rank(rank: i32) -> f64 {
-    let val =
-        constants::MULTIPLIER * (constants::OSU_RATING_INTERCEPT - (constants::OSU_RATING_SLOPE * (rank as f64).ln()));
+fn mu_from_rank(rank: i32, ruleset: Ruleset) -> f64 {
+    let left_slope = 4.0;
+    let right_slope = 3.0;
 
-    if val < constants::MULTIPLIER * constants::OSU_RATING_FLOOR {
-        return constants::MULTIPLIER * constants::OSU_RATING_FLOOR;
+    let mean = mean_from_ruleset(ruleset);
+    let std_dev = std_dev_from_ruleset(ruleset);
+
+    let z = (rank as f64 / mean.exp()).ln() / std_dev;
+    let val = MULTIPLIER * (18.0 - (if z > 0.0 { left_slope } else { right_slope }) * z);
+
+    if val < MULTIPLIER * OSU_RATING_FLOOR {
+        return MULTIPLIER * OSU_RATING_FLOOR;
     }
 
-    if val > constants::MULTIPLIER * constants::OSU_RATING_CEILING {
-        return constants::MULTIPLIER * constants::OSU_RATING_CEILING;
+    if val > MULTIPLIER * OSU_RATING_CEILING {
+        return MULTIPLIER * OSU_RATING_CEILING;
     }
 
     val
+}
+
+fn mean_from_ruleset(ruleset: Ruleset) -> f64 {
+    match ruleset {
+        Ruleset::Osu => 9.91,
+        Ruleset::Taiko => 7.59,
+        Ruleset::Catch => 6.75,
+        Ruleset::Mania4k | Ruleset::Mania7k => 8.18
+    }
+}
+
+fn std_dev_from_ruleset(ruleset: Ruleset) -> f64 {
+    match ruleset {
+        Ruleset::Osu => 1.59,
+        Ruleset::Taiko => 1.56,
+        Ruleset::Catch => 1.54,
+        Ruleset::Mania4k | Ruleset::Mania7k => 1.55
+    }
 }

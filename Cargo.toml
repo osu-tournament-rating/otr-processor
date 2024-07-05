@@ -28,6 +28,9 @@ itertools = "0.12.1"
 indexmap = "2.2.6"
 approx = "0.5.1"
 log = "0.4.22"
+strum = "0.26.3"
+strum_macros = "0.26.4"
+rand = "0.8.5"
 
 [dev-dependencies]
 async-once-cell = "0.5.3"

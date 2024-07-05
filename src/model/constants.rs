@@ -12,7 +12,5 @@ pub const ABSOLUTE_RATING_FLOOR: f64 = 100.0;
 // Default rating constants for osu!
 pub const OSU_RATING_FLOOR: f64 = 5.0;
 pub const OSU_RATING_CEILING: f64 = 30.0;
-pub const OSU_RATING_INTERCEPT: f64 = 45.0;
-pub const OSU_RATING_SLOPE: f64 = 3.2;
 pub const VOLATILITY_GROWTH_RATE: f64 = 0.08 * (MULTIPLIER * MULTIPLIER);
-pub const POOR_PERFORMANCE_PENALTY_FACTOR: f64 = 0.3;
+pub const PERFORMANCE_SCALING_FACTOR: f64 = 0.3;

@@ -80,7 +80,6 @@ impl DecayTracker {
         }
 
         let country_mapping = generate_country_mapping(&decay_ratings, country);
-
         rating_tracker.insert_or_update(&decay_ratings, &country_mapping, None)
     }
 
