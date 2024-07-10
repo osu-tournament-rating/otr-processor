@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use chrono::{DateTime, FixedOffset};
+use chrono::{DateTime, FixedOffset, Utc};
 use rand::{seq::SliceRandom, thread_rng};
 
 use crate::{
@@ -66,14 +66,13 @@ pub fn generate_match(id: i32, ruleset: Ruleset, games: &[Game], start_time: Opt
 
 pub fn generate_matches(n: i32, player_ratings: &[PlayerRating]) -> Vec<Match> {
     let mut matches = Vec::new();
-    let mut rng = thread_rng();
     for i in 1..=n {
-        let game_count = [3, 5, 7, 9, 11, 13, 15].choose(&mut rng).unwrap();
+        let game_count = 9;
         matches.push(generate_match(
             i,
             Ruleset::Osu,
-            &generate_games(*game_count, random_placements(*game_count, player_ratings).as_slice()),
-            Some(chrono::Utc::now().fixed_offset())
+            &generate_games(game_count, random_placements(player_ratings).as_slice()),
+            Some(Utc::now().fixed_offset())
         ));
     }
 
@@ -89,14 +88,12 @@ fn generate_games(n: i32, placements: &[PlayerPlacement]) -> Vec<Game> {
     games
 }
 
-fn random_placements(size: i32, player_ratings: &[PlayerRating]) -> Vec<PlayerPlacement> {
-    let mut rng = thread_rng();
+fn random_placements(player_ratings: &[PlayerRating]) -> Vec<PlayerPlacement> {
     let mut placements = Vec::new();
 
     // Select random placements for each player (1 to size)
-    for i in 1..=size {
-        let random_rating = player_ratings.choose(&mut rng).unwrap();
-        placements.push(generate_placement(random_rating.player_id, i));
+    for i in 0..player_ratings.len() {
+        placements.push(generate_placement(player_ratings[i].player_id, i as i32));
     }
 
     placements

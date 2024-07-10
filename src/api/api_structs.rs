@@ -57,6 +57,12 @@ pub struct RatingAdjustment {
     pub timestamp: DateTime<FixedOffset>
 }
 
+/// Used for POSTing rating data to the o!TR API
+pub struct RatingPost {
+    pub rating: PlayerRating,
+    pub adjustments: Vec<RatingAdjustment>
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Match {

@@ -10,6 +10,7 @@ use crate::{
     api::api_structs::{PlayerRating, RatingAdjustment},
     model::structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
 };
+use crate::api::api_structs::RatingPost;
 
 pub struct RatingTracker {
     // Global leaderboard, used as a reference for country leaderboards also.
@@ -166,6 +167,25 @@ impl RatingTracker {
         self.adjustments.get(&(player_id, ruleset))
     }
 
+    /// Fetches the data necessary for POSTing results
+    pub fn get_post_data(&self) -> Vec<RatingPost> {
+        let mut data = Vec::new();
+        let keys = self.leaderboard.keys();
+
+        for (player_id, ruleset) in keys {
+            let rating = self.get_rating(*player_id, *ruleset).unwrap().clone();
+            let adjustments = self.get_rating_adjustments(*player_id, *ruleset)
+                .unwrap_or(&Vec::new()).clone();
+
+            data.push(RatingPost {
+                rating,
+                adjustments
+            })
+        }
+
+        data
+    }
+
     /// Sorts and updates the PlayerRating global_rank, country_rank, and percentile values.
     fn sort(&mut self) {
         // Sort leaderboard by rating
@@ -248,6 +268,7 @@ impl RatingTracker {
 #[cfg(test)]
 mod tests {
     use approx::assert_abs_diff_eq;
+    use itertools::process_results;
 
     use crate::{
         model::{
@@ -256,6 +277,7 @@ mod tests {
         },
         utils::test_utils::{generate_country_mapping, generate_player_rating}
     };
+    use crate::utils::test_utils::generate_matches;
 
     #[test]
     fn test_track_player_initial_rating_and_match_update() {

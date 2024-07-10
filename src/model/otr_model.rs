@@ -16,6 +16,7 @@ use openskill::{
     rating::{default_gamma, Rating}
 };
 use statrs::statistics::Statistics;
+use crate::api::api_structs::RatingPost;
 
 pub struct OtrModel {
     pub model: PlackettLuce,
@@ -36,12 +37,14 @@ impl OtrModel {
         }
     }
 
-    pub fn process(&mut self, matches: &[Match]) {
+    pub fn process(&mut self, matches: &[Match]) -> Vec<RatingPost> {
         let progress_bar = progress_bar(matches.len() as u64, "Processing match data".to_string());
         for m in matches {
             self.process_match(m);
             progress_bar.inc(1);
         }
+
+        self.rating_tracker.get_post_data()
     }
 
     /// # o!TR Match Processing
@@ -212,6 +215,8 @@ mod tests {
         utils::test_utils::*
     };
     use approx::assert_abs_diff_eq;
+    use chrono::Utc;
+    use crate::model::structures::rating_adjustment_type::RatingAdjustmentType::{Initial, Match};
 
     #[test]
     fn test_rate() {
@@ -345,5 +350,31 @@ mod tests {
         OtrModel::apply_performance_scaling(&mut rating, rating_diff, games_played, games_total, scaling);
 
         assert_abs_diff_eq!(rating.rating, 990.0);
+    }
+
+    #[test]
+    fn test_process_returns_api_data() {
+        let now = Utc::now().fixed_offset();
+        let player_ratings = vec![generate_player_rating(1, 1000.0, 100.0, Initial, Some(now)),
+                                  generate_player_rating(2, 1000.0, 100.0, Initial, Some(now)),
+                                  generate_player_rating(3, 1000.0, 100.0, Initial, Some(now)),
+                                  generate_player_rating(4, 1000.0, 100.0, Initial, Some(now))];
+
+        let matches = generate_matches(5, &player_ratings);
+        let country_mapping = generate_country_mapping(&player_ratings, "US");
+
+        let mut model = OtrModel::new(&player_ratings, &country_mapping);
+        let data = model.process(&matches);
+
+        assert_eq!(data.len(), 4);
+
+        for item in data {
+            assert_eq!(item.adjustments.len(), 6); // 5 matches + 1 for initial adjustment
+            assert!(item.rating.rating > 0.0);
+            assert!(item.rating.global_rank > 0);
+            assert!(item.rating.country_rank > 0);
+            assert!(item.rating.volatility > 0.0);
+            assert!(item.rating.adjustment_type == Initial || item.rating.adjustment_type == Match);
+        }
     }
 }
