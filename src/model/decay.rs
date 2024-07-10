@@ -136,9 +136,19 @@ mod tests {
         },
         utils::test_utils::{generate_country_mapping, generate_player_rating}
     };
+    use crate::model::constants::DECAY_DAYS;
 
     #[test]
-    fn test_decay() {
+    fn test_decay_default_days() {
+        decay(DECAY_DAYS as i32)
+    }
+
+    #[test]
+    fn test_decay_many_days() {
+        decay(7000)
+    }
+
+    fn decay(decay_days: i32) {
         let mut rating_tracker = RatingTracker::new();
         let ruleset = Ruleset::Osu;
 
@@ -149,7 +159,7 @@ mod tests {
         let t = DateTime::parse_from_rfc3339("2021-01-01T00:00:00+00:00")
             .unwrap()
             .fixed_offset();
-        let d = t.add(chrono::Duration::days(constants::DECAY_DAYS as i64));
+        let d = t.add(chrono::Duration::days(decay_days as i64));
 
         let player_ratings = vec![generate_player_rating(
             1,
