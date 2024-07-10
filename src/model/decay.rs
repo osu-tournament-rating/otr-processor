@@ -129,14 +129,13 @@ mod tests {
     use crate::{
         model::{
             constants,
-            constants::MULTIPLIER,
+            constants::{DECAY_DAYS, MULTIPLIER},
             decay::{decay_rating, decay_volatility, is_decay_possible, DecayTracker},
             rating_tracker::RatingTracker,
             structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
         },
         utils::test_utils::{generate_country_mapping, generate_player_rating}
     };
-    use crate::model::constants::DECAY_DAYS;
 
     #[test]
     fn test_decay_default_days() {

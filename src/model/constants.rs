@@ -10,7 +10,7 @@ pub const DECAY_MINIMUM: f64 = 18.0 * MULTIPLIER;
 pub const DECAY_RATE: f64 = 0.06 * MULTIPLIER;
 pub const ABSOLUTE_RATING_FLOOR: f64 = 100.0;
 // Default rating constants for osu!
-pub const OSU_RATING_FLOOR: f64 = 5.0;
-pub const OSU_RATING_CEILING: f64 = 30.0;
+pub const OSU_RATING_FLOOR: f64 = MULTIPLIER * 5.0;
+pub const OSU_RATING_CEILING: f64 = MULTIPLIER * 30.0;
 pub const VOLATILITY_GROWTH_RATE: f64 = 0.08 * (MULTIPLIER * MULTIPLIER);
 pub const PERFORMANCE_SCALING_FACTOR: f64 = 0.3;

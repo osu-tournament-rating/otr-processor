@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    api::api_structs::{Game, Match, PlayerRating},
+    api::api_structs::{Game, Match, PlayerRating, RatingPost},
     model::{
         constants::PERFORMANCE_SCALING_FACTOR,
         decay::DecayTracker,
@@ -16,7 +16,6 @@ use openskill::{
     rating::{default_gamma, Rating}
 };
 use statrs::statistics::Statistics;
-use crate::api::api_structs::RatingPost;
 
 pub struct OtrModel {
     pub model: PlackettLuce,
@@ -210,13 +209,18 @@ mod tests {
     use crate::{
         model::{
             otr_model::OtrModel,
-            structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
+            structures::{
+                rating_adjustment_type::{
+                    RatingAdjustmentType,
+                    RatingAdjustmentType::{Initial, Match}
+                },
+                ruleset::Ruleset
+            }
         },
         utils::test_utils::*
     };
     use approx::assert_abs_diff_eq;
     use chrono::Utc;
-    use crate::model::structures::rating_adjustment_type::RatingAdjustmentType::{Initial, Match};
 
     #[test]
     fn test_rate() {
@@ -355,10 +359,12 @@ mod tests {
     #[test]
     fn test_process_returns_api_data() {
         let now = Utc::now().fixed_offset();
-        let player_ratings = vec![generate_player_rating(1, 1000.0, 100.0, Initial, Some(now)),
-                                  generate_player_rating(2, 1000.0, 100.0, Initial, Some(now)),
-                                  generate_player_rating(3, 1000.0, 100.0, Initial, Some(now)),
-                                  generate_player_rating(4, 1000.0, 100.0, Initial, Some(now))];
+        let player_ratings = vec![
+            generate_player_rating(1, 1000.0, 100.0, Initial, Some(now)),
+            generate_player_rating(2, 1000.0, 100.0, Initial, Some(now)),
+            generate_player_rating(3, 1000.0, 100.0, Initial, Some(now)),
+            generate_player_rating(4, 1000.0, 100.0, Initial, Some(now)),
+        ];
 
         let matches = generate_matches(5, &player_ratings);
         let country_mapping = generate_country_mapping(&player_ratings, "US");

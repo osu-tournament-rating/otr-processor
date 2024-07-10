@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, FixedOffset, Utc};
-use rand::{seq::SliceRandom, thread_rng};
 
 use crate::{
     api::api_structs::{Game, Match, PlayerPlacement, PlayerRating},
@@ -18,6 +17,7 @@ pub fn generate_player_rating(
     adjustment_type: RatingAdjustmentType,
     timestamp: Option<DateTime<FixedOffset>>
 ) -> PlayerRating {
+    let default_time = "2007-09-16T00:00:00-00:00".parse::<DateTime<FixedOffset>>().unwrap();
     PlayerRating {
         player_id: id,
         ruleset: Ruleset::Osu,
@@ -26,7 +26,7 @@ pub fn generate_player_rating(
         percentile: 0.0,
         global_rank: 0,
         country_rank: 0,
-        timestamp: timestamp.unwrap_or_default(),
+        timestamp: timestamp.unwrap_or(default_time),
         adjustment_type
     }
 }
@@ -92,8 +92,8 @@ fn random_placements(player_ratings: &[PlayerRating]) -> Vec<PlayerPlacement> {
     let mut placements = Vec::new();
 
     // Select random placements for each player (1 to size)
-    for i in 0..player_ratings.len() {
-        placements.push(generate_placement(player_ratings[i].player_id, i as i32));
+    for (i, rating) in player_ratings.iter().enumerate() {
+        placements.push(generate_placement(rating.player_id, i as i32));
     }
 
     placements
