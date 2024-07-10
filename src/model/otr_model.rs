@@ -40,7 +40,10 @@ impl OtrModel {
         let progress_bar = progress_bar(matches.len() as u64, "Processing match data".to_string());
         for m in matches {
             self.process_match(m);
-            progress_bar.inc(1);
+
+            if progress_bar.is_some() {
+                progress_bar.clone().unwrap().inc(1);
+            }
         }
 
         self.rating_tracker.get_post_data()

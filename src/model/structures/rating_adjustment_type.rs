@@ -13,8 +13,9 @@ impl TryFrom<i32> for RatingAdjustmentType {
     type Error = ();
     fn try_from(v: i32) -> Result<Self, Self::Error> {
         match v {
-            0 => Ok(RatingAdjustmentType::Decay),
+            0 => Ok(RatingAdjustmentType::Initial),
             1 => Ok(RatingAdjustmentType::Match),
+            2 => Ok(RatingAdjustmentType::Decay),
             _ => Err(())
         }
     }
@@ -22,8 +23,8 @@ impl TryFrom<i32> for RatingAdjustmentType {
 
 #[cfg(test)]
 mod tests {
-    use rating_adjustment_type::RatingAdjustmentType;
     use crate::model::structures::rating_adjustment_type;
+    use rating_adjustment_type::RatingAdjustmentType;
 
     #[test]
     fn test_convert_initial() {
