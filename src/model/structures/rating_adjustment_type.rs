@@ -4,9 +4,9 @@ use std::convert::TryFrom;
 #[derive(Deserialize_repr, Serialize_repr, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum RatingAdjustmentType {
-    Decay = 0,
+    Initial = 0,
     Match = 1,
-    Initial = 2
+    Decay = 2
 }
 
 impl TryFrom<i32> for RatingAdjustmentType {
@@ -17,5 +17,31 @@ impl TryFrom<i32> for RatingAdjustmentType {
             1 => Ok(RatingAdjustmentType::Match),
             _ => Err(())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rating_adjustment_type::RatingAdjustmentType;
+    use crate::model::structures::rating_adjustment_type;
+
+    #[test]
+    fn test_convert_initial() {
+        assert_eq!(RatingAdjustmentType::try_from(0), Ok(RatingAdjustmentType::Initial));
+    }
+
+    #[test]
+    fn test_convert_match() {
+        assert_eq!(RatingAdjustmentType::try_from(1), Ok(RatingAdjustmentType::Match));
+    }
+
+    #[test]
+    fn test_convert_decay() {
+        assert_eq!(RatingAdjustmentType::try_from(2), Ok(RatingAdjustmentType::Decay));
+    }
+
+    #[test]
+    fn test_convert_error() {
+        assert_eq!(RatingAdjustmentType::try_from(3), Err(()));
     }
 }
