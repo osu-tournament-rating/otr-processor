@@ -96,7 +96,7 @@ fn std_dev_from_ruleset(ruleset: Ruleset) -> f64 {
 #[cfg(test)]
 mod tests {
     use crate::{
-        api::api_structs::{Player},
+        api::api_structs::Player,
         model::{
             constants::{DEFAULT_VOLATILITY, OSU_RATING_CEILING, OSU_RATING_FLOOR},
             rating_utils::{mu_from_rank, std_dev_from_ruleset},

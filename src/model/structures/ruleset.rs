@@ -26,3 +26,54 @@ impl TryFrom<i32> for Ruleset {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::model::structures::ruleset::Ruleset;
+    use strum::IntoEnumIterator;
+
+    #[test]
+    fn test_convert_osu() {
+        assert_eq!(Ruleset::try_from(0), Ok(Ruleset::Osu));
+    }
+
+    #[test]
+    fn test_convert_taiko() {
+        assert_eq!(Ruleset::try_from(1), Ok(Ruleset::Taiko));
+    }
+
+    #[test]
+    fn test_convert_catch() {
+        assert_eq!(Ruleset::try_from(2), Ok(Ruleset::Catch));
+    }
+
+    #[test]
+    fn test_convert_mania4k() {
+        assert_eq!(Ruleset::try_from(3), Ok(Ruleset::Mania4k));
+    }
+
+    #[test]
+    fn test_convert_mania7k() {
+        assert_eq!(Ruleset::try_from(4), Ok(Ruleset::Mania7k));
+    }
+
+    #[test]
+    fn test_convert_invalid() {
+        assert_eq!(Ruleset::try_from(5), Err(()));
+    }
+
+    #[test]
+    fn test_enumerate() {
+        let rulesets = Ruleset::iter().collect::<Vec<_>>();
+        assert_eq!(
+            rulesets,
+            vec![
+                Ruleset::Osu,
+                Ruleset::Taiko,
+                Ruleset::Catch,
+                Ruleset::Mania4k,
+                Ruleset::Mania7k
+            ]
+        );
+    }
+}

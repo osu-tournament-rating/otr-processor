@@ -265,7 +265,6 @@ impl RatingTracker {
 
 #[cfg(test)]
 mod tests {
-    use approx::assert_abs_diff_eq;
     use crate::{
         model::{
             rating_tracker::RatingTracker,
@@ -273,6 +272,7 @@ mod tests {
         },
         utils::test_utils::{generate_country_mapping, generate_player_rating}
     };
+    use approx::assert_abs_diff_eq;
 
     #[test]
     fn test_track_player_initial_rating_and_match_update() {
