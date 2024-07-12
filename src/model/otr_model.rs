@@ -112,8 +112,7 @@ impl OtrModel {
             Self::apply_performance_scaling(
                 &mut prior_rating,
                 mu_delta,
-                n_performances,
-                n_games,
+                performance_frequency,
                 PERFORMANCE_SCALING_FACTOR
             );
 
@@ -192,8 +191,7 @@ impl OtrModel {
     fn apply_performance_scaling(
         rating: &mut PlayerRating,
         rating_diff: f64,
-        games_played: i32,
-        games_total: i32,
+        performance_frequency: f64,
         scaling: f64
     ) {
         if rating_diff >= 0.0 {
@@ -203,7 +201,7 @@ impl OtrModel {
         // Rating differential is used with a scaling factor
         // to determine final rating change
         let prior_rating = rating.rating;
-        rating.rating = prior_rating - (scaling * (rating_diff.abs() * (games_played as f64 / games_total as f64)))
+        rating.rating = prior_rating - (scaling * (rating_diff.abs() * performance_frequency))
     }
 }
 
@@ -351,10 +349,11 @@ mod tests {
         let games_played = 1;
         let games_total = 10;
         let scaling = 1.0;
+        let frequency = 1.0 / 10.0;
 
         // User should lose 10% of what they would have lost as they only participated in 1/10 of the maps.
 
-        OtrModel::apply_performance_scaling(&mut rating, rating_diff, games_played, games_total, scaling);
+        OtrModel::apply_performance_scaling(&mut rating, rating_diff, frequency, scaling);
 
         assert_abs_diff_eq!(rating.rating, 990.0);
     }
