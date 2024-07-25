@@ -361,29 +361,6 @@ mod api_client_tests {
         assert_ne!(second_token, third_token);
     }
 
-    // #[tokio::test]
-    // #[ignore]
-    // async fn test_api_post_rating_adjustments() {
-    //     let api = get_api().await;
-    //
-    //     let payload = vec![RatingAdjustment {
-    //         player_id: 440,
-    //         mode: Ruleset::Osu,
-    //         rating_adjustment_amount: 10.5,
-    //         volatility_adjustment_amount: 0.4,
-    //         rating_before: 1000.0,
-    //         rating_after: 1010.5,
-    //         volatility_before: 100.0,
-    //         volatility_after: 100.4,
-    //         rating_adjustment_type: 0,
-    //         timestamp: Default::default(),
-    //     }];
-    //
-    //     api.post_match_rating_stats(&payload)
-    //         .await
-    //         .expect("Failed to POST rating adjustments");
-    // }
-
     #[tokio::test]
     async fn test_login_mocked() {
         let server = MockServer::start();
