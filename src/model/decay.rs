@@ -4,12 +4,12 @@ use crate::{
     api::api_structs::PlayerRating,
     model::{
         constants,
+        constants::DECAY_DAYS,
         rating_tracker::RatingTracker,
         structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
     },
     utils::test_utils::generate_country_mapping
 };
-use crate::model::constants::DECAY_DAYS;
 
 /// Tracks decay activity for players
 pub struct DecayTracker;
