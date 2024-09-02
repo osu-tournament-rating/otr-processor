@@ -16,3 +16,24 @@ pub fn get_env() -> EnvironmentVariables {
         privileged_secret
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env;
+
+    #[test]
+    fn test_get_env() {
+        let api_root = "https://otr.stagec.xyz/api/v1".to_string();
+        let privileged_secret = "abcd".to_string();
+
+        env::set_var("API_ROOT", &api_root);
+        env::set_var("PRIVILEGED_SECRET", &privileged_secret);
+
+        let env = get_env();
+        let expected = EnvironmentVariables {
+            api_root,
+            privileged_secret
+        };
+    }
+}

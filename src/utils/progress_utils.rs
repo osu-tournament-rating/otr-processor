@@ -1,6 +1,10 @@
 use indicatif::ProgressBar;
 
-pub fn progress_bar(len: u64, msg: String) -> ProgressBar {
+pub fn progress_bar(len: u64, msg: String) -> Option<ProgressBar> {
+    if cfg!(test) {
+        return None;
+    }
+
     let bar = ProgressBar::new(len).with_message(msg);
     bar.set_style(
         indicatif::ProgressStyle::default_bar()
@@ -9,10 +13,14 @@ pub fn progress_bar(len: u64, msg: String) -> ProgressBar {
             .progress_chars("##-")
     );
 
-    bar
+    Some(bar)
 }
 
-pub fn progress_bar_spinner(len: u64, msg: String) -> ProgressBar {
+pub fn progress_bar_spinner(len: u64, msg: String) -> Option<ProgressBar> {
+    if cfg!(test) {
+        return None;
+    }
+
     let bar = ProgressBar::new(len).with_message(msg);
     bar.set_style(
         indicatif::ProgressStyle::default_spinner()
@@ -20,10 +28,14 @@ pub fn progress_bar_spinner(len: u64, msg: String) -> ProgressBar {
             .unwrap()
     );
 
-    bar
+    Some(bar)
 }
 
-pub fn indeterminate_bar(msg: String) -> ProgressBar {
+pub fn indeterminate_bar(msg: String) -> Option<ProgressBar> {
+    if cfg!(test) {
+        return None;
+    }
+
     let bar = ProgressBar::new_spinner().with_message(msg);
 
     bar.set_style(
@@ -32,5 +44,5 @@ pub fn indeterminate_bar(msg: String) -> ProgressBar {
             .unwrap()
     );
 
-    bar
+    Some(bar)
 }

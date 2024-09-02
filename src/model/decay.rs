@@ -1,28 +1,19 @@
-use crate::{
-    api::api_structs::RatingAdjustment,
-    model::{constants, structures::ruleset::Ruleset}
-};
 use chrono::{DateTime, FixedOffset};
-use std::collections::HashMap;
+
+use crate::{
+    api::api_structs::PlayerRating,
+    model::{
+        constants,
+        rating_tracker::RatingTracker,
+        structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
+    },
+    utils::test_utils::generate_country_mapping
+};
+
 /// Tracks decay activity for players
-pub struct DecayTracker {
-    last_play_time: HashMap<(i32, Ruleset), DateTime<FixedOffset>>
-}
+pub struct DecayTracker;
 
 impl DecayTracker {
-    pub fn new() -> DecayTracker {
-        DecayTracker {
-            last_play_time: HashMap::new()
-        }
-    }
-    pub fn record_activity(&mut self, player_id: i32, mode: Ruleset, time: DateTime<FixedOffset>) {
-        self.last_play_time.insert((player_id, mode), time);
-    }
-
-    pub fn get_activity(&mut self, player_id: i32, mode: Ruleset) -> Option<&DateTime<FixedOffset>> {
-        self.last_play_time.get(&(player_id, mode))
-    }
-
     /// Returns a [`Vec<RatingAdjustment>`] for each decay application for this user.
     ///
     /// # How this works
@@ -40,59 +31,56 @@ impl DecayTracker {
     /// If the user does not need to decay, return None.
     pub fn decay(
         &self,
+        rating_tracker: &mut RatingTracker,
         player_id: i32,
-        mode: Ruleset,
-        mu: f64,
-        sigma: f64,
+        country: &str,
+        ruleset: Ruleset,
         d: DateTime<FixedOffset>
-    ) -> Option<Vec<RatingAdjustment>> {
-        let last_play_time = self.last_play_time.get(&(player_id, mode));
-        match last_play_time {
-            None => return None,
-            Some(t) => {
-                if d < *t {
-                    return None;
-                }
-            }
+    ) {
+        let rating = rating_tracker.get_rating(player_id, ruleset);
+
+        if rating.is_none() || !is_decay_possible(rating.unwrap().rating) {
+            return;
         }
 
-        let decay_weeks = Self::n_decay(d, *last_play_time.unwrap());
+        let last_play_time = rating.unwrap().timestamp;
+        if d < last_play_time {
+            return;
+        }
 
+        let decay_weeks = Self::n_decay(d, last_play_time);
         if decay_weeks < 1 {
-            return None;
+            return;
         }
 
-        let mut adjustments = Vec::new();
-        let mut old_mu;
-        let mut old_sigma;
-        let mut new_mu = mu;
-        let mut new_sigma = sigma;
+        let mut old_rating = rating.unwrap().rating;
+        let mut old_volatility = rating.unwrap().volatility;
 
+        let mut decay_ratings = Vec::new();
         for i in 0..decay_weeks {
             // Increment time by 7 days for each decay application (this is for accurate timestamps)
-            let now = last_play_time.unwrap().fixed_offset() + chrono::Duration::days(i * 7);
-            old_mu = new_mu;
-            old_sigma = new_sigma;
-            new_mu = decay_mu(new_mu);
-            new_sigma = decay_sigma(new_sigma);
+            let simulated_time = last_play_time + chrono::Duration::days(i * 7);
+            let new_rating = decay_rating(old_rating);
+            let new_volatility = decay_volatility(old_volatility);
 
-            let adjustment = RatingAdjustment {
+            old_rating = new_rating;
+            old_volatility = new_volatility;
+
+            decay_ratings.push(PlayerRating {
                 player_id,
-                mode,
-                rating_adjustment_amount: new_mu - old_mu,
-                volatility_adjustment_amount: new_sigma - old_sigma,
-                rating_before: old_mu,
-                rating_after: new_mu,
-                volatility_before: old_sigma,
-                volatility_after: new_sigma,
-                rating_adjustment_type: 0,
-                timestamp: now
-            };
-
-            adjustments.push(adjustment);
+                ruleset,
+                rating: new_rating,
+                volatility: new_volatility,
+                percentile: 0.0,
+                global_rank: 0,
+                country_rank: 0,
+                timestamp: simulated_time,
+                adjustment_type: RatingAdjustmentType::Decay
+            });
         }
 
-        Some(adjustments)
+        let country_mapping = generate_country_mapping(&decay_ratings, country);
+        rating_tracker.insert_or_update(&decay_ratings, &country_mapping, None)
     }
 
     /// Returns the number of decay applications that should be applied.
@@ -119,13 +107,13 @@ pub fn is_decay_possible(mu: f64) -> bool {
     mu > constants::DECAY_MINIMUM
 }
 
-pub fn decay_sigma(sigma: f64) -> f64 {
+fn decay_volatility(sigma: f64) -> f64 {
     let new_sigma = (sigma.powf(2.0) + constants::VOLATILITY_GROWTH_RATE).sqrt();
 
-    new_sigma.min(constants::SIGMA)
+    new_sigma.min(constants::DEFAULT_VOLATILITY)
 }
 
-pub fn decay_mu(mu: f64) -> f64 {
+fn decay_rating(mu: f64) -> f64 {
     let new_mu = mu - constants::DECAY_RATE;
 
     new_mu.max(constants::DECAY_MINIMUM)
@@ -133,59 +121,77 @@ pub fn decay_mu(mu: f64) -> f64 {
 
 #[cfg(test)]
 mod tests {
-    use crate::model::{
-        constants,
-        constants::MULTIPLIER,
-        decay::{decay_mu, decay_sigma, is_decay_possible, DecayTracker},
-        structures::ruleset::Ruleset
-    };
-    use chrono::DateTime;
     use std::ops::Add;
 
+    use approx::assert_abs_diff_eq;
+    use chrono::DateTime;
+
+    use crate::{
+        model::{
+            constants,
+            constants::{DECAY_DAYS, MULTIPLIER},
+            decay::{decay_rating, decay_volatility, is_decay_possible, DecayTracker},
+            rating_tracker::RatingTracker,
+            structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
+        },
+        utils::test_utils::{generate_country_mapping, generate_player_rating}
+    };
+
     #[test]
-    fn test_decay() {
-        let id = 1;
-        let mode = Ruleset::Osu;
-        let mu = 1000.0;
-        let sigma = 200.0;
+    fn test_decay_default_days() {
+        decay(DECAY_DAYS as i32)
+    }
 
-        let mut expected_mu = mu;
-        let mut expected_sigma = sigma;
+    #[test]
+    fn test_decay_many_days() {
+        decay(7000)
+    }
 
-        let mut tracker = DecayTracker::new();
+    fn decay(decay_days: i32) {
+        let mut rating_tracker = RatingTracker::new();
+        let ruleset = Ruleset::Osu;
 
-        // Set time for one match and record activity
+        let initial_rating = 2000.0;
+        let initial_volatility = 100.0;
+
+        // t = "last played time"
         let t = DateTime::parse_from_rfc3339("2021-01-01T00:00:00+00:00")
             .unwrap()
             .fixed_offset();
-        // Jump ahead 4 months. Should be (4 months in weeks) decay applications
-        let d = DateTime::parse_from_rfc3339("2021-05-01T00:00:00+00:00")
-            .unwrap()
-            .fixed_offset();
+        let d = t.add(chrono::Duration::days(decay_days as i64));
+
+        let player_ratings = vec![generate_player_rating(
+            1,
+            initial_rating,
+            initial_volatility,
+            RatingAdjustmentType::Initial,
+            Some(t)
+        )];
+
+        let country = "US";
+        let country_mapping = generate_country_mapping(&player_ratings, country);
+        rating_tracker.insert_or_update(&player_ratings, &country_mapping, None);
+
+        let decay_tracker = DecayTracker;
+        decay_tracker.decay(&mut rating_tracker, 1, country, ruleset, d);
+
+        let decayed_rating = rating_tracker.get_rating(1, ruleset).unwrap();
 
         let n_decay = DecayTracker::n_decay(d, t);
+        let mut expected_decay_rating = initial_rating;
+        let mut expected_decay_volatility = initial_volatility;
 
-        for _ in 0..n_decay {
-            expected_mu = decay_mu(expected_mu);
-            expected_sigma = decay_sigma(expected_sigma);
-        }
-
-        tracker.record_activity(id, mode, t);
-
-        let adjustments = tracker.decay(id, mode, mu, sigma, d).unwrap();
-
-        assert_eq!(adjustments.len() as i64, n_decay);
-
-        // Ensure all adjustments are of type 0
-        for a in adjustments.iter() {
-            assert_eq!(a.rating_adjustment_type, 0);
-        }
-
-        // Ensure adjustment timestamps are correct
         for i in 0..n_decay {
-            let expected_time = t.add(chrono::Duration::days(i * 7));
-            assert_eq!(adjustments[i as usize].timestamp, expected_time);
+            expected_decay_rating = decay_rating(expected_decay_rating);
+            expected_decay_volatility = decay_volatility(expected_decay_volatility);
         }
+
+        assert_abs_diff_eq!(decayed_rating.rating, expected_decay_rating);
+        assert_abs_diff_eq!(decayed_rating.volatility, expected_decay_volatility);
+
+        // Assert rank updates
+        assert_eq!(decayed_rating.global_rank, 1);
+        assert_eq!(decayed_rating.country_rank, 1);
     }
 
     #[test]
@@ -220,7 +226,6 @@ mod tests {
         let decay_min = constants::DECAY_MINIMUM;
 
         let decay_possible = mu > (decay_min);
-
         let result = is_decay_possible(mu);
 
         assert_eq!(result, decay_possible)
@@ -229,7 +234,7 @@ mod tests {
     #[test]
     fn test_decay_sigma_standard() {
         let sigma = 200.1;
-        let new_sigma = decay_sigma(sigma);
+        let new_sigma = decay_volatility(sigma);
         let expected = (sigma.powf(2.0) + constants::VOLATILITY_GROWTH_RATE).sqrt();
 
         assert_eq!(new_sigma, expected);
@@ -238,16 +243,16 @@ mod tests {
     #[test]
     fn test_decay_sigma_maximum_default() {
         let sigma = 999.0;
-        let new_sigma = decay_sigma(sigma);
-        let expected = constants::SIGMA;
+        let new_sigma = decay_volatility(sigma);
+        let expected = constants::DEFAULT_VOLATILITY;
 
         assert_eq!(new_sigma, expected);
     }
 
     #[test]
     fn test_decay_mu_standard() {
-        let mu = 1100.0;
-        let new_mu = decay_mu(mu);
+        let mu = 2000.0;
+        let new_mu = decay_rating(mu);
         let expected = mu - constants::DECAY_RATE;
 
         assert_eq!(new_mu, expected);
@@ -256,7 +261,7 @@ mod tests {
     #[test]
     fn test_decay_mu_min_decay() {
         let mu = MULTIPLIER * 18.0;
-        let new_mu = decay_mu(mu);
+        let new_mu = decay_rating(mu);
         let expected = MULTIPLIER * 18.0;
 
         assert_eq!(new_mu, expected);
