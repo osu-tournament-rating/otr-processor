@@ -4,6 +4,7 @@ use crate::{
     api::api_structs::PlayerRating,
     model::{
         constants,
+        constants::DECAY_DAYS,
         rating_tracker::RatingTracker,
         structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
     },
@@ -95,11 +96,11 @@ impl DecayTracker {
         let duration = d.signed_duration_since(t);
         let duration_days = duration.num_days();
 
-        if (duration_days as u64) < constants::DECAY_DAYS {
+        if (duration_days as u64) < DECAY_DAYS {
             return 0;
         }
 
-        duration.num_days() / 7
+        (((duration.num_days() as u64 - DECAY_DAYS) / 7u64) + 1u64) as i64
     }
 }
 
@@ -195,7 +196,7 @@ mod tests {
     }
 
     #[test]
-    fn test_n_decay() {
+    fn test_n_decay_begin() {
         let t = DateTime::parse_from_rfc3339("2021-01-01T00:00:00+00:00")
             .unwrap()
             .fixed_offset();
@@ -203,7 +204,19 @@ mod tests {
 
         let n = DecayTracker::n_decay(d, t);
 
-        assert_eq!(n, constants::DECAY_DAYS as i64 / 7);
+        assert_eq!(n, 1);
+    }
+
+    #[test]
+    fn test_n_decay_one_month() {
+        let t = DateTime::parse_from_rfc3339("2020-12-01T00:00:00+00:00")
+            .unwrap()
+            .fixed_offset();
+        let d = t.add(chrono::Duration::days(DECAY_DAYS as i64 + 30));
+
+        let n = DecayTracker::n_decay(d, t);
+
+        assert_eq!(n, 5);
     }
 
     #[test]
