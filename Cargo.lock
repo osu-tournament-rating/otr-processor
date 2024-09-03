@@ -1613,7 +1613,6 @@ dependencies = [
  "lazy_static",
  "log",
  "openskill",
- "postgres",
  "rand",
  "reqwest",
  "serde",
@@ -1623,6 +1622,7 @@ dependencies = [
  "strum",
  "strum_macros",
  "tokio",
+ "tokio-postgres",
 ]
 
 [[package]]
@@ -1801,20 +1801,6 @@ name = "portable-atomic"
 version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7170ef9988bc169ba16dd36a7fa041e5c4cbeb6a35b76d4c03daded371eae7c0"
-
-[[package]]
-name = "postgres"
-version = "0.19.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c9ec84ab55b0f9e418675de50052d494ba893fd28c65769a6e68fcdacbee2b8"
-dependencies = [
- "bytes",
- "fallible-iterator",
- "futures-util",
- "log",
- "tokio",
- "tokio-postgres",
-]
 
 [[package]]
 name = "postgres-protocol"
