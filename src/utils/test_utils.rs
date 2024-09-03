@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use chrono::{DateTime, FixedOffset, Utc};
 
 use crate::{
-    api::api_structs::{Game, Match, PlayerPlacement, PlayerRating},
+    models::db_structs::{Game, Match, PlayerPlacement, PlayerRating},
     model::{
         constants::{DEFAULT_RATING, DEFAULT_VOLATILITY},
         structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}

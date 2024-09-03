@@ -10,6 +10,4 @@ async fn main() {
     
     let db_client = DbClient::connect(connection_string.as_str()).await.expect("Expected valid database connection");
     
-    
-    
 }

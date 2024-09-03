@@ -1,5 +1,5 @@
 use crate::{
-    api::api_structs::{Player, PlayerRating},
+    models::db_structs::{Player, PlayerRating},
     model::{
         constants,
         constants::{DEFAULT_RATING, DEFAULT_VOLATILITY, MULTIPLIER, OSU_RATING_CEILING},
@@ -96,7 +96,7 @@ fn std_dev_from_ruleset(ruleset: Ruleset) -> f64 {
 #[cfg(test)]
 mod tests {
     use crate::{
-        api::api_structs::Player,
+        models::db_structs::Player,
         model::{
             constants::{DEFAULT_VOLATILITY, OSU_RATING_CEILING, OSU_RATING_FLOOR},
             rating_utils::{mu_from_rank, std_dev_from_ruleset},

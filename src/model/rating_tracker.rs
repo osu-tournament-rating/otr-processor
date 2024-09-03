@@ -7,7 +7,7 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 
 use crate::{
-    api::api_structs::{PlayerRating, RatingAdjustment, RatingPost},
+    models::db_structs::{PlayerRating, RatingAdjustment, RatingPost},
     model::structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
 };
 

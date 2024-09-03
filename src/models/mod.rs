@@ -10,11 +10,11 @@ use tokio::sync::{
     RwLock
 };
 
-use crate::api::api_structs::OAuthResponse;
+use crate::models::db_structs::OAuthResponse;
 
-use self::api_structs::MatchPagedResult;
+use self::db_structs::MatchPagedResult;
 
-pub mod api_structs;
+pub mod db_structs;
 
 /// A loop that automatically refreshes token
 pub async fn refresh_token_loop(api: Arc<OtrApiBody>) {
@@ -206,9 +206,9 @@ impl OtrApiClient {
     /// 1. Fetch some endpoint
     /// ```
     /// use reqwest::Method;
-    /// use otr_processor::api::OtrApiClient;
+    /// use otr_processor::models::OtrApiClient;
     /// let api = OtrApiClient::new("example.com/api/v1", "CLIENT_ID", "CLIENT_SECRET");
-    /// // api.make_request(Method::GET, "/fetch_something");
+    /// // models.make_request(Method::GET, "/fetch_something");
     /// ```
     async fn make_request<T>(&self, method: Method, partial_url: &str) -> Result<T, Error>
     where
@@ -238,10 +238,10 @@ impl OtrApiClient {
     /// 1. Make request to some endpoint with `Vec<32>` as body
     /// ```
     /// use reqwest::Method;
-    /// use otr_processor::api::OtrApiClient;
+    /// use otr_processor::models::OtrApiClient;
     /// let api = OtrApiClient::new("example.com/api/v1", "CLIENT_ID", "CLIENT_SECRET");
     /// let my_numbers: Vec<i32> = vec![1, 2, 3, 4, 5];
-    /// // (This commented code doesn't pass doc compilation test ?) let result = api.make_request_with_body(Method::GET, "/fetch_something", Some(&my_numbers));
+    /// // (This commented code doesn't pass doc compilation test ?) let result = models.make_request_with_body(Method::GET, "/fetch_something", Some(&my_numbers));
     /// ```
     async fn make_request_with_body<T, B>(&self, method: Method, partial_url: &str, body: Option<B>) -> Result<T, Error>
     where
@@ -297,7 +297,7 @@ mod api_client_tests {
     use httpmock::prelude::*;
     use serde_json::json;
 
-    use crate::api::OtrApiClient;
+    use crate::models::OtrApiClient;
 
     static API_INSTANCE: OnceCell<OtrApiClient> = OnceCell::new();
 
