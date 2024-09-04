@@ -5,3 +5,4 @@ pub mod rating_tracker;
 pub mod rating_utils;
 pub mod structures;
 pub mod db;
+pub mod db_structs;

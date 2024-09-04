@@ -1,7 +1,7 @@
 use chrono::{DateTime, FixedOffset};
 
 use crate::{
-    models::db_structs::PlayerRating,
+    model::db_structs::PlayerRating,
     model::{
         constants,
         constants::DECAY_DAYS,

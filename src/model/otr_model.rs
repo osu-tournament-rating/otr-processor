@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    models::db_structs::{Game, Match, PlayerRating, RatingPost},
+    model::db_structs::{Game, Match, PlayerRating, RatingPost},
     model::{
         constants::PERFORMANCE_SCALING_FACTOR,
         decay::DecayTracker,
