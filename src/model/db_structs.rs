@@ -149,7 +149,7 @@ pub struct NewGame {
     pub id: i32,
     pub ruleset: Ruleset,
     pub start_time: DateTime<FixedOffset>,
-    pub end_time: Option<DateTime<FixedOffset>>,
+    pub end_time: DateTime<FixedOffset>,
     pub scores: Vec<NewGameScore>,
 }
 

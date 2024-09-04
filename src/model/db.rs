@@ -1,7 +1,7 @@
-use tokio_postgres::{Client, NoTls, Error};
-use std::sync::Arc;
-use crate::model::db_structs::NewTournament;
+use crate::model::db_structs::{NewMatch, NewTournament};
 use crate::model::structures::ruleset::Ruleset;
+use std::sync::Arc;
+use tokio_postgres::{Client, Error, NoTls};
 
 #[derive(Clone)]
 pub struct DbClient {
@@ -48,11 +48,30 @@ impl DbClient {
             let game_id: i32 = row.get("game_id");
             let game_score_id: i32 = row.get("game_score_id");
 
-            let tournament = NewTournament {
+            let mut tournament = NewTournament {
                 id: tournament_id,
                 name: row.get("tournament_name"),
                 ruleset: Ruleset::try_from(row.get::<&str, i32>("tournament_ruleset")).unwrap(),
                 matches: vec![],
+            };
+
+            // Check if the match already exists
+            let match_pos = tournament.matches.iter_mut().position(|m| m.id == match_id);
+
+            let match_ = if let Some(pos) = match_pos {
+                // If the match exists, return a mutable reference to it
+                &mut tournament.matches[pos]
+            } else {
+                // If the match doesn't exist, push a new match and then return a mutable reference to it
+                tournament.matches.push(NewMatch {
+                    id: match_id,
+                    name: row.get("match_name"),
+                    start_time: row.get("match_start_time"),
+                    end_time: row.get("match_end_time"),
+                    ruleset: tournament.ruleset,
+                    games: Vec::new(),
+                });
+                tournament.matches.last_mut().unwrap()
             };
 
             println!("Tournament: {:?}", tournament);
