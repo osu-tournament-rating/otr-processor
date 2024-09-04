@@ -125,7 +125,7 @@ pub struct MatchPagedResult {
 
 // New
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct NewTournament {
     pub id: i32,
     pub name: String,
@@ -133,7 +133,7 @@ pub struct NewTournament {
     pub matches: Vec<NewMatch>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct NewMatch {
     pub id: i32,
     pub name: String,
@@ -144,7 +144,7 @@ pub struct NewMatch {
     pub games: Vec<NewGame>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct NewGame {
     pub id: i32,
     pub ruleset: Ruleset,
@@ -153,7 +153,7 @@ pub struct NewGame {
     pub scores: Vec<NewGameScore>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct NewGameScore {
     pub id: i32,
     pub player_id: i32,
