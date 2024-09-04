@@ -9,5 +9,5 @@ async fn main() {
         .expect("Expected CONNECTION_STRING environment variable for otr-db PostgreSQL connection.");
     
     let db_client = DbClient::connect(connection_string.as_str()).await.expect("Expected valid database connection");
-    
+    db_client.get_tournaments().await;
 }

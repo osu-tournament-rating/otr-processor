@@ -122,3 +122,37 @@ pub struct MatchPagedResult {
     /// List of resulting data
     pub results: Vec<Match>
 }
+
+// New
+
+#[derive(Debug)]
+pub struct NewTournament {
+    pub id: i32,
+    pub name: String,
+    pub ruleset: Ruleset,
+    pub matches: Vec<Match>,
+}
+
+pub struct NewMatch {
+    pub id: i32,
+    pub name: String,
+    pub start_time: Option<DateTime<FixedOffset>>,
+    pub end_time: Option<DateTime<FixedOffset>>,
+    pub tournament: NewTournament,
+    pub games: Vec<NewGame>,
+}
+
+pub struct NewGame {
+    pub id: i32,
+    pub ruleset: Ruleset,
+    pub start_time: DateTime<FixedOffset>,
+    pub end_time: Option<DateTime<FixedOffset>>,
+    pub scores: Vec<NewGameScore>,
+}
+
+pub struct NewGameScore {
+    pub id: i32,
+    pub player_id: i32,
+    pub game_id: i32,
+    pub score: i32,
+}
