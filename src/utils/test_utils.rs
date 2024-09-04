@@ -2,12 +2,10 @@ use std::collections::HashMap;
 
 use chrono::{DateTime, FixedOffset, Utc};
 
-use crate::{
-    model::db_structs::{Game, Match, PlayerPlacement, PlayerRating},
-    model::{
-        constants::{DEFAULT_RATING, DEFAULT_VOLATILITY},
-        structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
-    }
+use crate::model::{
+    constants::{DEFAULT_RATING, DEFAULT_VOLATILITY},
+    db_structs::{Game, Match, PlayerPlacement, PlayerRating},
+    structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
 };
 
 pub fn generate_player_rating(

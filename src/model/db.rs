@@ -1,12 +1,15 @@
-use crate::model::db_structs::{NewGame, NewGameScore, NewMatch, NewTournament};
-use crate::model::structures::ruleset::Ruleset;
-use std::sync::Arc;
+use crate::model::{
+    db_structs::{NewGame, NewGameScore, NewMatch, NewPlayer},
+    structures::ruleset::Ruleset
+};
 use serde_json::to_string;
+use std::sync::Arc;
 use tokio_postgres::{Client, Error, NoTls};
+use crate::model::db_structs::RulesetData;
 
 #[derive(Clone)]
 pub struct DbClient {
-    client: Arc<Client>,
+    client: Arc<Client>
 }
 
 impl DbClient {
@@ -22,7 +25,7 @@ impl DbClient {
         });
 
         Ok(DbClient {
-            client: Arc::new(client),
+            client: Arc::new(client)
         })
     }
 
@@ -59,7 +62,7 @@ impl DbClient {
                     start_time: row.get("match_start_time"),
                     end_time: row.get("match_end_time"),
                     ruleset: Ruleset::try_from(row.get::<_, i32>("tournament_ruleset")).unwrap(),
-                    games: Vec::new(),
+                    games: Vec::new()
                 };
                 matches.push(match_);
                 current_match_id = row.get("match_id");
@@ -71,7 +74,7 @@ impl DbClient {
                     ruleset: Ruleset::try_from(row.get::<_, i32>("game_ruleset")).unwrap(),
                     start_time: row.get("game_start_time"),
                     end_time: row.get("game_end_time"),
-                    scores: Vec::new(),
+                    scores: Vec::new()
                 };
                 matches.last_mut().unwrap().games.push(game);
                 current_game_id = row.get("game_id");
@@ -82,15 +85,52 @@ impl DbClient {
                     id: row.get("game_score_id"),
                     player_id: row.get("game_score_player_id"),
                     game_id: row.get("game_score_game_id"),
-                    score: row.get("game_score_score"),
+                    score: row.get("game_score_score")
                 };
-                matches.last_mut().unwrap().games.last_mut().unwrap().scores.push(game_score);
+                matches
+                    .last_mut()
+                    .unwrap()
+                    .games
+                    .last_mut()
+                    .unwrap()
+                    .scores
+                    .push(game_score);
                 current_game_score_id = row.get("game_score_id");
             }
         }
-        
+
         println!("{}", to_string(&matches).unwrap());
         matches
+    }
+
+    pub async fn get_players(&self) -> Vec<NewPlayer> {
+        let mut players: Vec<NewPlayer> = Vec::new();
+        let rows = self
+            .client
+            .query(
+                "SELECT p.id AS player_id, p.username AS username, \
+        p.country AS country, prd.ruleset AS ruleset, prd.earliest_global_rank AS earliest_global_rank,\
+          prd.global_rank AS global_rank FROM players p \
+        LEFT JOIN player_osu_ruleset_data prd ON prd.player_id = p.id",
+                &[]
+            )
+            .await
+            .unwrap();
+        for row in rows {
+            let player = NewPlayer {
+                id: row.get("player_id"),
+                username: row.get("username"),
+                ruleset_data: RulesetData {
+                    ruleset: Ruleset::try_from(row.get::<_, i32>("ruleset")).unwrap(),
+                    global_rank: row.get("global_rank"),
+                    earliest_global_rank: row.get("earliest_global_rank"),
+                },
+            };
+            players.push(player);
+        }
+
+        println!("{}", to_string(&players).unwrap());
+        players
     }
 
     // Access the underlying Client

@@ -1,10 +1,10 @@
 use chrono::{DateTime, FixedOffset};
 
 use crate::{
-    model::db_structs::PlayerRating,
     model::{
         constants,
         constants::DECAY_DAYS,
+        db_structs::PlayerRating,
         rating_tracker::RatingTracker,
         structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
     },

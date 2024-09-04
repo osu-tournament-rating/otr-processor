@@ -124,14 +124,18 @@ pub struct MatchPagedResult {
     pub results: Vec<Match>
 }
 
-// New
-
 #[derive(Debug, Clone, Serialize)]
-pub struct NewTournament {
+pub struct NewPlayer {
     pub id: i32,
-    pub name: String,
+    pub username: String,
+    pub ruleset_data: RulesetData
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RulesetData {
     pub ruleset: Ruleset,
-    pub matches: Vec<NewMatch>,
+    pub global_rank: Option<i32>,
+    pub earliest_global_rank: Option<i32>
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -142,7 +146,7 @@ pub struct NewMatch {
     pub end_time: DateTime<FixedOffset>,
     // Populated in the db query (uses the tournament's ruleset)
     pub ruleset: Ruleset,
-    pub games: Vec<NewGame>,
+    pub games: Vec<NewGame>
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -151,7 +155,7 @@ pub struct NewGame {
     pub ruleset: Ruleset,
     pub start_time: DateTime<FixedOffset>,
     pub end_time: DateTime<FixedOffset>,
-    pub scores: Vec<NewGameScore>,
+    pub scores: Vec<NewGameScore>
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -159,7 +163,7 @@ pub struct NewGameScore {
     pub id: i32,
     pub player_id: i32,
     pub game_id: i32,
-    pub score: i32,
+    pub score: i32
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -1,10 +1,8 @@
-use crate::{
-    model::db_structs::{Player, PlayerRating},
-    model::{
-        constants,
-        constants::{DEFAULT_RATING, DEFAULT_VOLATILITY, MULTIPLIER, OSU_RATING_CEILING},
-        structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
-    }
+use crate::model::{
+    constants,
+    constants::{DEFAULT_RATING, DEFAULT_VOLATILITY, MULTIPLIER, OSU_RATING_CEILING},
+    db_structs::{Player, PlayerRating},
+    structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
 };
 use chrono::{DateTime, FixedOffset};
 use constants::OSU_RATING_FLOOR;
@@ -96,9 +94,9 @@ fn std_dev_from_ruleset(ruleset: Ruleset) -> f64 {
 #[cfg(test)]
 mod tests {
     use crate::{
-        model::db_structs::Player,
         model::{
             constants::{DEFAULT_VOLATILITY, OSU_RATING_CEILING, OSU_RATING_FLOOR},
+            db_structs::Player,
             rating_utils::{mu_from_rank, std_dev_from_ruleset},
             structures::{
                 rating_adjustment_type::RatingAdjustmentType,

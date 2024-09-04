@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use crate::{
-    model::db_structs::{Game, Match, PlayerRating, RatingPost},
     model::{
         constants::PERFORMANCE_SCALING_FACTOR,
+        db_structs::{Game, Match, PlayerRating, RatingPost},
         decay::DecayTracker,
         rating_tracker::RatingTracker,
         structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}

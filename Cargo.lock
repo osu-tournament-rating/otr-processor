@@ -1613,6 +1613,7 @@ dependencies = [
  "lazy_static",
  "log",
  "openskill",
+ "postgres-types",
  "rand",
  "reqwest",
  "serde",

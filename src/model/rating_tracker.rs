@@ -6,9 +6,9 @@ use std::{
 use indexmap::IndexMap;
 use itertools::Itertools;
 
-use crate::{
-    model::db_structs::{PlayerRating, RatingAdjustment, RatingPost},
-    model::structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
+use crate::model::{
+    db_structs::{PlayerRating, RatingAdjustment, RatingPost},
+    structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
 };
 
 pub struct RatingTracker {
