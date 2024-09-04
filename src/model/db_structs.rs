@@ -1,6 +1,7 @@
 use crate::model::structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset};
-use chrono::{DateTime, FixedOffset};
+use chrono::{DateTime, FixedOffset, Utc};
 use serde::{Deserialize, Serialize};
+use tokio_postgres::types::Timestamp;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -159,4 +160,28 @@ pub struct NewGameScore {
     pub player_id: i32,
     pub game_id: i32,
     pub score: i32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct NewPlayerRating {
+    pub id: i32,
+    pub player_id: i32,
+    pub ruleset: Ruleset,
+    pub rating: f64,
+    pub volatility: f64,
+    pub percentile: f64,
+    pub global_rank: i32,
+    pub country_rank: i32,
+    pub adjustments: Vec<NewRatingAdjustments>
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct NewRatingAdjustments {
+    pub adjustment_type: RatingAdjustmentType,
+    pub match_id: Option<i32>,
+    pub rating_before: f64,
+    pub rating_after: f64,
+    pub volatility_before: f64,
+    pub volatility_after: f64,
+    pub timestamp: DateTime<FixedOffset>
 }
