@@ -26,8 +26,8 @@ impl DbClient {
         })
     }
 
-    pub async fn get_tournaments(&self) -> Vec<NewTournament> {
-        let mut tournaments = Vec::new();
+    pub async fn get_matches(&self) -> Vec<NewMatch> {
+        let mut matches: Vec<NewMatch> = Vec::new();
         let rows = self.client.query("
         SELECT
             t.id AS tournament_id, t.name AS tournament_name, t.ruleset AS tournament_ruleset,
@@ -39,30 +39,19 @@ impl DbClient {
         LEFT JOIN games g ON m.id = g.match_id
         LEFT JOIN game_scores gs ON g.id = gs.game_id
         WHERE t.verification_status = 1 AND m.verification_status = 2 AND g.verification_status = 2
-        AND gs.verification_status = 0", &[]).await.unwrap();
+        AND gs.verification_status = 0
+        ORDER BY m.start_time", &[]).await.unwrap();
 
         // TODO: Add 'WHERE t.processing_status = 4' to the query
         // TODO: Change 'WHERE t.verification_status = 1' to 'WHERE t.verification_status = 4'
         // TODO: Change 'WHERE m.verification_status = 2' to 'WHERE m.verification_status = 4'
         // TODO: Change 'WHERE gs.verification_status = 0' to 'WHERE gs.verification_status = 4'
 
-        let mut current_tournament_id = -1;
         let mut current_match_id = -1;
         let mut current_game_id = -1;
         let mut current_game_score_id = -1;
 
         for row in rows {
-            if row.get::<_, i32>("tournament_id") != current_tournament_id {
-                let tournament = NewTournament {
-                    id: row.get("tournament_id"),
-                    name: row.get("tournament_name"),
-                    ruleset: Ruleset::try_from(row.get::<_, i32>("tournament_ruleset")).unwrap(),
-                    matches: Vec::new(),
-                };
-                tournaments.push(tournament);
-                current_tournament_id = row.get("tournament_id");
-            }
-
             if row.get::<_, i32>("match_id") != current_match_id {
                 let match_ = NewMatch {
                     id: row.get("match_id"),
@@ -72,7 +61,7 @@ impl DbClient {
                     ruleset: Ruleset::try_from(row.get::<_, i32>("tournament_ruleset")).unwrap(),
                     games: Vec::new(),
                 };
-                tournaments.last_mut().unwrap().matches.push(match_);
+                matches.push(match_);
                 current_match_id = row.get("match_id");
             }
 
@@ -84,7 +73,7 @@ impl DbClient {
                     end_time: row.get("game_end_time"),
                     scores: Vec::new(),
                 };
-                tournaments.last_mut().unwrap().matches.last_mut().unwrap().games.push(game);
+                matches.last_mut().unwrap().games.push(game);
                 current_game_id = row.get("game_id");
             }
 
@@ -95,12 +84,13 @@ impl DbClient {
                     game_id: row.get("game_score_game_id"),
                     score: row.get("game_score_score"),
                 };
-                tournaments.last_mut().unwrap().matches.last_mut().unwrap().games.last_mut().unwrap().scores.push(game_score);
+                matches.last_mut().unwrap().games.last_mut().unwrap().scores.push(game_score);
                 current_game_score_id = row.get("game_score_id");
             }
         }
-
-        tournaments
+        
+        println!("{}", to_string(&matches).unwrap());
+        matches
     }
 
     // Access the underlying Client
