@@ -1,11 +1,10 @@
 use crate::model::{
-    db_structs::{NewGame, NewGameScore, NewMatch, NewPlayer},
+    db_structs::{NewGame, NewGameScore, NewMatch, NewPlayer, RulesetData},
     structures::ruleset::Ruleset
 };
 use serde_json::to_string;
 use std::sync::Arc;
 use tokio_postgres::{Client, Error, NoTls};
-use crate::model::db_structs::RulesetData;
 
 #[derive(Clone)]
 pub struct DbClient {
@@ -116,7 +115,7 @@ impl DbClient {
             )
             .await
             .unwrap();
-        
+
         let mut current_player_id = -1;
         for row in rows {
             if row.get::<_, i32>("player_id") != current_player_id {
@@ -133,15 +132,11 @@ impl DbClient {
                 players.push(player);
                 current_player_id = row.get("player_id");
             } else {
-                players
-                    .last_mut()
-                    .unwrap()
-                    .ruleset_data
-                    .push(RulesetData {
-                        ruleset: Ruleset::try_from(row.get::<_, i32>("ruleset")).unwrap(),
-                        global_rank: row.get("global_rank"),
-                        earliest_global_rank: row.get("earliest_global_rank")
-                    });
+                players.last_mut().unwrap().ruleset_data.push(RulesetData {
+                    ruleset: Ruleset::try_from(row.get::<_, i32>("ruleset")).unwrap(),
+                    global_rank: row.get("global_rank"),
+                    earliest_global_rank: row.get("earliest_global_rank")
+                });
             }
         }
 

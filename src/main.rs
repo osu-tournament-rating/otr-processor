@@ -1,6 +1,5 @@
-use otr_processor::model::db::DbClient;
+use otr_processor::model::{db::DbClient, rating_utils::initial_ratings};
 use std::env;
-use otr_processor::model::rating_utils::initial_ratings;
 
 #[tokio::main]
 async fn main() {
@@ -12,7 +11,7 @@ async fn main() {
 
     // 1. Generate initial ratings
     let ratings = initial_ratings(&players);
-    
+
     println!("{:?}", ratings);
 }
 

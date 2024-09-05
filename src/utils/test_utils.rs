@@ -4,10 +4,9 @@ use chrono::{DateTime, FixedOffset, Utc};
 
 use crate::model::{
     constants::{DEFAULT_RATING, DEFAULT_VOLATILITY},
-    db_structs::{Game, Match, PlayerPlacement, PlayerRating},
+    db_structs::{Game, Match, PlayerPlacement, PlayerRating, RulesetData},
     structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
 };
-use crate::model::db_structs::RulesetData;
 
 pub fn generate_player_rating(
     id: i32,
@@ -30,7 +29,11 @@ pub fn generate_player_rating(
     }
 }
 
-pub fn generate_ruleset_data(ruleset: Ruleset, global_rank: Option<i32>, earliest_global_rank: Option<i32>) -> RulesetData {
+pub fn generate_ruleset_data(
+    ruleset: Ruleset,
+    global_rank: Option<i32>,
+    earliest_global_rank: Option<i32>
+) -> RulesetData {
     RulesetData {
         ruleset,
         global_rank,

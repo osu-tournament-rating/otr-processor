@@ -1,13 +1,13 @@
 use crate::model::{
     constants,
     constants::{DEFAULT_RATING, DEFAULT_VOLATILITY, MULTIPLIER, OSU_RATING_CEILING},
+    db_structs::{NewPlayer, NewPlayerRating, NewRatingAdjustment},
     structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
 };
 use chrono::{DateTime, FixedOffset};
 use constants::OSU_RATING_FLOOR;
 use std::collections::HashMap;
 use strum::IntoEnumIterator;
-use crate::model::db_structs::{NewPlayer, NewPlayerRating, NewRatingAdjustment};
 
 pub fn initial_ratings(players: &[NewPlayer]) -> HashMap<(i32, Ruleset), NewPlayerRating> {
     let mut map = HashMap::new();
@@ -25,7 +25,7 @@ pub fn initial_ratings(players: &[NewPlayer]) -> HashMap<(i32, Ruleset), NewPlay
 fn create_initial_ratings(player: &NewPlayer) -> Vec<NewPlayerRating> {
     let timestamp: DateTime<FixedOffset> = "2007-09-16T00:00:00-00:00".parse().unwrap();
     let mut ratings = Vec::new();
-    
+
     for ruleset in Ruleset::iter() {
         let rating = initial_rating(player, &ruleset);
         let adjustment = NewRatingAdjustment {
@@ -39,7 +39,7 @@ fn create_initial_ratings(player: &NewPlayer) -> Vec<NewPlayerRating> {
             timestamp,
             adjustment_type: RatingAdjustmentType::Initial
         };
-        
+
         ratings.push(NewPlayerRating {
             id: 0,
             player_id: player.id,
@@ -52,14 +52,13 @@ fn create_initial_ratings(player: &NewPlayer) -> Vec<NewPlayerRating> {
             adjustments: vec![adjustment]
         });
     }
-    
+
     ratings
 }
 
 fn initial_rating(player: &NewPlayer, ruleset: &Ruleset) -> f64 {
     let ruleset_data = player.ruleset_data.iter().find(|rd| rd.ruleset == *ruleset);
-    let rank = ruleset_data
-        .and_then(|rd| rd.earliest_global_rank.or_else(|| rd.global_rank));
+    let rank = ruleset_data.and_then(|rd| rd.earliest_global_rank.or_else(|| rd.global_rank));
 
     match rank {
         Some(r) => mu_from_rank(r, *ruleset),
@@ -108,21 +107,19 @@ fn std_dev_from_ruleset(ruleset: Ruleset) -> f64 {
 
 #[cfg(test)]
 mod tests {
+    use super::create_initial_ratings;
     use crate::{
         model::{
             constants::{DEFAULT_VOLATILITY, OSU_RATING_CEILING, OSU_RATING_FLOOR},
-            db_structs::Player,
+            db_structs::{NewPlayer, Player},
             rating_utils::{mu_from_rank, std_dev_from_ruleset},
             structures::{
                 rating_adjustment_type::RatingAdjustmentType,
                 ruleset::Ruleset::{Catch, Mania4k, Mania7k, Osu, Taiko}
             }
         },
-        utils::test_utils::generate_player_rating
+        utils::test_utils::{generate_player_rating, generate_ruleset_data}
     };
-    use crate::model::db_structs::NewPlayer;
-    use crate::utils::test_utils::generate_ruleset_data;
-    use super::create_initial_ratings;
 
     #[test]
     fn test_ruleset_stddev_osu() {
@@ -205,7 +202,7 @@ mod tests {
                 generate_ruleset_data(Taiko, Some(1), None),
                 generate_ruleset_data(Catch, Some(1), None),
                 generate_ruleset_data(Mania4k, Some(1), None),
-                generate_ruleset_data(Mania7k, Some(1), None)
+                generate_ruleset_data(Mania7k, Some(1), None),
             ]
         };
 
@@ -239,7 +236,7 @@ mod tests {
                 generate_ruleset_data(Taiko, Some(1), None),
                 generate_ruleset_data(Catch, Some(1), None),
                 generate_ruleset_data(Mania4k, Some(1), None),
-                generate_ruleset_data(Mania7k, Some(1), None)
+                generate_ruleset_data(Mania7k, Some(1), None),
             ]
         };
 
@@ -271,31 +268,46 @@ mod tests {
         );
 
         let initial_ratings = create_initial_ratings(&player);
-        
+
         let actual_osu = initial_ratings.iter().find(|r| r.ruleset == Osu).unwrap();
         let actual_taiko = initial_ratings.iter().find(|r| r.ruleset == Taiko).unwrap();
         let actual_catch = initial_ratings.iter().find(|r| r.ruleset == Catch).unwrap();
         let actual_mania4k = initial_ratings.iter().find(|r| r.ruleset == Mania4k).unwrap();
         let actual_mania7k = initial_ratings.iter().find(|r| r.ruleset == Mania7k).unwrap();
-        
+
         assert_eq!(expected_osu.rating, actual_osu.rating);
         assert_eq!(expected_osu.volatility, actual_osu.volatility);
-        assert_eq!(expected_osu.adjustment_type, actual_osu.adjustments.first().unwrap().adjustment_type);
+        assert_eq!(
+            expected_osu.adjustment_type,
+            actual_osu.adjustments.first().unwrap().adjustment_type
+        );
 
         assert_eq!(expected_taiko.rating, actual_taiko.rating);
         assert_eq!(expected_taiko.volatility, actual_taiko.volatility);
-        assert_eq!(expected_taiko.adjustment_type, actual_taiko.adjustments.first().unwrap().adjustment_type);
-        
+        assert_eq!(
+            expected_taiko.adjustment_type,
+            actual_taiko.adjustments.first().unwrap().adjustment_type
+        );
+
         assert_eq!(expected_catch.rating, actual_catch.rating);
         assert_eq!(expected_catch.volatility, actual_catch.volatility);
-        assert_eq!(expected_catch.adjustment_type, actual_catch.adjustments.first().unwrap().adjustment_type);
-        
+        assert_eq!(
+            expected_catch.adjustment_type,
+            actual_catch.adjustments.first().unwrap().adjustment_type
+        );
+
         assert_eq!(expected_mania4k.rating, actual_mania4k.rating);
         assert_eq!(expected_mania4k.volatility, actual_mania4k.volatility);
-        assert_eq!(expected_mania4k.adjustment_type, actual_mania4k.adjustments.first().unwrap().adjustment_type);
-        
+        assert_eq!(
+            expected_mania4k.adjustment_type,
+            actual_mania4k.adjustments.first().unwrap().adjustment_type
+        );
+
         assert_eq!(expected_mania7k.rating, actual_mania7k.rating);
         assert_eq!(expected_mania7k.volatility, actual_mania7k.volatility);
-        assert_eq!(expected_mania7k.adjustment_type, actual_mania7k.adjustments.first().unwrap().adjustment_type);
+        assert_eq!(
+            expected_mania7k.adjustment_type,
+            actual_mania7k.adjustments.first().unwrap().adjustment_type
+        );
     }
 }
