@@ -10,6 +10,8 @@ use crate::{
     },
     utils::test_utils::generate_country_mapping
 };
+use crate::model::db_structs::{NewPlayerRating, NewRatingAdjustment};
+use crate::model::structures::rating_adjustment_type::RatingAdjustmentType::Decay;
 
 /// Tracks decay activity for players
 pub struct DecayTracker;
@@ -38,50 +40,66 @@ impl DecayTracker {
         ruleset: Ruleset,
         d: DateTime<FixedOffset>
     ) {
-        let rating = rating_tracker.get_rating(player_id, ruleset);
+        let player_rating = rating_tracker.get_rating(player_id, ruleset);
 
-        if rating.is_none() || !is_decay_possible(rating.unwrap().rating) {
+        if player_rating.is_none() {
             return;
         }
 
-        let last_play_time = rating.unwrap().timestamp;
-        if d < last_play_time {
+        let mut clone_rating = player_rating.unwrap().clone();
+
+        if !is_decay_possible(clone_rating.rating) {
             return;
         }
 
-        let decay_weeks = Self::n_decay(d, last_play_time);
+        // Extract the last adjustment to avoid multiple calls to unwrap and allow mutable borrow later
+        let last_adjustment = match clone_rating.adjustments.last() {
+            Some(adjustment) => adjustment,
+            None => return, // Early return if no last adjustment
+        };
+
+        if d < last_adjustment.timestamp {
+            return;
+        }
+
+        let decay_weeks = Self::n_decay(d, last_adjustment.timestamp);
         if decay_weeks < 1 {
             return;
         }
 
-        let mut old_rating = rating.unwrap().rating;
-        let mut old_volatility = rating.unwrap().volatility;
+        let mut old_rating = clone_rating.rating;
+        let mut old_volatility = clone_rating.volatility;
 
         let mut decay_ratings = Vec::new();
         for i in 0..decay_weeks {
             // Increment time by 7 days for each decay application (this is for accurate timestamps)
-            let simulated_time = last_play_time + chrono::Duration::days(i * 7);
+            let simulated_time = last_adjustment.timestamp + chrono::Duration::days(i * 7);
             let new_rating = decay_rating(old_rating);
             let new_volatility = decay_volatility(old_volatility);
 
             old_rating = new_rating;
             old_volatility = new_volatility;
 
-            decay_ratings.push(PlayerRating {
+            decay_ratings.push(NewRatingAdjustment {
                 player_id,
-                ruleset,
-                rating: new_rating,
-                volatility: new_volatility,
-                percentile: 0.0,
-                global_rank: 0,
-                country_rank: 0,
+                player_rating_id: 0,  // Presumably updated later
+                match_id: None,
+                rating_before: old_rating,
+                rating_after: new_rating,
+                volatility_before: old_volatility,
+                volatility_after: new_volatility,
                 timestamp: simulated_time,
-                adjustment_type: RatingAdjustmentType::Decay
+                adjustment_type: Decay,
             });
         }
 
-        let country_mapping = generate_country_mapping(&decay_ratings, country);
-        rating_tracker.insert_or_update(&decay_ratings, &country_mapping, None)
+        // Now that all immutable borrows are done, mutably borrow adjustments and extend
+        let mut new_adjustments = clone_rating.adjustments.clone();
+        new_adjustments.extend(decay_ratings);
+        clone_rating.adjustments = new_adjustments;
+
+        let country_mapping = generate_country_mapping(&vec![clone_rating.clone()], country);
+        rating_tracker.insert_or_update(&vec![clone_rating], &country_mapping);
     }
 
     /// Returns the number of decay applications that should be applied.
@@ -161,17 +179,12 @@ mod tests {
             .fixed_offset();
         let d = t.add(chrono::Duration::days(decay_days as i64));
 
-        let player_ratings = vec![generate_player_rating(
-            1,
-            initial_rating,
-            initial_volatility,
-            RatingAdjustmentType::Initial,
-            Some(t)
-        )];
+        let player_ratings = vec![generate_player_rating(1, ruleset, 
+                                                         initial_rating, initial_volatility, 1)];
 
         let country = "US";
         let country_mapping = generate_country_mapping(&player_ratings, country);
-        rating_tracker.insert_or_update(&player_ratings, &country_mapping, None);
+        rating_tracker.insert_or_update(&player_ratings, &country_mapping);
 
         let decay_tracker = DecayTracker;
         decay_tracker.decay(&mut rating_tracker, 1, country, ruleset, d);

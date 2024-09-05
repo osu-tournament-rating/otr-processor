@@ -16,6 +16,7 @@ use openskill::{
     rating::{default_gamma, Rating}
 };
 use statrs::statistics::Statistics;
+use crate::model::db_structs::NewPlayerRating;
 
 pub struct OtrModel {
     pub model: PlackettLuce,
@@ -24,10 +25,10 @@ pub struct OtrModel {
 }
 
 impl OtrModel {
-    pub fn new(initial_player_ratings: &[PlayerRating], country_mapping: &HashMap<i32, String>) -> OtrModel {
+    pub fn new(initial_player_ratings: &[NewPlayerRating], country_mapping: &HashMap<i32, String>) -> OtrModel {
         let mut tracker = RatingTracker::new();
 
-        tracker.insert_or_update(initial_player_ratings, country_mapping, None);
+        tracker.insert_or_update(initial_player_ratings, country_mapping);
 
         OtrModel {
             rating_tracker: tracker,
@@ -36,7 +37,7 @@ impl OtrModel {
         }
     }
 
-    pub fn process(&mut self, matches: &[Match]) -> Vec<RatingPost> {
+    pub fn process(&mut self, matches: &[Match]) {
         let progress_bar = progress_bar(matches.len() as u64, "Processing match data".to_string());
         for m in matches {
             self.process_match(m);
@@ -45,8 +46,6 @@ impl OtrModel {
                 progress_bar.clone().unwrap().inc(1);
             }
         }
-
-        self.rating_tracker.get_post_data()
     }
 
     /// # o!TR Match Processing
