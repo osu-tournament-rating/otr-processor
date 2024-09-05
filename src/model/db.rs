@@ -116,17 +116,33 @@ impl DbClient {
             )
             .await
             .unwrap();
+        
+        let mut current_player_id = -1;
         for row in rows {
-            let player = NewPlayer {
-                id: row.get("player_id"),
-                username: row.get("username"),
-                ruleset_data: RulesetData {
-                    ruleset: Ruleset::try_from(row.get::<_, i32>("ruleset")).unwrap(),
-                    global_rank: row.get("global_rank"),
-                    earliest_global_rank: row.get("earliest_global_rank"),
-                },
-            };
-            players.push(player);
+            if row.get::<_, i32>("player_id") != current_player_id {
+                let player = NewPlayer {
+                    id: row.get("player_id"),
+                    username: row.get("username"),
+                    country: row.get("country"),
+                    ruleset_data: vec![RulesetData {
+                        ruleset: Ruleset::try_from(row.get::<_, i32>("ruleset")).unwrap(),
+                        global_rank: row.get("global_rank"),
+                        earliest_global_rank: row.get("earliest_global_rank")
+                    }]
+                };
+                players.push(player);
+                current_player_id = row.get("player_id");
+            } else {
+                players
+                    .last_mut()
+                    .unwrap()
+                    .ruleset_data
+                    .push(RulesetData {
+                        ruleset: Ruleset::try_from(row.get::<_, i32>("ruleset")).unwrap(),
+                        global_rank: row.get("global_rank"),
+                        earliest_global_rank: row.get("earliest_global_rank")
+                    });
+            }
         }
 
         println!("{}", to_string(&players).unwrap());

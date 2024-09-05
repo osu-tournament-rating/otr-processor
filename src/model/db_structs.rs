@@ -127,8 +127,9 @@ pub struct MatchPagedResult {
 #[derive(Debug, Clone, Serialize)]
 pub struct NewPlayer {
     pub id: i32,
-    pub username: String,
-    pub ruleset_data: RulesetData
+    pub username: Option<String>,
+    pub country: Option<String>,
+    pub ruleset_data: Vec<RulesetData>
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -168,24 +169,32 @@ pub struct NewGameScore {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct NewPlayerRating {
+    /// Unknown until insertion
     pub id: i32,
     pub player_id: i32,
     pub ruleset: Ruleset,
     pub rating: f64,
     pub volatility: f64,
+    /// Updated once at the very end of processing
     pub percentile: f64,
+    /// Updated once at the very end of processing
     pub global_rank: i32,
+    /// Updated once at the very end of processing
     pub country_rank: i32,
-    pub adjustments: Vec<NewRatingAdjustments>
+    /// The adjustments that led to this rating object
+    pub adjustments: Vec<NewRatingAdjustment>
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct NewRatingAdjustments {
-    pub adjustment_type: RatingAdjustmentType,
+pub struct NewRatingAdjustment {
+    pub player_id: i32,
+    /// Unknown until parent is inserted
+    pub player_rating_id: i32,
     pub match_id: Option<i32>,
     pub rating_before: f64,
     pub rating_after: f64,
     pub volatility_before: f64,
     pub volatility_after: f64,
-    pub timestamp: DateTime<FixedOffset>
+    pub timestamp: DateTime<FixedOffset>,
+    pub adjustment_type: RatingAdjustmentType
 }

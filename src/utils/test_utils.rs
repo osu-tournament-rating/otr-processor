@@ -7,6 +7,7 @@ use crate::model::{
     db_structs::{Game, Match, PlayerPlacement, PlayerRating},
     structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
 };
+use crate::model::db_structs::RulesetData;
 
 pub fn generate_player_rating(
     id: i32,
@@ -26,6 +27,14 @@ pub fn generate_player_rating(
         country_rank: 0,
         timestamp: timestamp.unwrap_or(default_time),
         adjustment_type
+    }
+}
+
+pub fn generate_ruleset_data(ruleset: Ruleset, global_rank: Option<i32>, earliest_global_rank: Option<i32>) -> RulesetData {
+    RulesetData {
+        ruleset,
+        global_rank,
+        earliest_global_rank
     }
 }
 
