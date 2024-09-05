@@ -13,7 +13,10 @@ pub fn initial_ratings(players: &[NewPlayer]) -> HashMap<(i32, Ruleset), NewPlay
     let mut map = HashMap::new();
 
     for player in players {
-        let adjustments = create_initial_ratings(player);
+        let initial_ratings = create_initial_ratings(player);
+        for rating in initial_ratings {
+            map.insert((player.id, rating.ruleset), rating);
+        }
     }
 
     map

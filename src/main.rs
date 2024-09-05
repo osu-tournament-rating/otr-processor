@@ -12,6 +12,8 @@ async fn main() {
 
     // 1. Generate initial ratings
     let ratings = initial_ratings(&players);
+    
+    println!("{:?}", ratings);
 }
 
 async fn client() -> DbClient {
