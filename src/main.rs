@@ -3,7 +3,7 @@ use std::env;
 
 #[tokio::main]
 async fn main() {
-    let mut client: DbClient = client().await;
+    let client: DbClient = client().await;
 
     // Fetch matches and players for processing
     let matches = client.get_matches().await;

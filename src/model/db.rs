@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use crate::model::{
     db_structs::{NewGame, NewGameScore, NewMatch, NewPlayer, RulesetData},
     structures::ruleset::Ruleset
@@ -35,7 +36,7 @@ impl DbClient {
             t.id AS tournament_id, t.name AS tournament_name, t.ruleset AS tournament_ruleset,
             m.id AS match_id, m.name AS match_name, m.start_time AS match_start_time, m.end_time AS match_end_time, m.tournament_id AS match_tournament_id,
             g.id AS game_id, g.ruleset AS game_ruleset, g.start_time AS game_start_time, g.end_time AS game_end_time, g.match_id AS game_match_id,
-            gs.id AS game_score_id, gs.player_id AS game_score_player_id, gs.game_id AS game_score_game_id, gs.score AS game_score_score
+            gs.id AS game_score_id, gs.player_id AS game_score_player_id, gs.game_id AS game_score_game_id, gs.score AS game_score_score, gs.placement AS game_score_placement
         FROM tournaments t
         LEFT JOIN matches m ON t.id = m.tournament_id
         LEFT JOIN games g ON m.id = g.match_id
@@ -84,7 +85,8 @@ impl DbClient {
                     id: row.get("game_score_id"),
                     player_id: row.get("game_score_player_id"),
                     game_id: row.get("game_score_game_id"),
-                    score: row.get("game_score_score")
+                    score: row.get("game_score_score"),
+                    placement: row.get("game_score_placement")
                 };
                 matches
                     .last_mut()
@@ -97,7 +99,7 @@ impl DbClient {
                 current_game_score_id = row.get("game_score_id");
             }
         }
-
+        
         println!("{}", to_string(&matches).unwrap());
         matches
     }
@@ -143,7 +145,7 @@ impl DbClient {
         println!("{}", to_string(&players).unwrap());
         players
     }
-
+    
     // Access the underlying Client
     pub fn client(&self) -> Arc<Client> {
         Arc::clone(&self.client)

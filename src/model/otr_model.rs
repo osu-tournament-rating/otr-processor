@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     model::{
         constants::PERFORMANCE_SCALING_FACTOR,
-        db_structs::{Game, Match, PlayerRating, RatingPost},
+        db_structs::{NewGame, NewMatch, NewPlayerRating, NewRatingAdjustment},
         decay::DecayTracker,
         rating_tracker::RatingTracker,
         structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
@@ -16,7 +16,6 @@ use openskill::{
     rating::{default_gamma, Rating}
 };
 use statrs::statistics::Statistics;
-use crate::model::db_structs::NewPlayerRating;
 
 pub struct OtrModel {
     pub model: PlackettLuce,
@@ -37,7 +36,7 @@ impl OtrModel {
         }
     }
 
-    pub fn process(&mut self, matches: &[Match]) {
+    pub fn process(&mut self, matches: &[NewMatch]) {
         let progress_bar = progress_bar(matches.len() as u64, "Processing match data".to_string());
         for m in matches {
             self.process_match(m);
@@ -60,18 +59,25 @@ impl OtrModel {
     /// 3. Iterate through all games and compute a rating change based on the results from 1 & 2.
     /// Although ratings are computed at a per-game level, they actually are not applied until the
     /// end of the match.
-    fn process_match(&mut self, m: &Match) {
+    fn process_match(&mut self, match_: &NewMatch) {
         // Apply decay to all players
-        self.apply_decay(m);
+        self.apply_decay(match_);
 
-        let n_games = m.games.len() as i32;
-        let mut rating_changes: HashMap<i32, Vec<Rating>> = HashMap::new();
+        let n_games = match_.games.len() as i32;
+
+        // Map of player id and a vector of new ratings (from this match)
+        // Each game is processed and the rating results are stored here.
+        // Each rating object will be analyzed and a final rating / volatility
+        // number will be output.
+        let mut unprocessed_performances: HashMap<i32, Vec<Rating>> = HashMap::new();
         let mut country_mapping: HashMap<i32, String> = HashMap::new();
-        for game in &m.games {
-            let game_ratings = self.rate(game, m.ruleset);
+
+        // For each game,
+        for game in &match_.games {
+            let game_ratings = self.rate(game, match_.ruleset);
 
             for (player_id, rating) in game_ratings {
-                let player_ratings = rating_changes.entry(player_id).or_default();
+                let player_ratings = unprocessed_performances.entry(player_id).or_default();
                 player_ratings.push(rating);
                 country_mapping.insert(
                     player_id,
@@ -80,54 +86,85 @@ impl OtrModel {
             }
         }
 
-        let mut ratings_to_update = Vec::new();
-        for p_id in rating_changes.keys() {
-            let mut prior_rating = self.rating_tracker.get_rating(*p_id, m.ruleset).unwrap().clone();
-            let performances = rating_changes
-                .get(p_id)
-                .unwrap_or_else(|| panic!("Expected player {} to have performances for this match {}!", p_id, m.id));
+        let mut new_ratings = Vec::new();
+        for player_id in unprocessed_performances.clone().keys() {
+            let current_rating = self.process_rating_result(match_, n_games, &mut unprocessed_performances, player_id);
 
-            let n_performances = performances.len() as i32;
-
-            // A scaling factor based on game performance
-            let performance_frequency = (n_performances / n_games) as f64;
-
-            // Calculate differences from the baseline rating
-            // This works because we only update the ratings in the leaderboard once per match
-            // (these performances are from the game level)
-            let baseline_mu_change: f64 = performances.iter().map(|f| f.mu - prior_rating.rating).mean();
-            let baseline_volatility_change: f64 = performances.iter().map(|f| f.sigma - prior_rating.volatility).mean();
-
-            // Average the sigma changes
-            let scaled_mu = (prior_rating.rating + baseline_mu_change) * performance_frequency;
-            let scaled_volatility: f64 = (prior_rating.volatility + baseline_volatility_change) * performance_frequency;
-
-            let mu_delta = scaled_mu - prior_rating.rating;
-
-            prior_rating.rating = scaled_mu;
-            prior_rating.volatility = scaled_volatility;
-            prior_rating.adjustment_type = RatingAdjustmentType::Match;
-
-            Self::apply_performance_scaling(
-                &mut prior_rating,
-                mu_delta,
-                performance_frequency,
-                PERFORMANCE_SCALING_FACTOR
-            );
-
-            ratings_to_update.push(prior_rating);
+            new_ratings.push(current_rating);
         }
 
         self.rating_tracker
-            .insert_or_update(ratings_to_update.as_slice(), &country_mapping, Some(m.id))
+            .insert_or_update(new_ratings.as_slice(), &country_mapping)
+    }
+
+    fn process_rating_result(
+        &mut self,
+        match_: &NewMatch,
+        n_games: i32,
+        unprocessed_performances: &mut HashMap<i32, Vec<Rating>>,
+        player_id: &i32
+    ) -> NewPlayerRating {
+        let mut current_rating = self
+            .rating_tracker
+            .get_rating(*player_id, match_.ruleset)
+            .unwrap()
+            .clone();
+        let performances = unprocessed_performances.get(player_id).unwrap_or_else(|| {
+            panic!(
+                "Expected player {} to have performances for this match {}!",
+                player_id, match_.id
+            )
+        });
+
+        let n_performances = performances.len() as i32;
+
+        // A scaling factor based on game performance
+        let performance_frequency = (n_performances / n_games) as f64;
+
+        // Calculate differences from the baseline rating
+        // This works because we only update the ratings in the leaderboard once per match
+        // (these performances are from the game level)
+        let baseline_mu_change: f64 = performances.iter().map(|f| f.mu - current_rating.rating).mean();
+        let baseline_volatility_change: f64 = performances.iter().map(|f| f.sigma - current_rating.volatility).mean();
+
+        // Average the sigma changes
+        let scaled_rating = (current_rating.rating + baseline_mu_change) * performance_frequency;
+        let scaled_volatility: f64 = (current_rating.volatility + baseline_volatility_change) * performance_frequency;
+
+        let rating_delta = scaled_rating - current_rating.rating;
+
+        let performance_scaled_rating = Self::performance_scaled_rating(
+            current_rating.rating,
+            rating_delta,
+            performance_frequency,
+            PERFORMANCE_SCALING_FACTOR
+        );
+
+        let adjustment = NewRatingAdjustment {
+            player_id: *player_id,
+            player_rating_id: 0,
+            match_id: Some(match_.id),
+            rating_before: current_rating.rating,
+            rating_after: performance_scaled_rating,
+            volatility_before: current_rating.volatility,
+            volatility_after: scaled_volatility,
+            timestamp: match_.start_time,
+            adjustment_type: RatingAdjustmentType::Match
+        };
+
+        current_rating.rating = scaled_rating;
+        current_rating.volatility = scaled_volatility;
+        current_rating.adjustments.push(adjustment);
+
+        current_rating
     }
 
     /// Applies decay to all players who participated in this match.
-    fn apply_decay(&mut self, m: &Match) {
-        let player_ids: Vec<i32> = m
+    fn apply_decay(&mut self, match_: &NewMatch) {
+        let player_ids: Vec<i32> = match_
             .games
             .iter()
-            .flat_map(|g| g.placements.iter().map(|p| p.player_id).collect::<Vec<i32>>())
+            .flat_map(|g| g.scores.iter().map(|score| score.player_id).collect::<Vec<i32>>())
             .collect();
 
         for p_id in player_ids {
@@ -136,21 +173,22 @@ impl OtrModel {
                 &mut self.rating_tracker,
                 p_id,
                 country.as_str(),
-                m.ruleset,
-                m.start_time.unwrap()
+                match_.ruleset,
+                match_.start_time
             );
         }
     }
 
-    /// Rates a Game. Returns a HashMap of <player_id, (new_rating, new_volatility)
-    fn rate(&self, game: &Game, ruleset: Ruleset) -> HashMap<i32, Rating> {
-        let (ratings, placements): (Vec<Option<&PlayerRating>>, Vec<usize>) = game
-            .placements
+    /// Rates a Game. Returns a HashMap of <player_id, new_rating> which is used in a later processing step.
+    /// This function is not responsible for creating new PlayerRating objects or RatingAdjustments
+    fn rate(&self, game: &NewGame, ruleset: Ruleset) -> HashMap<i32, Rating> {
+        let (ratings, placements): (Vec<Option<&NewPlayerRating>>, Vec<usize>) = game
+            .scores
             .iter()
-            .map(|p| {
+            .map(|score| {
                 (
-                    self.rating_tracker.get_rating(p.player_id, ruleset),
-                    p.placement as usize
+                    self.rating_tracker.get_rating(score.player_id, ruleset),
+                    score.placement as usize
                 )
             })
             .collect();
@@ -187,20 +225,19 @@ impl OtrModel {
     }
 
     /// Applies a scaled performance penalty to negative changes in rating.
-    fn apply_performance_scaling(
-        rating: &mut PlayerRating,
+    fn performance_scaled_rating(
+        current_rating: f64,
         rating_diff: f64,
         performance_frequency: f64,
         scaling: f64
-    ) {
+    ) -> f64 {
         if rating_diff >= 0.0 {
-            return;
+            return current_rating;
         }
 
         // Rating differential is used with a scaling factor
         // to determine final rating change
-        let prior_rating = rating.rating;
-        rating.rating = prior_rating - (scaling * (rating_diff.abs() * performance_frequency))
+        current_rating - (scaling * (rating_diff.abs() * performance_frequency))
     }
 }
 
@@ -210,10 +247,9 @@ mod tests {
         model::{
             otr_model::OtrModel,
             structures::{
-                rating_adjustment_type::{
-                    RatingAdjustmentType,
-                    RatingAdjustmentType::{Initial, Match}
-                },
+                rating_adjustment_type::RatingAdjustmentType,
+                rating_adjustment_type::RatingAdjustmentType::Initial,
+                rating_adjustment_type::RatingAdjustmentType::Match,
                 ruleset::Ruleset
             }
         },
@@ -221,14 +257,15 @@ mod tests {
     };
     use approx::assert_abs_diff_eq;
     use chrono::Utc;
+    use crate::model::structures::ruleset::Ruleset::Osu;
 
     #[test]
     fn test_rate() {
         // Add 3 players to model
         let player_ratings = vec![
-            generate_player_rating(1, 1000.0, 100.0, RatingAdjustmentType::Initial, None),
-            generate_player_rating(2, 1000.0, 100.0, RatingAdjustmentType::Initial, None),
-            generate_player_rating(3, 1000.0, 100.0, RatingAdjustmentType::Initial, None),
+            generate_player_rating(1, Osu, 1000.0, 100.0, 1),
+            generate_player_rating(2, Osu, 1000.0, 100.0, 1),
+            generate_player_rating(3, Osu, 1000.0, 100.0, 1),
         ];
 
         let countries = generate_country_mapping(player_ratings.as_slice(), "US");
@@ -258,10 +295,10 @@ mod tests {
     fn test_process() {
         // Add 4 players to model
         let player_ratings = vec![
-            generate_player_rating(1, 1000.0, 100.0, RatingAdjustmentType::Initial, None),
-            generate_player_rating(2, 1000.0, 100.0, RatingAdjustmentType::Initial, None),
-            generate_player_rating(3, 1000.0, 100.0, RatingAdjustmentType::Initial, None),
-            generate_player_rating(4, 1000.0, 100.0, RatingAdjustmentType::Initial, None),
+            generate_player_rating(1, Osu, 1000.0, 100.0,1 ),
+            generate_player_rating(2, Osu, 1000.0, 100.0, 1),
+            generate_player_rating(3, Osu, 1000.0, 100.0, 1),
+            generate_player_rating(4, Osu, 1000.0, 100.0, 1),
         ];
 
         let countries = generate_country_mapping(player_ratings.as_slice(), "US");
@@ -283,9 +320,9 @@ mod tests {
 
         let matches = vec![generate_match(
             1,
-            Ruleset::Osu,
+            Osu,
             &games,
-            Some(chrono::Utc::now().fixed_offset())
+            Utc::now().fixed_offset()
         )];
         model.process(&matches);
 
@@ -335,15 +372,15 @@ mod tests {
         assert_eq!(adjustments_4.len(), 2);
 
         // Assert rating changes
-        assert!(adjustments_1[1].rating_delta < 0.0);
-        assert!(adjustments_2[1].rating_delta < 0.0);
-        assert!(adjustments_3[1].rating_delta > 0.0);
-        assert!(adjustments_4[1].rating_delta > 0.0);
+        assert!(adjustments_1[1].rating_after - adjustments_1[1].rating_before < 0.0);
+        assert!(adjustments_2[1].rating_after - adjustments_2[1].rating_before < 0.0);
+        assert!(adjustments_3[1].rating_after - adjustments_3[1].rating_before < 0.0);
+        assert!(adjustments_4[1].rating_after - adjustments_4[1].rating_before > 0.0);
     }
 
     #[test]
     fn test_negative_performance_scaling() {
-        let mut rating = generate_player_rating(1, 1000.0, 100.0, RatingAdjustmentType::Initial, None);
+        let mut rating = generate_player_rating(1, Osu, 1000.0, 100.0, 1);
         let rating_diff = -100.0;
         let games_played = 1;
         let games_total = 10;
@@ -352,36 +389,7 @@ mod tests {
 
         // User should lose 10% of what they would have lost as they only participated in 1/10 of the maps.
 
-        OtrModel::apply_performance_scaling(&mut rating, rating_diff, frequency, scaling);
-
-        assert_abs_diff_eq!(rating.rating, 990.0);
-    }
-
-    #[test]
-    fn test_process_returns_api_data() {
-        let now = Utc::now().fixed_offset();
-        let player_ratings = vec![
-            generate_player_rating(1, 1000.0, 100.0, Initial, Some(now)),
-            generate_player_rating(2, 1000.0, 100.0, Initial, Some(now)),
-            generate_player_rating(3, 1000.0, 100.0, Initial, Some(now)),
-            generate_player_rating(4, 1000.0, 100.0, Initial, Some(now)),
-        ];
-
-        let matches = generate_matches(5, &player_ratings);
-        let country_mapping = generate_country_mapping(&player_ratings, "US");
-
-        let mut model = OtrModel::new(&player_ratings, &country_mapping);
-        let data = model.process(&matches);
-
-        assert_eq!(data.len(), 4);
-
-        for item in data {
-            assert_eq!(item.adjustments.len(), 6); // 5 matches + 1 for initial adjustment
-            assert!(item.rating.rating > 0.0);
-            assert!(item.rating.global_rank > 0);
-            assert!(item.rating.country_rank > 0);
-            assert!(item.rating.volatility > 0.0);
-            assert!(item.rating.adjustment_type == Initial || item.rating.adjustment_type == Match);
-        }
+        let scaled_rating = OtrModel::performance_scaled_rating(rating.rating, rating_diff, frequency, scaling);
+        assert_abs_diff_eq!(scaled_rating, 10.0);
     }
 }

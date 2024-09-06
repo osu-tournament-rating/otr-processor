@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use crate::model::structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset};
 use chrono::{DateTime, FixedOffset, Utc};
 use serde::{Deserialize, Serialize};
@@ -164,7 +165,8 @@ pub struct NewGameScore {
     pub id: i32,
     pub player_id: i32,
     pub game_id: i32,
-    pub score: i32
+    pub score: i32,
+    pub placement: i32
 }
 
 #[derive(Debug, Clone, Serialize)]

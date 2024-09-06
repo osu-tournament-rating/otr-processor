@@ -1,14 +1,12 @@
 use chrono::{DateTime, FixedOffset};
 
-use crate::model::db_structs::NewRatingAdjustment;
-use crate::model::structures::rating_adjustment_type::RatingAdjustmentType::Decay;
 use crate::{
     model::{
         constants,
-        constants::DECAY_DAYS
-        ,
+        constants::DECAY_DAYS,
+        db_structs::NewRatingAdjustment,
         rating_tracker::RatingTracker,
-        structures::ruleset::Ruleset
+        structures::{rating_adjustment_type::RatingAdjustmentType::Decay, ruleset::Ruleset}
     },
     utils::test_utils::generate_country_mapping
 };
@@ -55,7 +53,7 @@ impl DecayTracker {
         // Extract the last adjustment to avoid multiple calls to unwrap and allow mutable borrow later
         let last_adjustment = match clone_rating.adjustments.last() {
             Some(adjustment) => adjustment,
-            None => return, // Early return if no last adjustment
+            None => return // Early return if no last adjustment
         };
 
         if d < last_adjustment.timestamp {
@@ -82,14 +80,14 @@ impl DecayTracker {
 
             decay_ratings.push(NewRatingAdjustment {
                 player_id,
-                player_rating_id: 0,  // Presumably updated later
+                player_rating_id: 0, // Presumably updated later
                 match_id: None,
                 rating_before: old_rating,
                 rating_after: new_rating,
                 volatility_before: old_volatility,
                 volatility_after: new_volatility,
                 timestamp: simulated_time,
-                adjustment_type: Decay,
+                adjustment_type: Decay
             });
         }
 
@@ -179,8 +177,13 @@ mod tests {
             .fixed_offset();
         let d = t.add(chrono::Duration::days(decay_days as i64));
 
-        let player_ratings = vec![generate_player_rating(1, ruleset, 
-                                                         initial_rating, initial_volatility, 1)];
+        let player_ratings = vec![generate_player_rating(
+            1,
+            ruleset,
+            initial_rating,
+            initial_volatility,
+            1
+        )];
 
         let country = "US";
         let country_mapping = generate_country_mapping(&player_ratings, country);

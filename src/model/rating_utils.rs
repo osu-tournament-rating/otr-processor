@@ -120,6 +120,7 @@ mod tests {
         },
         utils::test_utils::{generate_player_rating, generate_ruleset_data}
     };
+    use crate::model::structures::ruleset::Ruleset;
 
     #[test]
     fn test_ruleset_stddev_osu() {
@@ -247,24 +248,24 @@ mod tests {
         let rating_mania7k = mu_from_rank(1, Mania7k);
 
         let expected_osu =
-            generate_player_rating(0, rating_osu, DEFAULT_VOLATILITY, RatingAdjustmentType::Initial, None);
+            generate_player_rating(0, Osu, rating_osu, DEFAULT_VOLATILITY, 1);
         let expected_taiko =
-            generate_player_rating(0, rating_taiko, DEFAULT_VOLATILITY, RatingAdjustmentType::Initial, None);
+            generate_player_rating(0, Taiko, rating_taiko, DEFAULT_VOLATILITY, 1);
         let expected_catch =
-            generate_player_rating(0, rating_catch, DEFAULT_VOLATILITY, RatingAdjustmentType::Initial, None);
+            generate_player_rating(0, Catch, rating_catch, DEFAULT_VOLATILITY, 1);
         let expected_mania4k = generate_player_rating(
             0,
+            Mania4k,
             rating_mania4k,
             DEFAULT_VOLATILITY,
-            RatingAdjustmentType::Initial,
-            None
+            1
         );
         let expected_mania7k = generate_player_rating(
             0,
+            Mania7k,
             rating_mania7k,
             DEFAULT_VOLATILITY,
-            RatingAdjustmentType::Initial,
-            None
+            1
         );
 
         let initial_ratings = create_initial_ratings(&player);
@@ -278,35 +279,35 @@ mod tests {
         assert_eq!(expected_osu.rating, actual_osu.rating);
         assert_eq!(expected_osu.volatility, actual_osu.volatility);
         assert_eq!(
-            expected_osu.adjustment_type,
+            expected_osu.adjustments.first().unwrap().adjustment_type,
             actual_osu.adjustments.first().unwrap().adjustment_type
         );
 
         assert_eq!(expected_taiko.rating, actual_taiko.rating);
         assert_eq!(expected_taiko.volatility, actual_taiko.volatility);
         assert_eq!(
-            expected_taiko.adjustment_type,
+            expected_taiko.adjustments.first().unwrap().adjustment_type,
             actual_taiko.adjustments.first().unwrap().adjustment_type
         );
 
         assert_eq!(expected_catch.rating, actual_catch.rating);
         assert_eq!(expected_catch.volatility, actual_catch.volatility);
         assert_eq!(
-            expected_catch.adjustment_type,
+            expected_catch.adjustments.first().unwrap().adjustment_type,
             actual_catch.adjustments.first().unwrap().adjustment_type
         );
 
         assert_eq!(expected_mania4k.rating, actual_mania4k.rating);
         assert_eq!(expected_mania4k.volatility, actual_mania4k.volatility);
         assert_eq!(
-            expected_mania4k.adjustment_type,
+            expected_mania4k.adjustments.first().unwrap().adjustment_type,
             actual_mania4k.adjustments.first().unwrap().adjustment_type
         );
 
         assert_eq!(expected_mania7k.rating, actual_mania7k.rating);
         assert_eq!(expected_mania7k.volatility, actual_mania7k.volatility);
         assert_eq!(
-            expected_mania7k.adjustment_type,
+            expected_mania7k.adjustments.first().unwrap().adjustment_type,
             actual_mania7k.adjustments.first().unwrap().adjustment_type
         );
     }

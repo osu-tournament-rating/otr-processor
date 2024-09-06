@@ -7,10 +7,9 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 
 use crate::model::{
-    db_structs::{PlayerRating, RatingAdjustment, RatingPost},
+    db_structs::{NewPlayerRating, NewRatingAdjustment, PlayerRating, RatingAdjustment, RatingPost},
     structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
 };
-use crate::model::db_structs::{NewPlayerRating, NewRatingAdjustment};
 
 pub struct RatingTracker {
     // Global leaderboard, used as a reference for country leaderboards also.
@@ -48,11 +47,7 @@ impl RatingTracker {
 
     /// Inserts or updates a set of player ratings into the tracker.
     /// Ratings are assumed to be inserted on a per-match basis.
-    pub fn insert_or_update(
-        &mut self,
-        ratings: &[NewPlayerRating],
-        country_mapping: &HashMap<i32, String>
-    ) {
+    pub fn insert_or_update(&mut self, ratings: &[NewPlayerRating], country_mapping: &HashMap<i32, String>) {
         let countries: HashSet<&String> = country_mapping.values().collect();
 
         for country in countries {
@@ -95,11 +90,7 @@ impl RatingTracker {
     }
 
     pub fn get_rating_adjustments(&self, player_id: i32, ruleset: Ruleset) -> Option<Vec<NewRatingAdjustment>> {
-        if let Some(rating) = self.get_rating(player_id, ruleset) {
-            Some(rating.adjustments.clone())
-        } else {
-            None
-        }
+        self.get_rating(player_id, ruleset).map(|rating| rating.adjustments.clone())
     }
 
     /// Sorts and updates the PlayerRating global_rank, country_rank, and percentile values.
@@ -185,15 +176,15 @@ impl RatingTracker {
 mod tests {
     use crate::{
         model::{
+            constants::{DEFAULT_RATING, DEFAULT_VOLATILITY},
             rating_tracker::RatingTracker,
             structures::rating_adjustment_type::RatingAdjustmentType,
             structures::ruleset::Ruleset,
+            structures::ruleset::Ruleset::Osu,
         },
         utils::test_utils::{generate_country_mapping, generate_player_rating}
     };
     use approx::assert_abs_diff_eq;
-    use crate::model::constants::{DEFAULT_RATING, DEFAULT_VOLATILITY};
-    use crate::model::structures::ruleset::Ruleset::Osu;
 
     #[test]
     fn test_track_player_initial_rating_and_match_update() {
@@ -207,7 +198,7 @@ mod tests {
             DEFAULT_VOLATILITY,
             1
         )];
-        
+
         let country_mapping = generate_country_mapping(player_ratings.as_slice(), "US");
         rating_tracker.insert_or_update(&player_ratings, &country_mapping);
 
@@ -218,13 +209,7 @@ mod tests {
         assert_eq!(player_rating.adjustments.len(), 1); // First adjustment contains the default adjustment
 
         // Update player with a new match result - overrides previous value
-        let player_ratings = vec![generate_player_rating(
-            1,
-            Ruleset::Osu,
-            200.0,
-            85.0,
-            2
-        )];
+        let player_ratings = vec![generate_player_rating(1, Ruleset::Osu, 200.0, 85.0, 2)];
         rating_tracker.insert_or_update(&player_ratings, &country_mapping);
 
         // Verify the player was updated with the new rating and has an adjustment
@@ -240,7 +225,7 @@ mod tests {
         let mut rating_tracker = RatingTracker::new();
         let player_ratings = vec![
             generate_player_rating(1, Osu, 100.0, 100.0, 1),
-            generate_player_rating(2, Osu, 200.0, 100.0, 1)
+            generate_player_rating(2, Osu, 200.0, 100.0, 1),
         ];
 
         let country_mapping = generate_country_mapping(&player_ratings, "US");
@@ -273,7 +258,7 @@ mod tests {
         let mut rating_tracker = RatingTracker::new();
         let player_ratings = vec![
             generate_player_rating(1, Osu, 100.0, 100.0, 1),
-            generate_player_rating(2, Osu, 200.0, 100.0, 1)
+            generate_player_rating(2, Osu, 200.0, 100.0, 1),
         ];
         let country_mapping = generate_country_mapping(&player_ratings, "US");
 
@@ -324,7 +309,7 @@ mod tests {
         let mut rating_tracker = RatingTracker::new();
         let player_ratings = vec![
             generate_player_rating(1, Osu, 100.0, 100.0, 1),
-            generate_player_rating(2, Osu, 200.0, 100.0, 1)
+            generate_player_rating(2, Osu, 200.0, 100.0, 1),
         ];
         let country_mapping = generate_country_mapping(&player_ratings, "US");
 
