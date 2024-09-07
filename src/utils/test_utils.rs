@@ -3,10 +3,12 @@ use std::{collections::HashMap, ops::Add};
 
 use crate::model::{
     constants::{DEFAULT_RATING, DEFAULT_VOLATILITY},
-    db_structs::{Game, Match, NewPlayerRating, NewRatingAdjustment, PlayerPlacement, PlayerRating, RulesetData},
+    db_structs::{
+        NewGame, NewGameScore, NewMatch, NewPlayerRating, NewRatingAdjustment, PlayerPlacement
+        , RulesetData
+    },
     structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
 };
-use crate::model::db_structs::{NewGame, NewGameScore, NewMatch};
 
 pub fn generate_player_rating(
     player_id: i32,
@@ -79,22 +81,23 @@ pub fn generate_placement(player_id: i32, placement: i32) -> PlayerPlacement {
 }
 
 pub fn generate_game(id: i32, placements: &[PlayerPlacement]) -> NewGame {
-    let scores = placements.iter().map(|p| {
-        NewGameScore {
+    let scores = placements
+        .iter()
+        .map(|p| NewGameScore {
             id: 0,
             player_id: p.player_id,
             game_id: id,
             score: 0,
             placement: p.placement
-        }
-    }).collect();
+        })
+        .collect();
 
     NewGame {
         id,
         ruleset: Ruleset::Osu,
         start_time: Default::default(),
         end_time: Default::default(),
-        scores,
+        scores
     }
 }
 
@@ -114,7 +117,7 @@ pub fn generate_match(id: i32, ruleset: Ruleset, games: &[NewGame], start_time: 
         ruleset,
         start_time,
         end_time: start_time.add(chrono::Duration::hours(1)),
-        games: games.to_vec(),
+        games: games.to_vec()
     }
 }
 

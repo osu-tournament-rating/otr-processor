@@ -58,7 +58,7 @@ fn create_initial_ratings(player: &NewPlayer) -> Vec<NewPlayerRating> {
 
 fn initial_rating(player: &NewPlayer, ruleset: &Ruleset) -> f64 {
     let ruleset_data = player.ruleset_data.iter().find(|rd| rd.ruleset == *ruleset);
-    let rank = ruleset_data.and_then(|rd| rd.earliest_global_rank.or_else(|| rd.global_rank));
+    let rank = ruleset_data.and_then(|rd| rd.earliest_global_rank.or(rd.global_rank));
 
     match rank {
         Some(r) => mu_from_rank(r, *ruleset),
@@ -244,26 +244,11 @@ mod tests {
         let rating_mania4k = mu_from_rank(1, Mania4k);
         let rating_mania7k = mu_from_rank(1, Mania7k);
 
-        let expected_osu =
-            generate_player_rating(0, Osu, rating_osu, DEFAULT_VOLATILITY, 1);
-        let expected_taiko =
-            generate_player_rating(0, Taiko, rating_taiko, DEFAULT_VOLATILITY, 1);
-        let expected_catch =
-            generate_player_rating(0, Catch, rating_catch, DEFAULT_VOLATILITY, 1);
-        let expected_mania4k = generate_player_rating(
-            0,
-            Mania4k,
-            rating_mania4k,
-            DEFAULT_VOLATILITY,
-            1
-        );
-        let expected_mania7k = generate_player_rating(
-            0,
-            Mania7k,
-            rating_mania7k,
-            DEFAULT_VOLATILITY,
-            1
-        );
+        let expected_osu = generate_player_rating(0, Osu, rating_osu, DEFAULT_VOLATILITY, 1);
+        let expected_taiko = generate_player_rating(0, Taiko, rating_taiko, DEFAULT_VOLATILITY, 1);
+        let expected_catch = generate_player_rating(0, Catch, rating_catch, DEFAULT_VOLATILITY, 1);
+        let expected_mania4k = generate_player_rating(0, Mania4k, rating_mania4k, DEFAULT_VOLATILITY, 1);
+        let expected_mania7k = generate_player_rating(0, Mania7k, rating_mania7k, DEFAULT_VOLATILITY, 1);
 
         let initial_ratings = create_initial_ratings(&player);
 

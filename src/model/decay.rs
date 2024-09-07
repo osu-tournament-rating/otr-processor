@@ -77,7 +77,7 @@ impl DecayTracker {
 
             old_rating = new_rating;
             old_volatility = new_volatility;
-            
+
             clone_rating.rating = new_rating;
             clone_rating.volatility = new_volatility;
 
@@ -149,13 +149,13 @@ mod tests {
         model::{
             constants,
             constants::{DECAY_DAYS, MULTIPLIER},
+            db_structs::{NewPlayerRating, NewRatingAdjustment},
             decay::{decay_rating, decay_volatility, is_decay_possible, DecayTracker},
             rating_tracker::RatingTracker,
             structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
         },
         utils::test_utils::{generate_country_mapping, generate_player_rating}
     };
-    use crate::model::db_structs::{NewPlayerRating, NewRatingAdjustment};
 
     #[test]
     fn test_decay_default_days() {
@@ -189,19 +189,17 @@ mod tests {
             percentile: 0.0,
             global_rank: 1,
             country_rank: 1,
-            adjustments: vec![
-                NewRatingAdjustment {
-                    player_id: 1,
-                    player_rating_id: 1,
-                    match_id: None,
-                    rating_before: 0.0,
-                    rating_after: initial_rating,
-                    volatility_before: 0.0,
-                    volatility_after: initial_volatility,
-                    timestamp: t,
-                    adjustment_type: RatingAdjustmentType::Initial
-                }
-            ]
+            adjustments: vec![NewRatingAdjustment {
+                player_id: 1,
+                player_rating_id: 1,
+                match_id: None,
+                rating_before: 0.0,
+                rating_after: initial_rating,
+                volatility_before: 0.0,
+                volatility_after: initial_volatility,
+                timestamp: t,
+                adjustment_type: RatingAdjustmentType::Initial
+            }]
         }];
 
         let country = "US";

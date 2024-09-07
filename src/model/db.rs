@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use crate::model::{
     db_structs::{NewGame, NewGameScore, NewMatch, NewPlayer, RulesetData},
     structures::ruleset::Ruleset
@@ -99,7 +98,7 @@ impl DbClient {
                 current_game_score_id = row.get("game_score_id");
             }
         }
-        
+
         println!("{}", to_string(&matches).unwrap());
         matches
     }
@@ -145,7 +144,7 @@ impl DbClient {
         println!("{}", to_string(&players).unwrap());
         players
     }
-    
+
     // Access the underlying Client
     pub fn client(&self) -> Arc<Client> {
         Arc::clone(&self.client)

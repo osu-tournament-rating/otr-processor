@@ -7,8 +7,8 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 
 use crate::model::{
-    db_structs::{NewPlayerRating, NewRatingAdjustment, PlayerRating, RatingAdjustment, RatingPost},
-    structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
+    db_structs::{NewPlayerRating, NewRatingAdjustment},
+    structures::ruleset::Ruleset
 };
 
 pub struct RatingTracker {
@@ -88,7 +88,8 @@ impl RatingTracker {
     }
 
     pub fn get_rating_adjustments(&self, player_id: i32, ruleset: Ruleset) -> Option<Vec<NewRatingAdjustment>> {
-        self.get_rating(player_id, ruleset).map(|rating| rating.adjustments.clone())
+        self.get_rating(player_id, ruleset)
+            .map(|rating| rating.adjustments.clone())
     }
 
     /// Sorts and updates the PlayerRating global_rank, country_rank, and percentile values.
@@ -176,9 +177,10 @@ mod tests {
         model::{
             constants::{DEFAULT_RATING, DEFAULT_VOLATILITY},
             rating_tracker::RatingTracker,
-            structures::rating_adjustment_type::RatingAdjustmentType,
-            structures::ruleset::Ruleset,
-            structures::ruleset::Ruleset::Osu,
+            structures::{
+                rating_adjustment_type::RatingAdjustmentType,
+                ruleset::{Ruleset, Ruleset::Osu}
+            }
         },
         utils::test_utils::{generate_country_mapping, generate_player_rating}
     };
@@ -189,13 +191,7 @@ mod tests {
         let mut rating_tracker = RatingTracker::new();
 
         // Initialize new player
-        let player_ratings = vec![generate_player_rating(
-            1,
-            Osu,
-            DEFAULT_RATING,
-            DEFAULT_VOLATILITY,
-            1
-        )];
+        let player_ratings = vec![generate_player_rating(1, Osu, DEFAULT_RATING, DEFAULT_VOLATILITY, 1)];
 
         let country_mapping = generate_country_mapping(player_ratings.as_slice(), "US");
         rating_tracker.insert_or_update(&player_ratings, &country_mapping);

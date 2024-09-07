@@ -1,8 +1,6 @@
-use std::collections::HashMap;
 use crate::model::structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset};
-use chrono::{DateTime, FixedOffset, Utc};
+use chrono::{DateTime, FixedOffset};
 use serde::{Deserialize, Serialize};
-use tokio_postgres::types::Timestamp;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
