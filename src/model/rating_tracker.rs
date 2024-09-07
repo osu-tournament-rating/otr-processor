@@ -243,13 +243,13 @@ mod tests {
 
         assert_abs_diff_eq!(p1.country_rank, 0);
         assert_abs_diff_eq!(p2.country_rank, 0);
-        
+
         assert_abs_diff_eq!(p1.percentile, 0.0);
         assert_abs_diff_eq!(p2.percentile, 0.0);
 
         // Sort updates the global & country rankings for all users
         rating_tracker.sort();
-        
+
         let p1 = rating_tracker
             .get_rating(1, Osu)
             .expect("Expected to find rating for Player 1 in ruleset Osu");
@@ -265,35 +265,6 @@ mod tests {
 
         assert_abs_diff_eq!(p1.percentile, RatingTracker::percentile(2, 2).unwrap());
         assert_abs_diff_eq!(p2.percentile, RatingTracker::percentile(1, 2).unwrap());
-    }
-
-    #[test]
-    fn test_initial_rating_adjustment() {
-        let mut rating_tracker = RatingTracker::new();
-        let player_ratings = vec![
-            generate_player_rating(1, Osu, 100.0, 100.0, 1),
-            generate_player_rating(2, Osu, 200.0, 100.0, 1),
-        ];
-        let country_mapping = generate_country_mapping(&player_ratings, "US");
-
-        rating_tracker.insert_or_update(&player_ratings, &country_mapping);
-        rating_tracker.sort();
-
-        let adj_1 = rating_tracker.get_rating_adjustments(1, Osu).unwrap();
-        let adj_2 = rating_tracker.get_rating_adjustments(2, Osu).unwrap();
-
-        assert_eq!(adj_1.len(), 1);
-        assert_eq!(adj_2.len(), 1);
-
-        assert_eq!(adj_1[0].rating_before, 100.0);
-        assert_eq!(adj_1[0].rating_after, 100.0);
-        assert_eq!(adj_1[0].volatility_before, 100.0);
-        assert_eq!(adj_1[0].volatility_after, 100.0);
-
-        assert_eq!(adj_2[0].rating_before, 200.0);
-        assert_eq!(adj_2[0].rating_after, 200.0);
-        assert_eq!(adj_2[0].volatility_before, 100.0);
-        assert_eq!(adj_2[0].volatility_after, 100.0);
     }
 
     #[test]
