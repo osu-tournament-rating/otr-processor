@@ -111,11 +111,15 @@ impl OtrModel {
                 player_id, match_.id
             )
         });
+        
+        if n_games == 0 {
+            panic!("Expected at least one game in the match!");
+        }
 
         let n_performances = performances.len() as i32;
 
         // A scaling factor based on game performance
-        let performance_frequency = (n_performances / n_games) as f64;
+        let performance_frequency = n_performances as f64 / n_games as f64;
 
         // Calculate differences from the baseline rating
         // This works because we only update the ratings in the leaderboard once per match
@@ -135,6 +139,10 @@ impl OtrModel {
             performance_frequency,
             PERFORMANCE_SCALING_FACTOR
         );
+        
+        if scaled_volatility == 0.0 {
+            panic!("Scaled volatility is 0.0 for player {} in match {}", player_id, match_.id);
+        }
 
         let adjustment = RatingAdjustment {
             player_id: *player_id,
