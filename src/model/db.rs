@@ -99,7 +99,6 @@ impl DbClient {
             }
         }
 
-        println!("{}", to_string(&matches).unwrap());
         matches
     }
 
@@ -141,7 +140,6 @@ impl DbClient {
             }
         }
 
-        println!("{}", to_string(&players).unwrap());
         players
     }
 

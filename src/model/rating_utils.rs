@@ -6,20 +6,17 @@ use crate::model::{
 };
 use chrono::{DateTime, FixedOffset};
 use constants::OSU_RATING_FLOOR;
-use std::collections::HashMap;
 use strum::IntoEnumIterator;
 
-pub fn initial_ratings(players: &[Player]) -> HashMap<(i32, Ruleset), PlayerRating> {
-    let mut map = HashMap::new();
+pub fn initial_ratings(players: &[Player]) -> Vec<PlayerRating> {
+    let mut ratings = Vec::new();
 
     for player in players {
         let initial_ratings = create_initial_ratings(player);
-        for rating in initial_ratings {
-            map.insert((player.id, rating.ruleset), rating);
-        }
+        ratings.extend(initial_ratings);
     }
 
-    map
+    ratings
 }
 
 fn create_initial_ratings(player: &Player) -> Vec<PlayerRating> {

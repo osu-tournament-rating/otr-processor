@@ -9,6 +9,7 @@ use crate::model::{
     },
     structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
 };
+use crate::model::db_structs::Player;
 
 pub fn generate_player_rating(
     player_id: i32,
@@ -101,10 +102,19 @@ pub fn generate_game(id: i32, placements: &[PlayerPlacement]) -> Game {
     }
 }
 
-pub fn generate_country_mapping(player_ratings: &[PlayerRating], country: &str) -> HashMap<i32, String> {
+pub fn generate_country_mapping_player_ratings(player_ratings: &[PlayerRating], country: &str) -> HashMap<i32, String> {
     let mut mapping = HashMap::new();
     for p in player_ratings {
         mapping.insert(p.player_id, country.to_string());
+    }
+
+    mapping
+}
+
+pub fn generate_country_mapping_players(players: &[Player]) -> HashMap<i32, String> {
+    let mut mapping: HashMap<i32, String> = HashMap::new();
+    for p in players {
+        mapping.insert(p.id, p.country.clone().unwrap_or_default());
     }
 
     mapping

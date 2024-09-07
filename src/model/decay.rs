@@ -8,7 +8,7 @@ use crate::{
         rating_tracker::RatingTracker,
         structures::{rating_adjustment_type::RatingAdjustmentType::Decay, ruleset::Ruleset}
     },
-    utils::test_utils::generate_country_mapping
+    utils::test_utils::generate_country_mapping_player_ratings
 };
 
 /// Tracks decay activity for players
@@ -98,7 +98,7 @@ impl DecayTracker {
         new_adjustments.extend(decay_ratings);
         clone_rating.adjustments = new_adjustments;
 
-        let country_mapping = generate_country_mapping(&[clone_rating.clone()], country);
+        let country_mapping = generate_country_mapping_player_ratings(&[clone_rating.clone()], country);
         rating_tracker.insert_or_update(&[clone_rating], &country_mapping);
     }
 
@@ -154,7 +154,7 @@ mod tests {
             rating_tracker::RatingTracker,
             structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
         },
-        utils::test_utils::{generate_country_mapping, generate_player_rating}
+        utils::test_utils::{generate_country_mapping_player_ratings, generate_player_rating}
     };
 
     #[test]
@@ -203,7 +203,7 @@ mod tests {
         }];
 
         let country = "US";
-        let country_mapping = generate_country_mapping(&player_ratings, country);
+        let country_mapping = generate_country_mapping_player_ratings(&player_ratings, country);
         rating_tracker.insert_or_update(&player_ratings, &country_mapping);
 
         let decay_tracker = DecayTracker;

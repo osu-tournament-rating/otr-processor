@@ -182,7 +182,7 @@ mod tests {
                 ruleset::{Ruleset, Ruleset::Osu}
             }
         },
-        utils::test_utils::{generate_country_mapping, generate_player_rating}
+        utils::test_utils::{generate_country_mapping_player_ratings, generate_player_rating}
     };
     use approx::assert_abs_diff_eq;
 
@@ -193,7 +193,7 @@ mod tests {
         // Initialize new player
         let player_ratings = vec![generate_player_rating(1, Osu, DEFAULT_RATING, DEFAULT_VOLATILITY, 1)];
 
-        let country_mapping = generate_country_mapping(player_ratings.as_slice(), "US");
+        let country_mapping = generate_country_mapping_player_ratings(player_ratings.as_slice(), "US");
         rating_tracker.insert_or_update(&player_ratings, &country_mapping);
 
         // Verify the player was added to the leaderboard and does not have data for another ruleset
@@ -222,7 +222,7 @@ mod tests {
             generate_player_rating(2, Osu, 200.0, 100.0, 1),
         ];
 
-        let country_mapping = generate_country_mapping(&player_ratings, "US");
+        let country_mapping = generate_country_mapping_player_ratings(&player_ratings, "US");
         rating_tracker.insert_or_update(&player_ratings, &country_mapping);
 
         let p1 = rating_tracker
@@ -292,7 +292,7 @@ mod tests {
             generate_player_rating(1, Osu, 100.0, 100.0, 1),
             generate_player_rating(2, Osu, 200.0, 100.0, 1),
         ];
-        let country_mapping = generate_country_mapping(&player_ratings, "US");
+        let country_mapping = generate_country_mapping_player_ratings(&player_ratings, "US");
 
         rating_tracker.insert_or_update(&player_ratings, &country_mapping);
         assert_eq!(rating_tracker.country_change_tracker.len(), 1);

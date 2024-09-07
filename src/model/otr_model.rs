@@ -269,7 +269,7 @@ mod tests {
             generate_player_rating(3, Osu, 1000.0, 100.0, 1),
         ];
 
-        let countries = generate_country_mapping(player_ratings.as_slice(), "US");
+        let countries = generate_country_mapping_player_ratings(player_ratings.as_slice(), "US");
 
         let model = OtrModel::new(player_ratings.as_slice(), &countries);
 
@@ -302,7 +302,7 @@ mod tests {
             generate_player_rating(4, Osu, 1000.0, 100.0, 1),
         ];
 
-        let countries = generate_country_mapping(player_ratings.as_slice(), "US");
+        let countries = generate_country_mapping_player_ratings(player_ratings.as_slice(), "US");
         let mut model = OtrModel::new(player_ratings.as_slice(), &countries);
 
         let placements = vec![
