@@ -219,7 +219,7 @@ mod tests {
     }
 
     #[test]
-    fn test_leaderboard_update() {
+    fn test_sort() {
         let mut rating_tracker = RatingTracker::new();
         let player_ratings = vec![
             generate_player_rating(1, Osu, 100.0, 100.0, 1),
@@ -229,16 +229,32 @@ mod tests {
         let country_mapping = generate_country_mapping(&player_ratings, "US");
         rating_tracker.insert_or_update(&player_ratings, &country_mapping);
 
-        // Assert sorted by rating descending
-        assert_eq!(rating_tracker.leaderboard.len(), 2);
-        assert_abs_diff_eq!(rating_tracker.leaderboard.get_index(0).unwrap().1.rating, 200.0);
-        assert_abs_diff_eq!(rating_tracker.leaderboard.get_index(1).unwrap().1.rating, 100.0);
-
         let p1 = rating_tracker
-            .get_rating(1, Ruleset::Osu)
+            .get_rating(1, Osu)
+            .expect("Expected to find rating for Player 1 in ruleset Osu");
+
+        let p2 = rating_tracker
+            .get_rating(2, Osu)
+            .expect("Expected to find rating for Player 2 in ruleset Osu");
+
+        // Assert global ranks are different from what they should be
+        assert_abs_diff_eq!(p1.global_rank, 0);
+        assert_abs_diff_eq!(p2.global_rank, 0);
+
+        assert_abs_diff_eq!(p1.country_rank, 0);
+        assert_abs_diff_eq!(p2.country_rank, 0);
+        
+        assert_abs_diff_eq!(p1.percentile, 0.0);
+        assert_abs_diff_eq!(p2.percentile, 0.0);
+
+        // Sort updates the global & country rankings for all users
+        rating_tracker.sort();
+        
+        let p1 = rating_tracker
+            .get_rating(1, Osu)
             .expect("Expected to find rating for Player 1 in ruleset Osu");
         let p2 = rating_tracker
-            .get_rating(2, Ruleset::Osu)
+            .get_rating(2, Osu)
             .expect("Expected to find rating for Player 2 in ruleset Osu");
 
         assert_eq!(p1.global_rank, 2);
