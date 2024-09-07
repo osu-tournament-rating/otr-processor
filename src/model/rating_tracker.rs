@@ -40,6 +40,10 @@ impl RatingTracker {
             country_mapping: HashMap::new()
         }
     }
+    
+    pub fn get_all_ratings(&self) -> Vec<PlayerRating> {
+        self.leaderboard.values().cloned().collect()
+    }
 
     fn track_country(&mut self, country: &str) {
         self.country_change_tracker.insert(country.to_owned());

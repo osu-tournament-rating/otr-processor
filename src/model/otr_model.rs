@@ -36,17 +36,17 @@ impl OtrModel {
         }
     }
 
-    pub fn process(&mut self, matches: &[Match]) {
-        let progress_bar = progress_bar(matches.len() as u64, "Processing match data".to_string());
+    pub fn process(&mut self, matches: &[Match]) -> Vec<PlayerRating> {
+        let progress_bar = progress_bar(matches.len() as u64, "Processing match data".to_string()).unwrap();
         for m in matches {
             self.process_match(m);
-
-            if progress_bar.is_some() {
-                progress_bar.clone().unwrap().inc(1);
-            }
+            progress_bar.inc(1);
         }
+        
+        self.rating_tracker.sort();
+        self.rating_tracker.get_all_ratings()
     }
-
+    
     /// # o!TR Match Processing
     ///
     /// This function processes a single match but serves as the heart of where all rating changes

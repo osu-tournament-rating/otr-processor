@@ -10,6 +10,7 @@ async fn main() {
 
     // 1. Fetch matches and players for processing
     let matches = client.get_matches().await;
+
     let players = client.get_players().await;
 
     // 2. Generate initial ratings
@@ -22,7 +23,9 @@ async fn main() {
     let mut model = OtrModel::new(&initial_ratings, &country_mapping);
 
     // 5. Process matches
-    model.process(&matches);
+    let results = model.process(&matches);
+    
+    // 6. Save results in database
 }
 
 async fn client() -> DbClient {
