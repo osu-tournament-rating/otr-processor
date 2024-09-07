@@ -111,16 +111,12 @@ mod tests {
     use crate::{
         model::{
             constants::{DEFAULT_VOLATILITY, OSU_RATING_CEILING, OSU_RATING_FLOOR},
-            db_structs::{NewPlayer, Player},
+            db_structs::NewPlayer,
             rating_utils::{mu_from_rank, std_dev_from_ruleset},
-            structures::{
-                rating_adjustment_type::RatingAdjustmentType,
-                ruleset::Ruleset::{Catch, Mania4k, Mania7k, Osu, Taiko}
-            }
+            structures::ruleset::Ruleset::{Catch, Mania4k, Mania7k, Osu, Taiko}
         },
         utils::test_utils::{generate_player_rating, generate_ruleset_data}
     };
-    use crate::model::structures::ruleset::Ruleset;
 
     #[test]
     fn test_ruleset_stddev_osu() {
@@ -198,6 +194,7 @@ mod tests {
             id: 1,
             username: Some("Test".to_string()),
             country: None,
+            // Player who is rank 1 in everything. wow!
             ruleset_data: vec![
                 generate_ruleset_data(Osu, Some(1), None),
                 generate_ruleset_data(Taiko, Some(1), None),
