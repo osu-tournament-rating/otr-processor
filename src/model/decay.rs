@@ -1,16 +1,13 @@
 use chrono::{DateTime, FixedOffset};
 
-use crate::{
-    model::{
-        constants,
-        constants::DECAY_DAYS,
-        db_structs::RatingAdjustment,
-        rating_tracker::RatingTracker,
-        structures::{rating_adjustment_type::RatingAdjustmentType::Decay, ruleset::Ruleset}
-    },
-    utils::test_utils::generate_country_mapping_player_ratings
-};
 use crate::model::structures::rating_adjustment_type::RatingAdjustmentType::Initial;
+use crate::model::{
+    constants,
+    constants::DECAY_DAYS,
+    db_structs::RatingAdjustment,
+    rating_tracker::RatingTracker,
+    structures::{rating_adjustment_type::RatingAdjustmentType::Decay, ruleset::Ruleset}
+};
 
 /// Tracks decay activity for players
 pub struct DecayTracker;

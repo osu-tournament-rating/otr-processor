@@ -246,10 +246,9 @@ mod tests {
             db_structs::PlayerRating,
             otr_model::OtrModel,
             structures::{
-                rating_adjustment_type::{
-                    RatingAdjustmentType,
-                    RatingAdjustmentType::{Initial, Match}
-                },
+                rating_adjustment_type::RatingAdjustmentType,
+                rating_adjustment_type::RatingAdjustmentType::Initial,
+                rating_adjustment_type::RatingAdjustmentType::Match,
                 ruleset::{Ruleset, Ruleset::Osu}
             }
         },

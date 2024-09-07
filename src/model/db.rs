@@ -2,7 +2,6 @@ use crate::model::{
     db_structs::{Game, GameScore, Match, Player, RulesetData},
     structures::ruleset::Ruleset
 };
-use serde_json::to_string;
 use std::sync::Arc;
 use tokio_postgres::{Client, Error, NoTls};
 

@@ -1,9 +1,9 @@
-use std::{
-    cmp::Ordering,
-    collections::{HashMap, HashSet}
-};
 use indexmap::IndexMap;
 use itertools::Itertools;
+use std::{
+    cmp::Ordering,
+    collections::HashMap
+};
 
 use crate::model::{
     db_structs::{PlayerRating, RatingAdjustment},
@@ -115,7 +115,7 @@ impl RatingTracker {
         }
 
         // Update country rankings
-        for (_, mut country_leaderboard) in &self.country_leaderboards {
+        for (_, country_leaderboard) in &self.country_leaderboards {
             for ruleset in rulesets.iter() {
                 let mut country_rank = 1;
 
@@ -158,10 +158,9 @@ mod tests {
         model::{
             constants::{DEFAULT_RATING, DEFAULT_VOLATILITY},
             rating_tracker::RatingTracker,
-            structures::{
-                rating_adjustment_type::RatingAdjustmentType,
-                ruleset::{Ruleset, Ruleset::Osu}
-            }
+            structures::rating_adjustment_type::RatingAdjustmentType,
+            structures::ruleset::Ruleset,
+            structures::ruleset::Ruleset::Osu,
         },
         utils::test_utils::{generate_country_mapping_player_ratings, generate_player_rating}
     };
