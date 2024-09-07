@@ -96,8 +96,8 @@ impl DecayTracker {
         new_adjustments.extend(decay_ratings);
         clone_rating.adjustments = new_adjustments;
 
-        let country_mapping = generate_country_mapping(&vec![clone_rating.clone()], country);
-        rating_tracker.insert_or_update(&vec![clone_rating], &country_mapping);
+        let country_mapping = generate_country_mapping(&[clone_rating.clone()], country);
+        rating_tracker.insert_or_update(&[clone_rating], &country_mapping);
     }
 
     /// Returns the number of decay applications that should be applied.
@@ -153,18 +153,19 @@ mod tests {
         },
         utils::test_utils::{generate_country_mapping, generate_player_rating}
     };
+    use crate::model::db_structs::{NewPlayerRating, NewRatingAdjustment};
 
     #[test]
     fn test_decay_default_days() {
-        decay(DECAY_DAYS as i32)
+        decay_test(DECAY_DAYS as i32)
     }
 
     #[test]
     fn test_decay_many_days() {
-        decay(7000)
+        decay_test(7000)
     }
 
-    fn decay(decay_days: i32) {
+    fn decay_test(decay_days: i32) {
         let mut rating_tracker = RatingTracker::new();
         let ruleset = Ruleset::Osu;
 
@@ -177,13 +178,29 @@ mod tests {
             .fixed_offset();
         let d = t.add(chrono::Duration::days(decay_days as i64));
 
-        let player_ratings = vec![generate_player_rating(
-            1,
+        let player_ratings = vec![NewPlayerRating {
+            id: 1,
+            player_id: 1,
             ruleset,
-            initial_rating,
-            initial_volatility,
-            1
-        )];
+            rating: initial_rating,
+            volatility: initial_volatility,
+            percentile: 0.0,
+            global_rank: 1,
+            country_rank: 1,
+            adjustments: vec![
+                NewRatingAdjustment {
+                    player_id: 1,
+                    player_rating_id: 1,
+                    match_id: None,
+                    rating_before: 0.0,
+                    rating_after: initial_rating,
+                    volatility_before: 0.0,
+                    volatility_after: initial_volatility,
+                    timestamp: t,
+                    adjustment_type: RatingAdjustmentType::Initial
+                }
+            ]
+        }];
 
         let country = "US";
         let country_mapping = generate_country_mapping(&player_ratings, country);

@@ -390,6 +390,6 @@ mod tests {
         // User should lose 10% of what they would have lost as they only participated in 1/10 of the maps.
 
         let scaled_rating = OtrModel::performance_scaled_rating(rating.rating, rating_diff, frequency, scaling);
-        assert_abs_diff_eq!(scaled_rating, 10.0);
+        assert_abs_diff_eq!(scaled_rating, 990.0);
     }
 }
