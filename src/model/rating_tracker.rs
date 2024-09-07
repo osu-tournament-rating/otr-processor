@@ -1,9 +1,6 @@
 use indexmap::IndexMap;
 use itertools::Itertools;
-use std::{
-    cmp::Ordering,
-    collections::HashMap
-};
+use std::{cmp::Ordering, collections::HashMap};
 
 use crate::model::{
     db_structs::{PlayerRating, RatingAdjustment},
@@ -108,14 +105,17 @@ impl RatingTracker {
         for (player_id, country) in &self.country_mapping {
             for ruleset in rulesets.iter() {
                 if let Some(player_rating) = self.leaderboard.get(&(*player_id, *ruleset)) {
-                    let country_leaderboard = self.country_leaderboards.entry(country.clone()).or_insert_with(IndexMap::new);
+                    let country_leaderboard = self
+                        .country_leaderboards
+                        .entry(country.clone())
+                        .or_default();
                     country_leaderboard.insert((*player_id, *ruleset), player_rating.clone());
                 }
             }
         }
 
         // Update country rankings
-        for (_, country_leaderboard) in &self.country_leaderboards {
+        for country_leaderboard in self.country_leaderboards.values() {
             for ruleset in rulesets.iter() {
                 let mut country_rank = 1;
 
@@ -158,9 +158,10 @@ mod tests {
         model::{
             constants::{DEFAULT_RATING, DEFAULT_VOLATILITY},
             rating_tracker::RatingTracker,
-            structures::rating_adjustment_type::RatingAdjustmentType,
-            structures::ruleset::Ruleset,
-            structures::ruleset::Ruleset::Osu,
+            structures::{
+                rating_adjustment_type::RatingAdjustmentType,
+                ruleset::{Ruleset, Ruleset::Osu}
+            }
         },
         utils::test_utils::{generate_country_mapping_player_ratings, generate_player_rating}
     };

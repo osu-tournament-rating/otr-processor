@@ -3,13 +3,9 @@ use std::{collections::HashMap, ops::Add};
 
 use crate::model::{
     constants::{DEFAULT_RATING, DEFAULT_VOLATILITY},
-    db_structs::{
-        Game, GameScore, Match, PlayerRating, RatingAdjustment, PlayerPlacement
-        , RulesetData
-    },
+    db_structs::{Game, GameScore, Match, Player, PlayerPlacement, PlayerRating, RatingAdjustment, RulesetData},
     structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
 };
-use crate::model::db_structs::Player;
 
 pub fn generate_player_rating(
     player_id: i32,

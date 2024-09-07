@@ -43,11 +43,11 @@ impl OtrModel {
             self.process_match(m);
             progress_bar.inc(1);
         }
-        
+
         self.rating_tracker.sort();
         self.rating_tracker.get_all_ratings()
     }
-    
+
     /// # o!TR Match Processing
     ///
     /// This function processes a single match but serves as the heart of where all rating changes
@@ -89,8 +89,7 @@ impl OtrModel {
             new_ratings.push(current_rating);
         }
 
-        self.rating_tracker
-            .insert_or_update(new_ratings.as_slice())
+        self.rating_tracker.insert_or_update(new_ratings.as_slice())
     }
 
     fn process_rating_result(
@@ -111,7 +110,7 @@ impl OtrModel {
                 player_id, match_.id
             )
         });
-        
+
         if n_games == 0 {
             panic!("Expected at least one game in the match!");
         }
@@ -139,9 +138,12 @@ impl OtrModel {
             performance_frequency,
             PERFORMANCE_SCALING_FACTOR
         );
-        
+
         if scaled_volatility == 0.0 {
-            panic!("Scaled volatility is 0.0 for player {} in match {}", player_id, match_.id);
+            panic!(
+                "Scaled volatility is 0.0 for player {} in match {}",
+                player_id, match_.id
+            );
         }
 
         let adjustment = RatingAdjustment {
@@ -172,12 +174,8 @@ impl OtrModel {
             .collect();
 
         for p_id in player_ids {
-            self.decay_tracker.decay(
-                &mut self.rating_tracker,
-                p_id,
-                match_.ruleset,
-                match_.start_time
-            );
+            self.decay_tracker
+                .decay(&mut self.rating_tracker, p_id, match_.ruleset, match_.start_time);
         }
     }
 
@@ -219,9 +217,13 @@ impl OtrModel {
         for i in 0..ratings.len() {
             let p_rating = ratings.get(i).unwrap();
             let result = results.get(i).unwrap().clone();
-            
+
             if result.mu.is_nan() {
-                panic!("Rating is NaN for player {} in game {}", p_rating.unwrap().player_id, game.id);
+                panic!(
+                    "Rating is NaN for player {} in game {}",
+                    p_rating.unwrap().player_id,
+                    game.id
+                );
             }
 
             new_ratings.insert(p_rating.unwrap().player_id, result);
@@ -254,9 +256,10 @@ mod tests {
             db_structs::PlayerRating,
             otr_model::OtrModel,
             structures::{
-                rating_adjustment_type::RatingAdjustmentType,
-                rating_adjustment_type::RatingAdjustmentType::Initial,
-                rating_adjustment_type::RatingAdjustmentType::Match,
+                rating_adjustment_type::{
+                    RatingAdjustmentType,
+                    RatingAdjustmentType::{Initial, Match}
+                },
                 ruleset::{Ruleset, Ruleset::Osu}
             }
         },

@@ -7,7 +7,10 @@ use otr_processor::{
 
 fn process_matches(count_players: usize, count_matches: usize) {
     let initial_ratings = generate_default_initial_ratings(count_players.try_into().unwrap());
-    let matches = generate_matches(count_matches.try_into().unwrap(), &initial_ratings.iter().map(|r| r.player_id).collect_vec());
+    let matches = generate_matches(
+        count_matches.try_into().unwrap(),
+        &initial_ratings.iter().map(|r| r.player_id).collect_vec()
+    );
     let country_mapping = generate_country_mapping_player_ratings(initial_ratings.as_slice(), "US");
 
     let mut model = OtrModel::new(initial_ratings.as_slice(), &country_mapping);

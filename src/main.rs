@@ -1,8 +1,8 @@
-use otr_processor::model::otr_model::OtrModel;
-use otr_processor::model::{db::DbClient, rating_utils::initial_ratings};
-use otr_processor::utils::test_utils::generate_country_mapping_players;
-use std::collections::HashMap;
-use std::env;
+use otr_processor::{
+    model::{db::DbClient, otr_model::OtrModel, rating_utils::initial_ratings},
+    utils::test_utils::generate_country_mapping_players
+};
+use std::{collections::HashMap, env};
 
 #[tokio::main]
 async fn main() {
@@ -23,7 +23,6 @@ async fn main() {
 
     // 5. Process matches
     let results = model.process(&matches);
-    println!("{:?}", results);
     // 6. Save results in database
 }
 

@@ -1,12 +1,14 @@
 use chrono::{DateTime, FixedOffset};
 
-use crate::model::structures::rating_adjustment_type::RatingAdjustmentType::Initial;
 use crate::model::{
     constants,
     constants::DECAY_DAYS,
     db_structs::RatingAdjustment,
     rating_tracker::RatingTracker,
-    structures::{rating_adjustment_type::RatingAdjustmentType::Decay, ruleset::Ruleset}
+    structures::{
+        rating_adjustment_type::RatingAdjustmentType::{Decay, Initial},
+        ruleset::Ruleset
+    }
 };
 
 /// Tracks decay activity for players
@@ -52,7 +54,7 @@ impl DecayTracker {
             Some(adjustment) => adjustment,
             None => return // Early return if no last adjustment
         };
-        
+
         // Do not consider the adjustment time if it's the initial adjustment
         if last_adjustment.adjustment_type == Initial {
             return;
