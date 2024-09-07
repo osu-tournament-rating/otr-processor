@@ -35,7 +35,6 @@ impl DecayTracker {
         &self,
         rating_tracker: &mut RatingTracker,
         player_id: i32,
-        country: &str,
         ruleset: Ruleset,
         d: DateTime<FixedOffset>
     ) {
@@ -213,7 +212,7 @@ mod tests {
         rating_tracker.insert_or_update(&player_ratings);
 
         let decay_tracker = DecayTracker;
-        decay_tracker.decay(&mut rating_tracker, 1, country, ruleset, d);
+        decay_tracker.decay(&mut rating_tracker, 1, ruleset, d);
 
         let decayed_rating = rating_tracker.get_rating(1, ruleset).unwrap();
 

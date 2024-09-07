@@ -164,11 +164,9 @@ impl OtrModel {
             .collect();
 
         for p_id in player_ids {
-            let country = self.rating_tracker.get_country(p_id).unwrap().clone();
             self.decay_tracker.decay(
                 &mut self.rating_tracker,
                 p_id,
-                country.as_str(),
                 match_.ruleset,
                 match_.start_time
             );
