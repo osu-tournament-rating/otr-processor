@@ -30,7 +30,7 @@ fn create_initial_ratings(player: &NewPlayer) -> Vec<NewPlayerRating> {
         let rating = initial_rating(player, &ruleset);
         let adjustment = NewRatingAdjustment {
             player_id: player.id,
-            player_rating_id: 0, // ?
+            player_rating_id: 0,
             match_id: None,
             rating_before: 0.0,
             rating_after: rating,
