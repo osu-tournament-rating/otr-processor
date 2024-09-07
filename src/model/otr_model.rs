@@ -38,10 +38,17 @@ impl OtrModel {
     }
 
     pub fn process(&mut self, matches: &[Match]) -> Vec<PlayerRating> {
-        let progress_bar = progress_bar(matches.len() as u64, "Processing match data".to_string()).unwrap();
+        let progress_bar = progress_bar(matches.len() as u64, "Processing match data".to_string());
         for m in matches {
             self.process_match(m);
-            progress_bar.inc(1);
+
+            if let Some(pb) = &progress_bar {
+                pb.inc(1);
+            }
+        }
+
+        if let Some(pb) = &progress_bar {
+            pb.finish();
         }
 
         self.rating_tracker.sort();
@@ -251,15 +258,11 @@ impl OtrModel {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
+    pub use crate::{
         model::{
             db_structs::PlayerRating,
             otr_model::OtrModel,
             structures::{
-                rating_adjustment_type::{
-                    RatingAdjustmentType,
-                    RatingAdjustmentType::{Initial, Match}
-                },
                 ruleset::{Ruleset, Ruleset::Osu}
             }
         },

@@ -159,7 +159,6 @@ mod tests {
             constants::{DEFAULT_RATING, DEFAULT_VOLATILITY},
             rating_tracker::RatingTracker,
             structures::{
-                rating_adjustment_type::RatingAdjustmentType,
                 ruleset::{Ruleset, Ruleset::Osu}
             }
         },

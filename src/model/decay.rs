@@ -157,7 +157,7 @@ mod tests {
             rating_tracker::RatingTracker,
             structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
         },
-        utils::test_utils::{generate_country_mapping_player_ratings, generate_player_rating}
+        utils::test_utils::generate_country_mapping_player_ratings
     };
 
     #[test]
@@ -201,7 +201,8 @@ mod tests {
                 volatility_before: 0.0,
                 volatility_after: initial_volatility,
                 timestamp: t,
-                adjustment_type: RatingAdjustmentType::Initial
+                // We use match here because we do not consider initial ratings as markers for decay
+                adjustment_type: RatingAdjustmentType::Match
             }]
         }];
 
