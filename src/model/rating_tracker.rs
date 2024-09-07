@@ -38,6 +38,14 @@ impl RatingTracker {
     pub fn get_all_ratings(&self) -> Vec<PlayerRating> {
         self.leaderboard.values().cloned().collect()
     }
+    
+    pub fn get_leaderboard(&self, ruleset: Ruleset) -> Vec<PlayerRating> {
+        self.leaderboard
+            .iter()
+            .filter(|(_, player_rating)| player_rating.ruleset == ruleset)
+            .map(|(_, player_rating)| player_rating.clone())
+            .collect()
+    }
 
     pub fn set_country_mapping(&mut self, country_mapping: HashMap<i32, String>) {
         self.country_mapping = country_mapping;
@@ -134,6 +142,21 @@ impl RatingTracker {
                     country_rank += 1;
                 }
             }
+        }
+
+        // Calculate percentile, leaderboards are already sorted at this point
+        for ruleset in rulesets {
+            let mut lb = self.get_leaderboard(ruleset);
+            let enumerate = lb.iter_mut().enumerate();
+            let count = enumerate.len() as i32;
+            
+            for (i, player_rating) in enumerate {
+                // Update players with new data
+                let percentile = Self::percentile(i as i32 + 1, count).expect("Failed to calculate percentile");
+                player_rating.percentile = percentile;
+            }
+            
+            self.insert_or_update(lb.as_slice());
         }
     }
 

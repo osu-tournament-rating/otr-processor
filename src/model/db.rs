@@ -4,6 +4,7 @@ use crate::model::{
 };
 use std::sync::Arc;
 use tokio_postgres::{Client, Error, NoTls};
+use crate::utils::progress_utils::progress_bar;
 
 #[derive(Clone)]
 pub struct DbClient {
@@ -137,7 +138,19 @@ impl DbClient {
         players
     }
 
-    pub async fn save_results(&self, player_ratings: &[PlayerRating]) {}
+    pub async fn save_results(&self, player_ratings: &[PlayerRating]) {
+        self.truncate_rating_adjustments().await;
+        self.truncate_player_ratings().await;
+        
+        let p_bar = progress_bar(player_ratings.len() as u64, "Saving player ratings to db".to_string()).unwrap();
+        
+        for player_rating in player_ratings {
+            let parent_id = self.save_player_rating(player_rating).await;
+            self.save_rating_adjustments(parent_id, &player_rating.adjustments).await;
+            
+            p_bar.inc(1);
+        }
+    }
 
     /// After the parent PlayerRating is saved, all child RatingAdjustments should be saved
     async fn save_rating_adjustments(&self, parent_id: i32, adjustments: &Vec<RatingAdjustment>) {
@@ -167,7 +180,6 @@ impl DbClient {
 
     /// Saves the PlayerRating, returning the primary key
     async fn save_player_rating(&self, player_rating: &PlayerRating) -> i32 {
-        self.truncate_player_ratings().await;
         let query = "INSERT INTO player_ratings (player_id, ruleset, rating, volatility, \
         percentile, global_rank, country_rank) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id";
         let row = self
@@ -189,14 +201,17 @@ impl DbClient {
     }
 
     async fn truncate_player_ratings(&self) {
-        self.client.execute("TRUNCATE TABLE player_ratings", &[]).await.unwrap();
+        self.client.execute("TRUNCATE TABLE player_ratings CASCADE", &[]).await.unwrap();
+        println!("Truncated player_ratings table!");
     }
 
     async fn truncate_rating_adjustments(&self) {
         self.client
-            .execute("TRUNCATE TABLE rating_adjustments", &[])
+            .execute("TRUNCATE TABLE rating_adjustments CASCADE", &[])
             .await
             .unwrap();
+        
+        println!("Truncated player_ratings table!");
     }
 
     // Access the underlying Client
