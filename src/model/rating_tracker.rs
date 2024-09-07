@@ -62,9 +62,7 @@ impl RatingTracker {
         // Update the leaderboard with the current player rating information
         // (usually, this is done after a match is processed & ratings have been updated)
         for rating in ratings {
-            // Do not store clones of the adjustments
-            let mut cloned_rating = rating.clone();
-            cloned_rating.adjustments = Vec::new();
+            let cloned_rating = rating.clone();
 
             self.leaderboard
                 .insert((rating.player_id, rating.ruleset), cloned_rating.clone());
@@ -94,7 +92,7 @@ impl RatingTracker {
     }
 
     /// Sorts and updates the PlayerRating global_rank, country_rank, and percentile values.
-    fn sort(&mut self) {
+    pub fn sort(&mut self) {
         // Sort leaderboard by rating
         self.leaderboard
             .sort_by(|k1, v1, k2, v2| v2.rating.partial_cmp(&v1.rating).unwrap());
@@ -193,7 +191,7 @@ mod tests {
         // Initialize new player
         let player_ratings = vec![generate_player_rating(
             1,
-            Ruleset::Osu,
+            Osu,
             DEFAULT_RATING,
             DEFAULT_VOLATILITY,
             1

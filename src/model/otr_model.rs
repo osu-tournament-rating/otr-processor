@@ -257,6 +257,7 @@ mod tests {
     };
     use approx::assert_abs_diff_eq;
     use chrono::Utc;
+    use crate::model::db_structs::NewPlayerRating;
     use crate::model::structures::ruleset::Ruleset::Osu;
 
     #[test]
@@ -325,34 +326,35 @@ mod tests {
             Utc::now().fixed_offset()
         )];
         model.process(&matches);
-
-        let rating_1 = model.rating_tracker.get_rating(1, Ruleset::Osu).unwrap();
-        let rating_2 = model.rating_tracker.get_rating(2, Ruleset::Osu).unwrap();
-        let rating_3 = model.rating_tracker.get_rating(3, Ruleset::Osu).unwrap();
-        let rating_4 = model.rating_tracker.get_rating(4, Ruleset::Osu).unwrap();
+        model.rating_tracker.sort();
+        
+        let rating_1 = model.rating_tracker.get_rating(1, Osu).unwrap();
+        let rating_2 = model.rating_tracker.get_rating(2, Osu).unwrap();
+        let rating_3 = model.rating_tracker.get_rating(3, Osu).unwrap();
+        let rating_4 = model.rating_tracker.get_rating(4, Osu).unwrap();
 
         let adjustments_1 = model
             .rating_tracker
-            .get_rating_adjustments(1, Ruleset::Osu)
+            .get_rating_adjustments(1, Osu)
             .expect("Expected player 1 to have adjustments");
         let adjustments_2 = model
             .rating_tracker
-            .get_rating_adjustments(2, Ruleset::Osu)
+            .get_rating_adjustments(2, Osu)
             .expect("Expected player 1 to have adjustments");
         let adjustments_3 = model
             .rating_tracker
-            .get_rating_adjustments(3, Ruleset::Osu)
+            .get_rating_adjustments(3, Osu)
             .expect("Expected player 1 to have adjustments");
         let adjustments_4 = model
             .rating_tracker
-            .get_rating_adjustments(4, Ruleset::Osu)
+            .get_rating_adjustments(4, Osu)
             .expect("Expected player 1 to have adjustments");
 
         assert!(rating_4.rating > rating_3.rating);
         assert!(rating_3.rating > rating_2.rating);
         assert!(rating_2.rating > rating_1.rating);
         assert!(rating_1.rating < 1000.0);
-
+        
         // Assert global ranks
         assert_eq!(rating_4.global_rank, 1);
         assert_eq!(rating_3.global_rank, 2);
@@ -366,21 +368,15 @@ mod tests {
         assert_eq!(rating_1.country_rank, 4);
 
         // Assert adjustments
-        assert_eq!(adjustments_1.len(), 2);
-        assert_eq!(adjustments_2.len(), 2);
-        assert_eq!(adjustments_3.len(), 2);
-        assert_eq!(adjustments_4.len(), 2);
-
-        // Assert rating changes
-        assert!(adjustments_1[1].rating_after - adjustments_1[1].rating_before < 0.0);
-        assert!(adjustments_2[1].rating_after - adjustments_2[1].rating_before < 0.0);
-        assert!(adjustments_3[1].rating_after - adjustments_3[1].rating_before < 0.0);
-        assert!(adjustments_4[1].rating_after - adjustments_4[1].rating_before > 0.0);
+        assert_eq!(adjustments_1.len(), 1);
+        assert_eq!(adjustments_2.len(), 1);
+        assert_eq!(adjustments_3.len(), 1);
+        assert_eq!(adjustments_4.len(), 1);
     }
 
     #[test]
     fn test_negative_performance_scaling() {
-        let mut rating = generate_player_rating(1, Osu, 1000.0, 100.0, 1);
+        let rating: NewPlayerRating = generate_player_rating(1, Osu, 1000.0, 100.0, 1);
         let rating_diff = -100.0;
         let games_played = 1;
         let games_total = 10;

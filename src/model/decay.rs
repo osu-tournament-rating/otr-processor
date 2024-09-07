@@ -77,6 +77,9 @@ impl DecayTracker {
 
             old_rating = new_rating;
             old_volatility = new_volatility;
+            
+            clone_rating.rating = new_rating;
+            clone_rating.volatility = new_volatility;
 
             decay_ratings.push(NewRatingAdjustment {
                 player_id,
@@ -91,7 +94,6 @@ impl DecayTracker {
             });
         }
 
-        // Now that all immutable borrows are done, mutably borrow adjustments and extend
         let mut new_adjustments = clone_rating.adjustments.clone();
         new_adjustments.extend(decay_ratings);
         clone_rating.adjustments = new_adjustments;

@@ -18,7 +18,7 @@ pub fn generate_player_rating(
     if n_adjustments < 1 {
         panic!("Number of adjustments must be at least 1");
     }
-    
+
     let default_time = "2007-09-16T00:00:00-00:00".parse::<DateTime<FixedOffset>>().unwrap();
 
     let change_per_adjustment = rating / n_adjustments as f64;
@@ -88,7 +88,7 @@ pub fn generate_game(id: i32, placements: &[PlayerPlacement]) -> NewGame {
             placement: p.placement
         }
     }).collect();
-    
+
     NewGame {
         id,
         ruleset: Ruleset::Osu,
