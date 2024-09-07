@@ -10,7 +10,7 @@ pub struct PlayerPlacement {
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct NewPlayer {
+pub struct Player {
     pub id: i32,
     pub username: Option<String>,
     pub country: Option<String>,
@@ -25,27 +25,27 @@ pub struct RulesetData {
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct NewMatch {
+pub struct Match {
     pub id: i32,
     pub name: String,
     pub start_time: DateTime<FixedOffset>,
     pub end_time: DateTime<FixedOffset>,
     // Populated in the db query (uses the tournament's ruleset)
     pub ruleset: Ruleset,
-    pub games: Vec<NewGame>
+    pub games: Vec<Game>
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct NewGame {
+pub struct Game {
     pub id: i32,
     pub ruleset: Ruleset,
     pub start_time: DateTime<FixedOffset>,
     pub end_time: DateTime<FixedOffset>,
-    pub scores: Vec<NewGameScore>
+    pub scores: Vec<GameScore>
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct NewGameScore {
+pub struct GameScore {
     pub id: i32,
     pub player_id: i32,
     pub game_id: i32,
@@ -54,7 +54,7 @@ pub struct NewGameScore {
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct NewPlayerRating {
+pub struct PlayerRating {
     /// Unknown until insertion
     pub id: i32,
     pub player_id: i32,
@@ -68,11 +68,11 @@ pub struct NewPlayerRating {
     /// Updated once at the very end of processing
     pub country_rank: i32,
     /// The adjustments that led to this rating object
-    pub adjustments: Vec<NewRatingAdjustment>
+    pub adjustments: Vec<RatingAdjustment>
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct NewRatingAdjustment {
+pub struct RatingAdjustment {
     pub player_id: i32,
     /// Unknown until parent is inserted
     pub player_rating_id: i32,

@@ -4,7 +4,7 @@ use std::{collections::HashMap, ops::Add};
 use crate::model::{
     constants::{DEFAULT_RATING, DEFAULT_VOLATILITY},
     db_structs::{
-        NewGame, NewGameScore, NewMatch, NewPlayerRating, NewRatingAdjustment, PlayerPlacement
+        Game, GameScore, Match, PlayerRating, RatingAdjustment, PlayerPlacement
         , RulesetData
     },
     structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
@@ -16,7 +16,7 @@ pub fn generate_player_rating(
     rating: f64,
     volatility: f64,
     n_adjustments: i32
-) -> NewPlayerRating {
+) -> PlayerRating {
     if n_adjustments < 1 {
         panic!("Number of adjustments must be at least 1");
     }
@@ -38,7 +38,7 @@ pub fn generate_player_rating(
         let volatility_after = volatility;
         let timestamp = default_time.add(chrono::Duration::days(i as i64));
 
-        adjustments.push(NewRatingAdjustment {
+        adjustments.push(RatingAdjustment {
             player_id,
             adjustment_type,
             match_id: None,
@@ -51,7 +51,7 @@ pub fn generate_player_rating(
         });
     }
 
-    NewPlayerRating {
+    PlayerRating {
         id: player_id,
         player_id,
         ruleset,
@@ -80,10 +80,10 @@ pub fn generate_placement(player_id: i32, placement: i32) -> PlayerPlacement {
     PlayerPlacement { player_id, placement }
 }
 
-pub fn generate_game(id: i32, placements: &[PlayerPlacement]) -> NewGame {
+pub fn generate_game(id: i32, placements: &[PlayerPlacement]) -> Game {
     let scores = placements
         .iter()
-        .map(|p| NewGameScore {
+        .map(|p| GameScore {
             id: 0,
             player_id: p.player_id,
             game_id: id,
@@ -92,7 +92,7 @@ pub fn generate_game(id: i32, placements: &[PlayerPlacement]) -> NewGame {
         })
         .collect();
 
-    NewGame {
+    Game {
         id,
         ruleset: Ruleset::Osu,
         start_time: Default::default(),
@@ -101,7 +101,7 @@ pub fn generate_game(id: i32, placements: &[PlayerPlacement]) -> NewGame {
     }
 }
 
-pub fn generate_country_mapping(player_ratings: &[NewPlayerRating], country: &str) -> HashMap<i32, String> {
+pub fn generate_country_mapping(player_ratings: &[PlayerRating], country: &str) -> HashMap<i32, String> {
     let mut mapping = HashMap::new();
     for p in player_ratings {
         mapping.insert(p.player_id, country.to_string());
@@ -110,8 +110,8 @@ pub fn generate_country_mapping(player_ratings: &[NewPlayerRating], country: &st
     mapping
 }
 
-pub fn generate_match(id: i32, ruleset: Ruleset, games: &[NewGame], start_time: DateTime<FixedOffset>) -> NewMatch {
-    NewMatch {
+pub fn generate_match(id: i32, ruleset: Ruleset, games: &[Game], start_time: DateTime<FixedOffset>) -> Match {
+    Match {
         id,
         name: "Test Match".to_string(),
         ruleset,
@@ -121,7 +121,7 @@ pub fn generate_match(id: i32, ruleset: Ruleset, games: &[NewGame], start_time: 
     }
 }
 
-pub fn generate_matches(n: i32, player_ids: &[i32]) -> Vec<NewMatch> {
+pub fn generate_matches(n: i32, player_ids: &[i32]) -> Vec<Match> {
     let mut matches = Vec::new();
     for (i, _) in player_ids.iter().enumerate() {
         let game_count = 9;
@@ -136,7 +136,7 @@ pub fn generate_matches(n: i32, player_ids: &[i32]) -> Vec<NewMatch> {
     matches
 }
 
-fn generate_games(n: i32, placements: &[PlayerPlacement]) -> Vec<NewGame> {
+fn generate_games(n: i32, placements: &[PlayerPlacement]) -> Vec<Game> {
     let mut games = Vec::new();
     for i in 1..=n {
         games.push(generate_game(i, placements));
@@ -157,7 +157,7 @@ fn random_placements(player_ids: &[i32]) -> Vec<PlayerPlacement> {
 }
 
 /// Generates `n` player ratings with default values
-pub fn generate_default_initial_ratings(n: i32) -> Vec<NewPlayerRating> {
+pub fn generate_default_initial_ratings(n: i32) -> Vec<PlayerRating> {
     let mut players = Vec::new();
     for i in 1..=n {
         players.push(generate_player_rating(

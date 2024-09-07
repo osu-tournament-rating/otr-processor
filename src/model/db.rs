@@ -1,5 +1,5 @@
 use crate::model::{
-    db_structs::{NewGame, NewGameScore, NewMatch, NewPlayer, RulesetData},
+    db_structs::{Game, GameScore, Match, Player, RulesetData},
     structures::ruleset::Ruleset
 };
 use serde_json::to_string;
@@ -28,8 +28,8 @@ impl DbClient {
         })
     }
 
-    pub async fn get_matches(&self) -> Vec<NewMatch> {
-        let mut matches: Vec<NewMatch> = Vec::new();
+    pub async fn get_matches(&self) -> Vec<Match> {
+        let mut matches: Vec<Match> = Vec::new();
         let rows = self.client.query("
         SELECT
             t.id AS tournament_id, t.name AS tournament_name, t.ruleset AS tournament_ruleset,
@@ -55,7 +55,7 @@ impl DbClient {
 
         for row in rows {
             if row.get::<_, i32>("match_id") != current_match_id {
-                let match_ = NewMatch {
+                let match_ = Match {
                     id: row.get("match_id"),
                     name: row.get("match_name"),
                     start_time: row.get("match_start_time"),
@@ -68,7 +68,7 @@ impl DbClient {
             }
 
             if row.get::<_, i32>("game_id") != current_game_id {
-                let game = NewGame {
+                let game = Game {
                     id: row.get("game_id"),
                     ruleset: Ruleset::try_from(row.get::<_, i32>("game_ruleset")).unwrap(),
                     start_time: row.get("game_start_time"),
@@ -80,7 +80,7 @@ impl DbClient {
             }
 
             if row.get::<_, i32>("game_score_id") != current_game_score_id {
-                let game_score = NewGameScore {
+                let game_score = GameScore {
                     id: row.get("game_score_id"),
                     player_id: row.get("game_score_player_id"),
                     game_id: row.get("game_score_game_id"),
@@ -103,8 +103,8 @@ impl DbClient {
         matches
     }
 
-    pub async fn get_players(&self) -> Vec<NewPlayer> {
-        let mut players: Vec<NewPlayer> = Vec::new();
+    pub async fn get_players(&self) -> Vec<Player> {
+        let mut players: Vec<Player> = Vec::new();
         let rows = self
             .client
             .query(
@@ -120,7 +120,7 @@ impl DbClient {
         let mut current_player_id = -1;
         for row in rows {
             if row.get::<_, i32>("player_id") != current_player_id {
-                let player = NewPlayer {
+                let player = Player {
                     id: row.get("player_id"),
                     username: row.get("username"),
                     country: row.get("country"),

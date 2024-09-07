@@ -1,7 +1,7 @@
 use crate::model::{
     constants,
     constants::{DEFAULT_RATING, DEFAULT_VOLATILITY, MULTIPLIER, OSU_RATING_CEILING},
-    db_structs::{NewPlayer, NewPlayerRating, NewRatingAdjustment},
+    db_structs::{Player, PlayerRating, RatingAdjustment},
     structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
 };
 use chrono::{DateTime, FixedOffset};
@@ -9,7 +9,7 @@ use constants::OSU_RATING_FLOOR;
 use std::collections::HashMap;
 use strum::IntoEnumIterator;
 
-pub fn initial_ratings(players: &[NewPlayer]) -> HashMap<(i32, Ruleset), NewPlayerRating> {
+pub fn initial_ratings(players: &[Player]) -> HashMap<(i32, Ruleset), PlayerRating> {
     let mut map = HashMap::new();
 
     for player in players {
@@ -22,13 +22,13 @@ pub fn initial_ratings(players: &[NewPlayer]) -> HashMap<(i32, Ruleset), NewPlay
     map
 }
 
-fn create_initial_ratings(player: &NewPlayer) -> Vec<NewPlayerRating> {
+fn create_initial_ratings(player: &Player) -> Vec<PlayerRating> {
     let timestamp: DateTime<FixedOffset> = "2007-09-16T00:00:00-00:00".parse().unwrap();
     let mut ratings = Vec::new();
 
     for ruleset in Ruleset::iter() {
         let rating = initial_rating(player, &ruleset);
-        let adjustment = NewRatingAdjustment {
+        let adjustment = RatingAdjustment {
             player_id: player.id,
             player_rating_id: 0,
             match_id: None,
@@ -40,7 +40,7 @@ fn create_initial_ratings(player: &NewPlayer) -> Vec<NewPlayerRating> {
             adjustment_type: RatingAdjustmentType::Initial
         };
 
-        ratings.push(NewPlayerRating {
+        ratings.push(PlayerRating {
             id: 0,
             player_id: player.id,
             ruleset,
@@ -56,7 +56,7 @@ fn create_initial_ratings(player: &NewPlayer) -> Vec<NewPlayerRating> {
     ratings
 }
 
-fn initial_rating(player: &NewPlayer, ruleset: &Ruleset) -> f64 {
+fn initial_rating(player: &Player, ruleset: &Ruleset) -> f64 {
     let ruleset_data = player.ruleset_data.iter().find(|rd| rd.ruleset == *ruleset);
     let rank = ruleset_data.and_then(|rd| rd.earliest_global_rank.or(rd.global_rank));
 
@@ -111,7 +111,7 @@ mod tests {
     use crate::{
         model::{
             constants::{DEFAULT_VOLATILITY, OSU_RATING_CEILING, OSU_RATING_FLOOR},
-            db_structs::NewPlayer,
+            db_structs::Player,
             rating_utils::{mu_from_rank, std_dev_from_ruleset},
             structures::ruleset::Ruleset::{Catch, Mania4k, Mania7k, Osu, Taiko}
         },
@@ -190,7 +190,7 @@ mod tests {
 
     #[test]
     fn test_create_initial_ratings() {
-        let player = NewPlayer {
+        let player = Player {
             id: 1,
             username: Some("Test".to_string()),
             country: None,
@@ -225,7 +225,7 @@ mod tests {
 
     #[test]
     fn test_create_initial_adjustment() {
-        let player = NewPlayer {
+        let player = Player {
             id: 0,
             username: Some("Test".to_string()),
             country: None,

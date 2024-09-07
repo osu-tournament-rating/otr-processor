@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     model::{
         constants::PERFORMANCE_SCALING_FACTOR,
-        db_structs::{NewGame, NewMatch, NewPlayerRating, NewRatingAdjustment},
+        db_structs::{Game, Match, PlayerRating, RatingAdjustment},
         decay::DecayTracker,
         rating_tracker::RatingTracker,
         structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
@@ -24,7 +24,7 @@ pub struct OtrModel {
 }
 
 impl OtrModel {
-    pub fn new(initial_player_ratings: &[NewPlayerRating], country_mapping: &HashMap<i32, String>) -> OtrModel {
+    pub fn new(initial_player_ratings: &[PlayerRating], country_mapping: &HashMap<i32, String>) -> OtrModel {
         let mut tracker = RatingTracker::new();
 
         tracker.insert_or_update(initial_player_ratings, country_mapping);
@@ -36,7 +36,7 @@ impl OtrModel {
         }
     }
 
-    pub fn process(&mut self, matches: &[NewMatch]) {
+    pub fn process(&mut self, matches: &[Match]) {
         let progress_bar = progress_bar(matches.len() as u64, "Processing match data".to_string());
         for m in matches {
             self.process_match(m);
@@ -59,7 +59,7 @@ impl OtrModel {
     /// 3. Iterate through all games and compute a rating change based on the results from 1 & 2.
     ///     Although ratings are computed at a per-game level, they actually are not applied until the
     ///     end of the match.
-    fn process_match(&mut self, match_: &NewMatch) {
+    fn process_match(&mut self, match_: &Match) {
         // Apply decay to all players
         self.apply_decay(match_);
 
@@ -99,11 +99,11 @@ impl OtrModel {
 
     fn process_rating_result(
         &mut self,
-        match_: &NewMatch,
+        match_: &Match,
         n_games: i32,
         unprocessed_performances: &mut HashMap<i32, Vec<Rating>>,
         player_id: &i32
-    ) -> NewPlayerRating {
+    ) -> PlayerRating {
         let mut current_rating = self
             .rating_tracker
             .get_rating(*player_id, match_.ruleset)
@@ -140,7 +140,7 @@ impl OtrModel {
             PERFORMANCE_SCALING_FACTOR
         );
 
-        let adjustment = NewRatingAdjustment {
+        let adjustment = RatingAdjustment {
             player_id: *player_id,
             player_rating_id: 0,
             match_id: Some(match_.id),
@@ -160,7 +160,7 @@ impl OtrModel {
     }
 
     /// Applies decay to all players who participated in this match.
-    fn apply_decay(&mut self, match_: &NewMatch) {
+    fn apply_decay(&mut self, match_: &Match) {
         let player_ids: Vec<i32> = match_
             .games
             .iter()
@@ -181,8 +181,8 @@ impl OtrModel {
 
     /// Rates a Game. Returns a HashMap of <player_id, new_rating> which is used in a later processing step.
     /// This function is not responsible for creating new PlayerRating objects or RatingAdjustments
-    fn rate(&self, game: &NewGame, ruleset: Ruleset) -> HashMap<i32, Rating> {
-        let (ratings, placements): (Vec<Option<&NewPlayerRating>>, Vec<usize>) = game
+    fn rate(&self, game: &Game, ruleset: Ruleset) -> HashMap<i32, Rating> {
+        let (ratings, placements): (Vec<Option<&PlayerRating>>, Vec<usize>) = game
             .scores
             .iter()
             .map(|score| {
@@ -245,7 +245,7 @@ impl OtrModel {
 mod tests {
     use crate::{
         model::{
-            db_structs::NewPlayerRating,
+            db_structs::PlayerRating,
             otr_model::OtrModel,
             structures::{
                 rating_adjustment_type::{
@@ -374,7 +374,7 @@ mod tests {
 
     #[test]
     fn test_negative_performance_scaling() {
-        let rating: NewPlayerRating = generate_player_rating(1, Osu, 1000.0, 100.0, 1);
+        let rating: PlayerRating = generate_player_rating(1, Osu, 1000.0, 100.0, 1);
         let rating_diff = -100.0;
         let games_played = 1;
         let games_total = 10;

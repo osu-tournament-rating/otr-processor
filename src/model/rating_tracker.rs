@@ -7,7 +7,7 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 
 use crate::model::{
-    db_structs::{NewPlayerRating, NewRatingAdjustment},
+    db_structs::{PlayerRating, RatingAdjustment},
     structures::ruleset::Ruleset
 };
 
@@ -17,10 +17,10 @@ pub struct RatingTracker {
     // to reflect the new country rank for the specific ruleset.
     // The `percentile`, `country_rank`, and `global_rank` values are updated through this IndexMap.
     // -- Does not store any information on the adjustments --
-    leaderboard: IndexMap<(i32, Ruleset), NewPlayerRating>,
+    leaderboard: IndexMap<(i32, Ruleset), PlayerRating>,
     // The PlayerRating here is used as a reference. The rankings are NOT updated here, but the
     // other values are affected by `insert_or_updated`.
-    country_leaderboards: HashMap<String, IndexMap<(i32, Ruleset), NewPlayerRating>>,
+    country_leaderboards: HashMap<String, IndexMap<(i32, Ruleset), PlayerRating>>,
     country_change_tracker: HashSet<String>, // This is so we don't have to update EVERY country with each update
     country_mapping: HashMap<i32, String>
 }
@@ -47,7 +47,7 @@ impl RatingTracker {
 
     /// Inserts or updates a set of player ratings into the tracker.
     /// Ratings are assumed to be inserted on a per-match basis.
-    pub fn insert_or_update(&mut self, ratings: &[NewPlayerRating], country_mapping: &HashMap<i32, String>) {
+    pub fn insert_or_update(&mut self, ratings: &[PlayerRating], country_mapping: &HashMap<i32, String>) {
         let countries: HashSet<&String> = country_mapping.values().collect();
 
         for country in countries {
@@ -79,7 +79,7 @@ impl RatingTracker {
     }
 
     /// Returns the current rating value for the player and the ruleset.
-    pub fn get_rating(&self, player_id: i32, ruleset: Ruleset) -> Option<&NewPlayerRating> {
+    pub fn get_rating(&self, player_id: i32, ruleset: Ruleset) -> Option<&PlayerRating> {
         self.leaderboard.get(&(player_id, ruleset))
     }
 
@@ -87,7 +87,7 @@ impl RatingTracker {
         self.country_mapping.get(&player_id)
     }
 
-    pub fn get_rating_adjustments(&self, player_id: i32, ruleset: Ruleset) -> Option<Vec<NewRatingAdjustment>> {
+    pub fn get_rating_adjustments(&self, player_id: i32, ruleset: Ruleset) -> Option<Vec<RatingAdjustment>> {
         self.get_rating(player_id, ruleset)
             .map(|rating| rating.adjustments.clone())
     }

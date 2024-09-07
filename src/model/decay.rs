@@ -4,7 +4,7 @@ use crate::{
     model::{
         constants,
         constants::DECAY_DAYS,
-        db_structs::NewRatingAdjustment,
+        db_structs::RatingAdjustment,
         rating_tracker::RatingTracker,
         structures::{rating_adjustment_type::RatingAdjustmentType::Decay, ruleset::Ruleset}
     },
@@ -81,7 +81,7 @@ impl DecayTracker {
             clone_rating.rating = new_rating;
             clone_rating.volatility = new_volatility;
 
-            decay_ratings.push(NewRatingAdjustment {
+            decay_ratings.push(RatingAdjustment {
                 player_id,
                 player_rating_id: 0, // Presumably updated later
                 match_id: None,
@@ -149,7 +149,7 @@ mod tests {
         model::{
             constants,
             constants::{DECAY_DAYS, MULTIPLIER},
-            db_structs::{NewPlayerRating, NewRatingAdjustment},
+            db_structs::{PlayerRating, RatingAdjustment},
             decay::{decay_rating, decay_volatility, is_decay_possible, DecayTracker},
             rating_tracker::RatingTracker,
             structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
@@ -180,7 +180,7 @@ mod tests {
             .fixed_offset();
         let d = t.add(chrono::Duration::days(decay_days as i64));
 
-        let player_ratings = vec![NewPlayerRating {
+        let player_ratings = vec![PlayerRating {
             id: 1,
             player_id: 1,
             ruleset,
@@ -189,7 +189,7 @@ mod tests {
             percentile: 0.0,
             global_rank: 1,
             country_rank: 1,
-            adjustments: vec![NewRatingAdjustment {
+            adjustments: vec![RatingAdjustment {
                 player_id: 1,
                 player_rating_id: 1,
                 match_id: None,
