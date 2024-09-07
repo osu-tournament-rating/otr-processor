@@ -40,14 +40,9 @@ impl DbClient {
         LEFT JOIN matches m ON t.id = m.tournament_id
         LEFT JOIN games g ON m.id = g.match_id
         LEFT JOIN game_scores gs ON g.id = gs.game_id
-        WHERE t.verification_status = 1 AND m.verification_status = 2 AND g.verification_status = 2
-        AND gs.verification_status = 0
+        WHERE t.verification_status = 4 AND m.verification_status = 4 AND g.verification_status = 4
+        AND gs.verification_status = 4
         ORDER BY m.start_time", &[]).await.unwrap();
-
-        // TODO: Add 'WHERE t.processing_status = 4' to the query
-        // TODO: Change 'WHERE t.verification_status = 1' to 'WHERE t.verification_status = 4'
-        // TODO: Change 'WHERE m.verification_status = 2' to 'WHERE m.verification_status = 4'
-        // TODO: Change 'WHERE gs.verification_status = 0' to 'WHERE gs.verification_status = 4'
 
         let mut current_match_id = -1;
         let mut current_game_id = -1;
