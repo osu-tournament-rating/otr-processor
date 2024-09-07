@@ -10,13 +10,12 @@ async fn main() {
 
     // 1. Fetch matches and players for processing
     let matches = client.get_matches().await;
-
     let players = client.get_players().await;
 
     // 2. Generate initial ratings
     let initial_ratings = initial_ratings(&players);
 
-    // 3. Generate country mapping
+    // 3. Generate country mapping and set
     let country_mapping: HashMap<i32, String> = generate_country_mapping_players(&players);
 
     // 4. Create the model
@@ -24,7 +23,7 @@ async fn main() {
 
     // 5. Process matches
     let results = model.process(&matches);
-    
+    println!("{:?}", results);
     // 6. Save results in database
 }
 

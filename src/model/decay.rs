@@ -10,6 +10,7 @@ use crate::{
     },
     utils::test_utils::generate_country_mapping_player_ratings
 };
+use crate::model::structures::rating_adjustment_type::RatingAdjustmentType::Initial;
 
 /// Tracks decay activity for players
 pub struct DecayTracker;
@@ -55,6 +56,11 @@ impl DecayTracker {
             Some(adjustment) => adjustment,
             None => return // Early return if no last adjustment
         };
+        
+        // Do not consider the adjustment time if it's the initial adjustment
+        if last_adjustment.adjustment_type == Initial {
+            return;
+        }
 
         if d < last_adjustment.timestamp {
             return;
@@ -75,9 +81,6 @@ impl DecayTracker {
             let new_rating = decay_rating(old_rating);
             let new_volatility = decay_volatility(old_volatility);
 
-            old_rating = new_rating;
-            old_volatility = new_volatility;
-
             clone_rating.rating = new_rating;
             clone_rating.volatility = new_volatility;
 
@@ -92,14 +95,16 @@ impl DecayTracker {
                 timestamp: simulated_time,
                 adjustment_type: Decay
             });
+
+            old_rating = new_rating;
+            old_volatility = new_volatility;
         }
 
         let mut new_adjustments = clone_rating.adjustments.clone();
         new_adjustments.extend(decay_ratings);
         clone_rating.adjustments = new_adjustments;
 
-        let country_mapping = generate_country_mapping_player_ratings(&[clone_rating.clone()], country);
-        rating_tracker.insert_or_update(&[clone_rating], &country_mapping);
+        rating_tracker.insert_or_update(&[clone_rating]);
     }
 
     /// Returns the number of decay applications that should be applied.
@@ -204,7 +209,8 @@ mod tests {
 
         let country = "US";
         let country_mapping = generate_country_mapping_player_ratings(&player_ratings, country);
-        rating_tracker.insert_or_update(&player_ratings, &country_mapping);
+        rating_tracker.set_country_mapping(country_mapping);
+        rating_tracker.insert_or_update(&player_ratings);
 
         let decay_tracker = DecayTracker;
         decay_tracker.decay(&mut rating_tracker, 1, country, ruleset, d);

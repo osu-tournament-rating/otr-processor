@@ -27,7 +27,8 @@ impl OtrModel {
     pub fn new(initial_player_ratings: &[PlayerRating], country_mapping: &HashMap<i32, String>) -> OtrModel {
         let mut tracker = RatingTracker::new();
 
-        tracker.insert_or_update(initial_player_ratings, country_mapping);
+        tracker.set_country_mapping(country_mapping.clone());
+        tracker.insert_or_update(initial_player_ratings);
 
         OtrModel {
             rating_tracker: tracker,
@@ -70,7 +71,6 @@ impl OtrModel {
         // Each rating object will be analyzed and a final rating / volatility
         // number will be output.
         let mut unprocessed_performances: HashMap<i32, Vec<Rating>> = HashMap::new();
-        let mut country_mapping: HashMap<i32, String> = HashMap::new();
 
         // For each game,
         for game in &match_.games {
@@ -79,10 +79,6 @@ impl OtrModel {
             for (player_id, rating) in game_ratings {
                 let player_ratings = unprocessed_performances.entry(player_id).or_default();
                 player_ratings.push(rating);
-                country_mapping.insert(
-                    player_id,
-                    self.rating_tracker.get_country(player_id).unwrap().to_string()
-                );
             }
         }
 
@@ -94,7 +90,7 @@ impl OtrModel {
         }
 
         self.rating_tracker
-            .insert_or_update(new_ratings.as_slice(), &country_mapping)
+            .insert_or_update(new_ratings.as_slice())
     }
 
     fn process_rating_result(
@@ -217,6 +213,10 @@ impl OtrModel {
         for i in 0..ratings.len() {
             let p_rating = ratings.get(i).unwrap();
             let result = results.get(i).unwrap().clone();
+            
+            if result.mu.is_nan() {
+                panic!("Rating is NaN for player {} in game {}", p_rating.unwrap().player_id, game.id);
+            }
 
             new_ratings.insert(p_rating.unwrap().player_id, result);
         }

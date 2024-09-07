@@ -36,6 +36,10 @@ fn create_initial_ratings(player: &Player) -> Vec<PlayerRating> {
             timestamp,
             adjustment_type: RatingAdjustmentType::Initial
         };
+        
+        if rating.is_nan() || rating <= 0.0 {
+            panic!("Initial rating is NaN or <= 0.0 for player: {:?}", player);
+        }
 
         ratings.push(PlayerRating {
             id: 0,
@@ -80,7 +84,7 @@ fn mu_from_rank(rank: i32, ruleset: Ruleset) -> f64 {
     if val > OSU_RATING_CEILING {
         return OSU_RATING_CEILING;
     }
-
+    
     val
 }
 

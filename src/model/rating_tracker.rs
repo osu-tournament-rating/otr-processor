@@ -2,7 +2,6 @@ use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet}
 };
-
 use indexmap::IndexMap;
 use itertools::Itertools;
 
@@ -21,7 +20,6 @@ pub struct RatingTracker {
     // The PlayerRating here is used as a reference. The rankings are NOT updated here, but the
     // other values are affected by `insert_or_updated`.
     country_leaderboards: HashMap<String, IndexMap<(i32, Ruleset), PlayerRating>>,
-    country_change_tracker: HashSet<String>, // This is so we don't have to update EVERY country with each update
     country_mapping: HashMap<i32, String>
 }
 
@@ -36,33 +34,21 @@ impl RatingTracker {
         RatingTracker {
             leaderboard: IndexMap::new(),
             country_leaderboards: HashMap::new(),
-            country_change_tracker: HashSet::new(),
             country_mapping: HashMap::new()
         }
     }
-    
+
     pub fn get_all_ratings(&self) -> Vec<PlayerRating> {
         self.leaderboard.values().cloned().collect()
     }
 
-    fn track_country(&mut self, country: &str) {
-        self.country_change_tracker.insert(country.to_owned());
+    pub fn set_country_mapping(&mut self, country_mapping: HashMap<i32, String>) {
+        self.country_mapping = country_mapping;
     }
 
     /// Inserts or updates a set of player ratings into the tracker.
     /// Ratings are assumed to be inserted on a per-match basis.
-    pub fn insert_or_update(&mut self, ratings: &[PlayerRating], country_mapping: &HashMap<i32, String>) {
-        let countries: HashSet<&String> = country_mapping.values().collect();
-
-        for country in countries {
-            self.track_country(country.as_str());
-        }
-
-        for player_id in country_mapping.keys() {
-            self.country_mapping
-                .insert(*player_id, country_mapping.get(player_id).unwrap().to_string());
-        }
-
+    pub fn insert_or_update(&mut self, ratings: &[PlayerRating]) {
         // Update the leaderboard with the current player rating information
         // (usually, this is done after a match is processed & ratings have been updated)
         for rating in ratings {
@@ -70,15 +56,6 @@ impl RatingTracker {
 
             self.leaderboard
                 .insert((rating.player_id, rating.ruleset), cloned_rating.clone());
-
-            // Get the player's country leaderboard and insert the player rating.
-            // The country rankings themselves will be determined at the end of processing,
-            // this just stores a record in the leaderboard for use in that step.
-            let player_country = country_mapping.get(&rating.player_id).unwrap();
-            self.country_leaderboards
-                .entry(player_country.to_string())
-                .or_default()
-                .insert((rating.player_id, rating.ruleset), cloned_rating);
         }
     }
 
@@ -98,10 +75,6 @@ impl RatingTracker {
 
     /// Sorts and updates the PlayerRating global_rank, country_rank, and percentile values.
     pub fn sort(&mut self) {
-        // Sort leaderboard by rating
-        self.leaderboard
-            .sort_by(|k1, v1, k2, v2| v2.rating.partial_cmp(&v1.rating).unwrap());
-
         // Iterate updating global rankings and percentiles
         let rulesets = [
             Ruleset::Osu,
@@ -114,11 +87,12 @@ impl RatingTracker {
         for ruleset in rulesets.iter() {
             let mut global_rank = 1;
 
-            // Clone the iterator to get the count without consuming it
+            // Sort the ruleset-specific leaderboard
             let ruleset_leaderboard: Vec<_> = self
                 .leaderboard
                 .iter_mut()
                 .filter(|(_, player_rating)| player_rating.ruleset == *ruleset)
+                .sorted_by(|(_, a), (_, b)| b.rating.partial_cmp(&a.rating).unwrap())
                 .collect();
             let count = ruleset_leaderboard.len() as i32;
 
@@ -130,19 +104,24 @@ impl RatingTracker {
             }
         }
 
+        // Slot all players from main leaderboard into country leaderboard
+        for (player_id, country) in &self.country_mapping {
+            for ruleset in rulesets.iter() {
+                if let Some(player_rating) = self.leaderboard.get(&(*player_id, *ruleset)) {
+                    let country_leaderboard = self.country_leaderboards.entry(country.clone()).or_insert_with(IndexMap::new);
+                    country_leaderboard.insert((*player_id, *ruleset), player_rating.clone());
+                }
+            }
+        }
+
         // Update country rankings
-        let changed_countries: Vec<&String> = self.country_change_tracker.iter().collect();
-        let country_leaderboards = self
-            .country_leaderboards
-            .iter_mut()
-            .filter(|(country, _)| changed_countries.contains(country));
-        for (_, country_leaderboard) in country_leaderboards {
+        for (_, mut country_leaderboard) in &self.country_leaderboards {
             for ruleset in rulesets.iter() {
                 let mut country_rank = 1;
 
                 // Clone the iterator to get the count without consuming it
                 let country_ruleset_leaderboard: Vec<_> = country_leaderboard
-                    .iter_mut()
+                    .iter()
                     .filter(|(_, player_rating)| player_rating.ruleset == *ruleset)
                     .sorted_by(|(_, a), (_, b)| b.rating.partial_cmp(&a.rating).unwrap())
                     .collect();
@@ -159,8 +138,6 @@ impl RatingTracker {
                 }
             }
         }
-
-        self.country_change_tracker.clear();
     }
 
     /// `P = (n/N) * 100`
@@ -198,7 +175,8 @@ mod tests {
         let player_ratings = vec![generate_player_rating(1, Osu, DEFAULT_RATING, DEFAULT_VOLATILITY, 1)];
 
         let country_mapping = generate_country_mapping_player_ratings(player_ratings.as_slice(), "US");
-        rating_tracker.insert_or_update(&player_ratings, &country_mapping);
+        rating_tracker.set_country_mapping(country_mapping);
+        rating_tracker.insert_or_update(&player_ratings);
 
         // Verify the player was added to the leaderboard and does not have data for another ruleset
         let player_rating = rating_tracker.get_rating(1, Osu).unwrap();
@@ -208,7 +186,7 @@ mod tests {
 
         // Update player with a new match result - overrides previous value
         let player_ratings = vec![generate_player_rating(1, Ruleset::Osu, 200.0, 85.0, 2)];
-        rating_tracker.insert_or_update(&player_ratings, &country_mapping);
+        rating_tracker.insert_or_update(&player_ratings);
 
         // Verify the player was updated with the new rating and has an adjustment
         let verify_rating = rating_tracker.get_rating(1, Ruleset::Osu).unwrap();
@@ -227,7 +205,8 @@ mod tests {
         ];
 
         let country_mapping = generate_country_mapping_player_ratings(&player_ratings, "US");
-        rating_tracker.insert_or_update(&player_ratings, &country_mapping);
+        rating_tracker.set_country_mapping(country_mapping);
+        rating_tracker.insert_or_update(&player_ratings);
 
         let p1 = rating_tracker
             .get_rating(1, Osu)
@@ -287,18 +266,5 @@ mod tests {
             99.9999,
             epsilon = 0.0001
         );
-    }
-
-    #[test]
-    fn test_country_change_tracker() {
-        let mut rating_tracker = RatingTracker::new();
-        let player_ratings = vec![
-            generate_player_rating(1, Osu, 100.0, 100.0, 1),
-            generate_player_rating(2, Osu, 200.0, 100.0, 1),
-        ];
-        let country_mapping = generate_country_mapping_player_ratings(&player_ratings, "US");
-
-        rating_tracker.insert_or_update(&player_ratings, &country_mapping);
-        assert_eq!(rating_tracker.country_change_tracker.len(), 1);
     }
 }
