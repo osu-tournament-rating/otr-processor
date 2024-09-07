@@ -155,7 +155,6 @@ impl OtrModel {
 
         let adjustment = RatingAdjustment {
             player_id: *player_id,
-            player_rating_id: 0,
             match_id: Some(match_.id),
             rating_before: current_rating.rating,
             rating_after: performance_scaled_rating,
@@ -262,9 +261,7 @@ mod tests {
         model::{
             db_structs::PlayerRating,
             otr_model::OtrModel,
-            structures::{
-                ruleset::{Ruleset, Ruleset::Osu}
-            }
+            structures::ruleset::{Ruleset, Ruleset::Osu}
         },
         utils::test_utils::*
     };

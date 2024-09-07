@@ -1,5 +1,5 @@
 use crate::model::{
-    db_structs::{Game, GameScore, Match, Player, RulesetData},
+    db_structs::{Game, GameScore, Match, Player, PlayerRating, RatingAdjustment, RulesetData},
     structures::ruleset::Ruleset
 };
 use std::sync::Arc;
@@ -135,6 +135,68 @@ impl DbClient {
         }
 
         players
+    }
+
+    pub async fn save_results(&self, player_ratings: &[PlayerRating]) {}
+
+    /// After the parent PlayerRating is saved, all child RatingAdjustments should be saved
+    async fn save_rating_adjustments(&self, parent_id: i32, adjustments: &Vec<RatingAdjustment>) {
+        for adjustment in adjustments {
+            let query = "INSERT INTO rating_adjustments (player_id, player_rating_id, match_id, \
+            rating_before, rating_after, volatility_before, volatility_after, timestamp, adjustment_type) \
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)";
+            self.client
+                .execute(
+                    query,
+                    &[
+                        &adjustment.player_id,
+                        &parent_id,
+                        &adjustment.match_id,
+                        &adjustment.rating_before,
+                        &adjustment.rating_after,
+                        &adjustment.volatility_before,
+                        &adjustment.volatility_after,
+                        &adjustment.timestamp,
+                        &(adjustment.adjustment_type as i32)
+                    ]
+                )
+                .await
+                .unwrap();
+        }
+    }
+
+    /// Saves the PlayerRating, returning the primary key
+    async fn save_player_rating(&self, player_rating: &PlayerRating) -> i32 {
+        self.truncate_player_ratings().await;
+        let query = "INSERT INTO player_ratings (player_id, ruleset, rating, volatility, \
+        percentile, global_rank, country_rank) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id";
+        let row = self
+            .client
+            .query_one(
+                query,
+                &[
+                    &player_rating.player_id,
+                    &(player_rating.ruleset as i32),
+                    &player_rating.rating,
+                    &player_rating.volatility,
+                    &player_rating.percentile,
+                    &player_rating.global_rank
+                ]
+            )
+            .await
+            .unwrap();
+        row.get("id")
+    }
+
+    async fn truncate_player_ratings(&self) {
+        self.client.execute("TRUNCATE TABLE player_ratings", &[]).await.unwrap();
+    }
+
+    async fn truncate_rating_adjustments(&self) {
+        self.client
+            .execute("TRUNCATE TABLE rating_adjustments", &[])
+            .await
+            .unwrap();
     }
 
     // Access the underlying Client

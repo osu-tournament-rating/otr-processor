@@ -43,8 +43,7 @@ pub fn generate_player_rating(
             rating_after,
             volatility_before,
             volatility_after,
-            timestamp,
-            player_rating_id: 0
+            timestamp
         });
     }
 

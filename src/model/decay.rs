@@ -84,7 +84,6 @@ impl DecayTracker {
 
             decay_ratings.push(RatingAdjustment {
                 player_id,
-                player_rating_id: 0, // Presumably updated later
                 match_id: None,
                 rating_before: old_rating,
                 rating_after: new_rating,
@@ -194,7 +193,6 @@ mod tests {
             country_rank: 1,
             adjustments: vec![RatingAdjustment {
                 player_id: 1,
-                player_rating_id: 1,
                 match_id: None,
                 rating_before: 0.0,
                 rating_after: initial_rating,

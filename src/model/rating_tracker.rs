@@ -105,10 +105,7 @@ impl RatingTracker {
         for (player_id, country) in &self.country_mapping {
             for ruleset in rulesets.iter() {
                 if let Some(player_rating) = self.leaderboard.get(&(*player_id, *ruleset)) {
-                    let country_leaderboard = self
-                        .country_leaderboards
-                        .entry(country.clone())
-                        .or_default();
+                    let country_leaderboard = self.country_leaderboards.entry(country.clone()).or_default();
                     country_leaderboard.insert((*player_id, *ruleset), player_rating.clone());
                 }
             }
@@ -158,9 +155,7 @@ mod tests {
         model::{
             constants::{DEFAULT_RATING, DEFAULT_VOLATILITY},
             rating_tracker::RatingTracker,
-            structures::{
-                ruleset::{Ruleset, Ruleset::Osu}
-            }
+            structures::ruleset::{Ruleset, Ruleset::Osu}
         },
         utils::test_utils::{generate_country_mapping_player_ratings, generate_player_rating}
     };

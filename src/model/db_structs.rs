@@ -74,8 +74,6 @@ pub struct PlayerRating {
 #[derive(Debug, Clone, Serialize)]
 pub struct RatingAdjustment {
     pub player_id: i32,
-    /// Unknown until parent is inserted
-    pub player_rating_id: i32,
     pub match_id: Option<i32>,
     pub rating_before: f64,
     pub rating_after: f64,
