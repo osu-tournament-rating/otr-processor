@@ -195,7 +195,8 @@ impl DbClient {
                     &player_rating.rating,
                     &player_rating.volatility,
                     &player_rating.percentile,
-                    &player_rating.global_rank
+                    &player_rating.global_rank,
+                    &player_rating.country_rank
                 ]
             )
             .await
