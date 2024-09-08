@@ -1,9 +1,10 @@
-use crate::model::constants::{WEIGHT_A, WEIGHT_B};
 use crate::{
     model::{
-        db_structs::{Game, GameScore, Match, PlayerRating},
+        constants::{WEIGHT_A, WEIGHT_B},
+        db_structs::{Game, GameScore, Match, PlayerRating, RatingAdjustment},
         decay::DecayTracker,
-        rating_tracker::RatingTracker
+        rating_tracker::RatingTracker,
+        structures::rating_adjustment_type::RatingAdjustmentType
     },
     utils::progress_utils::progress_bar
 };
@@ -13,11 +14,7 @@ use openskill::{
     model::{model::Model, plackett_luce::PlackettLuce},
     rating::{default_gamma, Rating}
 };
-use statrs::statistics::Statistics;
-use std::{collections::HashMap, ops::Index};
-use crate::model::db_structs::RatingAdjustment;
-use crate::model::structures::rating_adjustment_type::RatingAdjustmentType;
-use crate::model::structures::ruleset::Ruleset;
+use std::collections::HashMap;
 
 pub struct OtrModel {
     pub model: PlackettLuce,
@@ -68,7 +65,7 @@ impl OtrModel {
         self.rating_tracker.sort();
         self.rating_tracker.get_all_ratings()
     }
-    
+
     fn process_match(&mut self, match_: &Match) {
         // Apply decay to all players
         self.apply_decay(match_);
@@ -123,7 +120,7 @@ impl OtrModel {
         scores.iter().unique().copied().collect()
     }
 
-    fn apply_tie_for_last_scores(&self, match_: &mut Match, ids: &Vec<i32>) {
+    fn apply_tie_for_last_scores(&self, match_: &mut Match, ids: &[i32]) {
         // Iterate through all games etc.
         for g in match_.games.iter_mut() {
             // max = worst placement (1 = best)
@@ -224,13 +221,7 @@ impl OtrModel {
         let total_game_count = match_.games.len();
         let mut result_map: HashMap<i32, Rating> = HashMap::new();
         for (k, v) in rating_map {
-            result_map.insert(
-                k,
-                Self::calc_rating_b(
-                    &v,
-                    total_game_count
-                )
-            );
+            result_map.insert(k, Self::calc_rating_b(&v, total_game_count));
         }
 
         result_map
@@ -246,14 +237,17 @@ impl OtrModel {
 
             let result_a = map_a.get(k).unwrap();
             let result_b = map_b.get(k).unwrap();
-            
+
             let rating_final = WEIGHT_A * result_a.mu + WEIGHT_B * result_b.mu;
             let volatility_final = (WEIGHT_A * result_a.sigma.powf(2.0) + WEIGHT_B * result_b.sigma.powf(2.0)).sqrt();
 
-            final_map.insert(*k, Rating {
-                mu: rating_final,
-                sigma: volatility_final,
-            });
+            final_map.insert(
+                *k,
+                Rating {
+                    mu: rating_final,
+                    sigma: volatility_final
+                }
+            );
         }
 
         final_map
@@ -281,10 +275,7 @@ impl OtrModel {
         }
     }
 
-    fn calc_rating_b(
-        ratings: &[Rating],
-        total_game_count: usize
-    ) -> Rating {
+    fn calc_rating_b(ratings: &[Rating], total_game_count: usize) -> Rating {
         let rating_sum: f64 = ratings.iter().map(|f| f.mu).sum();
         let rating_b = rating_sum / total_game_count as f64;
 
@@ -310,13 +301,13 @@ impl OtrModel {
                 .decay(&mut self.rating_tracker, p_id, match_.ruleset, match_.start_time);
         }
     }
-    
+
     /// Updates the RatingTracker with the results of the rating calculation
     fn apply_results(&mut self, match_: &Match, rating_calc_result: &HashMap<i32, Rating>) {
         for (k, v) in rating_calc_result {
             // Get their current rating
-            let mut player_rating = self.rating_tracker.get_rating(*k, match_.ruleset).unwrap().clone(); 
-            
+            let mut player_rating = self.rating_tracker.get_rating(*k, match_.ruleset).unwrap().clone();
+
             // Create the adjustment
             let adjustment = RatingAdjustment {
                 player_id: *k,
@@ -326,15 +317,15 @@ impl OtrModel {
                 volatility_before: player_rating.volatility,
                 volatility_after: v.sigma,
                 timestamp: match_.start_time,
-                adjustment_type: RatingAdjustmentType::Match,
+                adjustment_type: RatingAdjustmentType::Match
             };
-            
+
             player_rating.adjustments.push(adjustment);
-            
+
             // Update the player_rating values
             player_rating.rating = v.mu;
             player_rating.volatility = v.sigma;
-            
+
             // Save
             self.rating_tracker.insert_or_update(&[player_rating])
         }
