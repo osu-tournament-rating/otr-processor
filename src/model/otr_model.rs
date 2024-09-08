@@ -1,14 +1,13 @@
+use crate::model::constants::{WEIGHT_A, WEIGHT_B};
 use crate::{
     model::{
-        constants::PERFORMANCE_SCALING_FACTOR,
-        db_structs::{Game, GameScore, Match, PlayerRating, RatingAdjustment},
+        db_structs::{Game, GameScore, Match, PlayerRating},
         decay::DecayTracker,
-        rating_tracker::RatingTracker,
-        structures::rating_adjustment_type::RatingAdjustmentType
+        rating_tracker::RatingTracker
     },
     utils::progress_utils::progress_bar
 };
-use itertools::{cloned, Itertools};
+use itertools::Itertools;
 use openskill::{
     constant::*,
     model::{model::Model, plackett_luce::PlackettLuce},
@@ -16,7 +15,9 @@ use openskill::{
 };
 use statrs::statistics::Statistics;
 use std::{collections::HashMap, ops::Index};
-use crate::model::constants::{WEIGHT_A, WEIGHT_B};
+use crate::model::db_structs::RatingAdjustment;
+use crate::model::structures::rating_adjustment_type::RatingAdjustmentType;
+use crate::model::structures::ruleset::Ruleset;
 
 pub struct OtrModel {
     pub model: PlackettLuce,
@@ -38,6 +39,18 @@ impl OtrModel {
         }
     }
 
+    /// # o!TR Match Processing
+    ///
+    /// This function processes a single match but serves as the heart of where all rating changes
+    /// occur.
+    ///
+    /// Steps:
+    /// 1. Apply decay if necessary to all players. Decayed ratings will become the new foundation
+    ///     by which this player is rated in this match.
+    /// 2. Iterate through the games and identify changes in rating at a per-game level, per player.
+    /// 3. Iterate through all games and compute a rating change based on the results from 1 & 2.
+    ///     Although ratings are computed at a per-game level, they actually are not applied until the
+    ///     end of the match.
     pub fn process(&mut self, matches: &[Match]) -> Vec<PlayerRating> {
         let progress_bar = progress_bar(matches.len() as u64, "Processing match data".to_string());
         for m in matches {
@@ -55,19 +68,7 @@ impl OtrModel {
         self.rating_tracker.sort();
         self.rating_tracker.get_all_ratings()
     }
-
-    /// # o!TR Match Processing
-    ///
-    /// This function processes a single match but serves as the heart of where all rating changes
-    /// occur.
-    ///
-    /// Steps:
-    /// 1. Apply decay if necessary to all players. Decayed ratings will become the new foundation
-    ///     by which this player is rated in this match.
-    /// 2. Iterate through the games and identify changes in rating at a per-game level, per player.
-    /// 3. Iterate through all games and compute a rating change based on the results from 1 & 2.
-    ///     Although ratings are computed at a per-game level, they actually are not applied until the
-    ///     end of the match.
+    
     fn process_match(&mut self, match_: &Match) {
         // Apply decay to all players
         self.apply_decay(match_);
@@ -79,8 +80,10 @@ impl OtrModel {
         // 2. Do math
         let calc_a = self.calc_a(ratings_a, match_);
         let calc_b = self.calc_b(ratings_b, match_);
+        let final_results = self.calc_weighted_rating(&calc_a, &calc_b);
 
         // 3. Update values in the rating tracker
+        self.apply_results(match_, &final_results)
     }
 
     /// Generates ratings for each player in the match
@@ -234,7 +237,7 @@ impl OtrModel {
     }
 
     /// Calculates the weighted rating for all players present in a and b
-    fn calc_weighted_rating(map_a: &HashMap<i32, Rating>, map_b: &HashMap<i32, Rating>) -> HashMap<i32, Rating> {
+    fn calc_weighted_rating(&self, map_a: &HashMap<i32, Rating>, map_b: &HashMap<i32, Rating>) -> HashMap<i32, Rating> {
         let mut final_map: HashMap<i32, Rating> = HashMap::new();
         for (k, v) in map_a {
             if !map_b.contains_key(k) {
@@ -305,6 +308,35 @@ impl OtrModel {
         for p_id in player_ids {
             self.decay_tracker
                 .decay(&mut self.rating_tracker, p_id, match_.ruleset, match_.start_time);
+        }
+    }
+    
+    /// Updates the RatingTracker with the results of the rating calculation
+    fn apply_results(&mut self, match_: &Match, rating_calc_result: &HashMap<i32, Rating>) {
+        for (k, v) in rating_calc_result {
+            // Get their current rating
+            let mut player_rating = self.rating_tracker.get_rating(*k, match_.ruleset).unwrap().clone(); 
+            
+            // Create the adjustment
+            let adjustment = RatingAdjustment {
+                player_id: *k,
+                match_id: Some(match_.id),
+                rating_before: player_rating.rating,
+                rating_after: v.mu,
+                volatility_before: player_rating.volatility,
+                volatility_after: v.sigma,
+                timestamp: match_.start_time,
+                adjustment_type: RatingAdjustmentType::Match,
+            };
+            
+            player_rating.adjustments.push(adjustment);
+            
+            // Update the player_rating values
+            player_rating.rating = v.mu;
+            player_rating.volatility = v.sigma;
+            
+            // Save
+            self.rating_tracker.insert_or_update(&[player_rating])
         }
     }
 
