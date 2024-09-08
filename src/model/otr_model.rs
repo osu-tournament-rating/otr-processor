@@ -382,7 +382,7 @@ mod tests {
 
         let game = generate_game(1, &placements);
 
-        let rating_result = model.rate(&game, Ruleset::Osu);
+        let rating_result = model.rate(&game);
 
         // Compare the 3 rating values, ensure order is 2, 1, 3
         let result_1 = rating_result.get(&1).unwrap();

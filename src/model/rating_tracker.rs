@@ -60,7 +60,7 @@ impl RatingTracker {
             let cloned_rating = rating.clone();
 
             self.leaderboard
-                .insert((rating.player_id, rating.ruleset), cloned_rating.clone());
+                .insert((rating.player_id, rating.ruleset), cloned_rating);
         }
     }
 
@@ -143,20 +143,13 @@ impl RatingTracker {
                 }
             }
         }
-
-        // Calculate percentile, leaderboards are already sorted at this point
-        for ruleset in rulesets {
-            let mut lb = self.get_leaderboard(ruleset);
-            let enumerate = lb.iter_mut().enumerate();
-            let count = enumerate.len() as i32;
-
-            for (i, player_rating) in enumerate {
-                // Update players with new data
-                let percentile = Self::percentile(i as i32 + 1, count).expect("Failed to calculate percentile");
-                player_rating.percentile = percentile;
-            }
-
-            self.insert_or_update(lb.as_slice());
+        
+        for ruleset in rulesets.iter() {
+            self.insert_or_update(&self.leaderboard
+                .values()
+                .filter(|player_rating| player_rating.ruleset == *ruleset)
+                .cloned()
+                .collect::<Vec<_>>());
         }
     }
 
@@ -234,11 +227,11 @@ mod tests {
             .expect("Expected to find rating for Player 2 in ruleset Osu");
 
         // Assert global ranks are different from what they should be
-        assert_abs_diff_eq!(p1.global_rank, 0);
-        assert_abs_diff_eq!(p2.global_rank, 0);
+        assert_eq!(p1.global_rank, 0);
+        assert_eq!(p2.global_rank, 0);
 
-        assert_abs_diff_eq!(p1.country_rank, 0);
-        assert_abs_diff_eq!(p2.country_rank, 0);
+        assert_eq!(p1.country_rank, 0);
+        assert_eq!(p2.country_rank, 0);
 
         assert_abs_diff_eq!(p1.percentile, 0.0);
         assert_abs_diff_eq!(p2.percentile, 0.0);
