@@ -38,7 +38,7 @@ impl RatingTracker {
     pub fn get_all_ratings(&self) -> Vec<PlayerRating> {
         self.leaderboard.values().cloned().collect()
     }
-    
+
     pub fn get_leaderboard(&self, ruleset: Ruleset) -> Vec<PlayerRating> {
         self.leaderboard
             .iter()
@@ -149,13 +149,13 @@ impl RatingTracker {
             let mut lb = self.get_leaderboard(ruleset);
             let enumerate = lb.iter_mut().enumerate();
             let count = enumerate.len() as i32;
-            
+
             for (i, player_rating) in enumerate {
                 // Update players with new data
                 let percentile = Self::percentile(i as i32 + 1, count).expect("Failed to calculate percentile");
                 player_rating.percentile = percentile;
             }
-            
+
             self.insert_or_update(lb.as_slice());
         }
     }

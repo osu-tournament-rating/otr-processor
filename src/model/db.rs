@@ -1,10 +1,12 @@
-use crate::model::{
-    db_structs::{Game, GameScore, Match, Player, PlayerRating, RatingAdjustment, RulesetData},
-    structures::ruleset::Ruleset
+use crate::{
+    model::{
+        db_structs::{Game, GameScore, Match, Player, PlayerRating, RatingAdjustment, RulesetData},
+        structures::ruleset::Ruleset
+    },
+    utils::progress_utils::progress_bar
 };
 use std::sync::Arc;
 use tokio_postgres::{Client, Error, NoTls};
-use crate::utils::progress_utils::progress_bar;
 
 #[derive(Clone)]
 pub struct DbClient {
@@ -141,13 +143,14 @@ impl DbClient {
     pub async fn save_results(&self, player_ratings: &[PlayerRating]) {
         self.truncate_rating_adjustments().await;
         self.truncate_player_ratings().await;
-        
+
         let p_bar = progress_bar(player_ratings.len() as u64, "Saving player ratings to db".to_string()).unwrap();
-        
+
         for player_rating in player_ratings {
             let parent_id = self.save_player_rating(player_rating).await;
-            self.save_rating_adjustments(parent_id, &player_rating.adjustments).await;
-            
+            self.save_rating_adjustments(parent_id, &player_rating.adjustments)
+                .await;
+
             p_bar.inc(1);
         }
     }
@@ -201,7 +204,10 @@ impl DbClient {
     }
 
     async fn truncate_player_ratings(&self) {
-        self.client.execute("TRUNCATE TABLE player_ratings CASCADE", &[]).await.unwrap();
+        self.client
+            .execute("TRUNCATE TABLE player_ratings CASCADE", &[])
+            .await
+            .unwrap();
         println!("Truncated player_ratings table!");
     }
 
@@ -210,7 +216,7 @@ impl DbClient {
             .execute("TRUNCATE TABLE rating_adjustments CASCADE", &[])
             .await
             .unwrap();
-        
+
         println!("Truncated player_ratings table!");
     }
 

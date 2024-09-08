@@ -1,7 +1,7 @@
 use crate::{
     model::{
         constants::PERFORMANCE_SCALING_FACTOR,
-        db_structs::{Game, Match, PlayerRating, RatingAdjustment},
+        db_structs::{Game, GameScore, Match, PlayerRating, RatingAdjustment},
         decay::DecayTracker,
         rating_tracker::RatingTracker,
         structures::rating_adjustment_type::RatingAdjustmentType
@@ -15,9 +15,7 @@ use openskill::{
     rating::{default_gamma, Rating}
 };
 use statrs::statistics::Statistics;
-use std::collections::HashMap;
-use std::ops::Index;
-use crate::model::db_structs::GameScore;
+use std::{collections::HashMap, ops::Index};
 
 pub struct OtrModel {
     pub model: PlackettLuce,
@@ -111,7 +109,11 @@ impl OtrModel {
 
     /// Returns a vector containing all player ids which participated in this match
     fn participants(&self, match_: &mut Match) -> Vec<i32> {
-        let scores = match_.games.iter().flat_map(|g| g.scores.iter().map(|s| s.player_id)).collect::<Vec<i32>>();
+        let scores = match_
+            .games
+            .iter()
+            .flat_map(|g| g.scores.iter().map(|s| s.player_id))
+            .collect::<Vec<i32>>();
         scores.iter().unique().map(|id| *id).collect()
     }
 
@@ -125,7 +127,10 @@ impl OtrModel {
             // are classified as placing worse than the worst player in this lobby
             let tie_for_last_placement = worst_placement + 1;
 
-            let ids_not_present = ids.iter().filter(|id| !g.scores.iter().any(|s| s.player_id == **id)).collect::<Vec<&i32>>();
+            let ids_not_present = ids
+                .iter()
+                .filter(|id| !g.scores.iter().any(|s| s.player_id == **id))
+                .collect::<Vec<&i32>>();
             for id in ids_not_present {
                 // Create the new score
                 g.scores.push(GameScore {
@@ -133,7 +138,7 @@ impl OtrModel {
                     player_id: *id,
                     game_id: g.id,
                     score: 0,
-                    placement: tie_for_last_placement,
+                    placement: tie_for_last_placement
                 })
             }
         }
@@ -151,15 +156,28 @@ impl OtrModel {
         let mut placements = Vec::new();
 
         for score in &game.scores {
-            player_ratings.push(self.rating_tracker.get_rating(score.player_id, game.ruleset)
-                .expect(format!("Expected player {:?} to have a rating for ruleset {:?}", score.player_id, game.ruleset).as_str()));
+            player_ratings.push(
+                self.rating_tracker
+                    .get_rating(score.player_id, game.ruleset)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "Expected player {:?} to have a rating for ruleset {:?}",
+                            score.player_id, game.ruleset
+                        )
+                    })
+            );
             placements.push(score.placement as usize);
         }
 
-        let model_input = player_ratings.iter().map(|r| vec![Rating {
-            mu: r.rating,
-            sigma: r.volatility,
-        }]).collect_vec();
+        let model_input = player_ratings
+            .iter()
+            .map(|r| {
+                vec![Rating {
+                    mu: r.rating,
+                    sigma: r.volatility
+                }]
+            })
+            .collect_vec();
 
         let model_result = self.model.rate(model_input, placements);
 
@@ -180,15 +198,26 @@ impl OtrModel {
         let mut result_map: HashMap<i32, Rating> = HashMap::new();
         for (k, v) in rating_map {
             let current_player_rating = self.rating_tracker.get_rating(k, match_.ruleset).unwrap();
-            result_map.insert(k, Self::calc_rating_a(&v, current_player_rating.rating, current_player_rating.volatility,
-            total_game_count));
+            result_map.insert(
+                k,
+                Self::calc_rating_a(
+                    &v,
+                    current_player_rating.rating,
+                    current_player_rating.volatility,
+                    total_game_count
+                )
+            );
         }
 
         result_map
     }
 
-    fn calc_rating_a(ratings: &Vec<Rating>, current_rating: f64,
-                     current_volatility: f64, total_game_count: usize) -> Rating {
+    fn calc_rating_a(
+        ratings: &Vec<Rating>,
+        current_rating: f64,
+        current_volatility: f64,
+        total_game_count: usize
+    ) -> Rating {
         let rating_sum: f64 = ratings.iter().map(|f| f.mu).sum();
 
         let count_games_unplayed = total_game_count as f64 - ratings.len() as f64;
