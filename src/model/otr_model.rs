@@ -76,7 +76,9 @@ impl OtrModel {
         let ratings_b = self.generate_ratings_b(match_);
 
         // 2. Do math
-
+        let calc_a = self.calc_a(ratings_a, match_);
+        let calc_b = self.calc_b(ratings_b, match_);
+        
         // 3. Update values in the rating tracker
     }
 
@@ -114,7 +116,7 @@ impl OtrModel {
             .iter()
             .flat_map(|g| g.scores.iter().map(|s| s.player_id))
             .collect::<Vec<i32>>();
-        scores.iter().unique().map(|id| *id).collect()
+        scores.iter().unique().copied().collect()
     }
 
     fn apply_tie_for_last_scores(&self, match_: &mut Match, ids: &Vec<i32>) {
@@ -192,7 +194,7 @@ impl OtrModel {
     }
 
     /// Performs method A calculation, combining a vector of ratings for a player
-    /// into a coherent number
+    /// into an unweighted rating value
     fn calc_a(&self, rating_map: HashMap<i32, Vec<Rating>>, match_: &Match) -> HashMap<i32, Rating> {
         let total_game_count = match_.games.len();
         let mut result_map: HashMap<i32, Rating> = HashMap::new();
@@ -212,8 +214,26 @@ impl OtrModel {
         result_map
     }
 
+    /// Performs method B calculation, combining a vector of ratings for a player
+    /// into an unweighted rating value
+    fn calc_b(&self, rating_map: HashMap<i32, Vec<Rating>>, match_: &Match) -> HashMap<i32, Rating> {
+        let total_game_count = match_.games.len();
+        let mut result_map: HashMap<i32, Rating> = HashMap::new();
+        for (k, v) in rating_map {
+            result_map.insert(
+                k,
+                Self::calc_rating_b(
+                    &v,
+                    total_game_count
+                )
+            );
+        }
+
+        result_map
+    }
+
     fn calc_rating_a(
-        ratings: &Vec<Rating>,
+        ratings: &[Rating],
         current_rating: f64,
         current_volatility: f64,
         total_game_count: usize
@@ -231,6 +251,22 @@ impl OtrModel {
         Rating {
             mu: rating_a,
             sigma: volatility_a
+        }
+    }
+
+    fn calc_rating_b(
+        ratings: &[Rating],
+        total_game_count: usize
+    ) -> Rating {
+        let rating_sum: f64 = ratings.iter().map(|f| f.mu).sum();
+        let rating_b = rating_sum / total_game_count as f64;
+
+        let volatility_sum: f64 = ratings.iter().map(|f| f.sigma.powf(2.0)).sum();
+        let volatility_b = (volatility_sum / total_game_count as f64).sqrt();
+
+        Rating {
+            mu: rating_b,
+            sigma: volatility_b
         }
     }
 
