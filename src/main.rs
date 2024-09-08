@@ -23,7 +23,7 @@ async fn main() {
 
     // 5. Process matches
     let results = model.process(&matches);
-    
+
     // 6. Save results in database
     client.save_results(&results).await;
 }

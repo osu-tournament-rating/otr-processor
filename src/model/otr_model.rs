@@ -1,22 +1,23 @@
-use std::collections::HashMap;
-use itertools::Itertools;
 use crate::{
     model::{
         constants::PERFORMANCE_SCALING_FACTOR,
         db_structs::{Game, Match, PlayerRating, RatingAdjustment},
         decay::DecayTracker,
         rating_tracker::RatingTracker,
-        structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
+        structures::rating_adjustment_type::RatingAdjustmentType
     },
     utils::progress_utils::progress_bar
 };
+use itertools::{cloned, Itertools};
 use openskill::{
     constant::*,
     model::{model::Model, plackett_luce::PlackettLuce},
     rating::{default_gamma, Rating}
 };
-use serde::__private::de::Content::F64;
 use statrs::statistics::Statistics;
+use std::collections::HashMap;
+use std::ops::Index;
+use crate::model::db_structs::GameScore;
 
 pub struct OtrModel {
     pub model: PlackettLuce,
@@ -72,143 +73,98 @@ impl OtrModel {
         // Apply decay to all players
         self.apply_decay(match_);
 
-        let new_ratings = Vec::new();
-
         self.rating_tracker.insert_or_update(new_ratings.as_slice())
     }
 
-    /// Rating method a, per the docs https://docs.otr.stagec.xyz/rating-calculation.html#ranking-rating-calculation
-    ///
-    /// R_A = (R_1 + .. + R_k + (n-k) * R) / n
-    /// V_A = sqrt((V_1^2 + .. + V_k^2 + (n-k) * V^2) / n)
-    ///
-    /// Returns a new Rating object (containing the mu and sigma)
-    fn rating_result_a(&self, player_id: i32, match_: Match) -> Rating {
-        let current_rating = self.rating_tracker.get_rating(player_id, match_.ruleset);
-
-        let r = current_rating.unwrap().rating;
-        
-        // Identify the number of games played of the total
-        let games_played: Vec<&Game> = match_.games.iter().filter(|f| f.scores.iter().any(|s| s.player_id == player_id)).collect();
-        let k = games_played.len();
-        let n = match_.games.len();
-
-        // For each played game, identify the placement
-        let mut ratings: Vec<Rating> = Vec::new();
-        for game in games_played {
-            let placement = game.scores.iter().find(|f| f.player_id == player_id).unwrap().placement;
-            let (teams, placements) = self.form_rating_teams(game, placement);
-            let result = self.model.rate(teams, placements);
-            
-            ratings.extend(result.into_iter().flatten());
+    /// Generates ratings for each player in the match
+    fn generate_ratings(&self, match_: &Match) -> HashMap<i32, Vec<Rating>> {
+        let mut map: HashMap<i32, Vec<Rating>> = HashMap::new();
+        for game in &match_.games {
+            let game_rating_result = self.rate(game);
+            for (k, v) in game_rating_result {
+                // Push to the vector of ratings in map for each player
+                map.entry(k).or_insert(Vec::new()).push(v);
+            }
         }
-
-        let mu_collection = ratings.iter().map(|f| f.mu);
-        let sigma_collection = ratings.iter().map(|f| f.sigma.powf(2.0));
-
-        let r_a = mu_collection.sum::<f64>() + (n as f64 - k as f64) * r / n as f64;
-        let v_a = (sigma_collection.sum::<f64>() + (n as f64 - k as f64) * current_rating.unwrap().volatility.powf(2.0) / n as f64).sqrt();
         
-        Rating {
-            mu: r_a,
-            sigma: v_a,
+        map
+    }
+
+    // match_ should be cloned on input
+    fn generate_ratings_b(&self, match_: &Match) -> HashMap<i32, Vec<Rating>> {
+        let mut cloned_match = match_.clone();
+        // 1. Identify all players who played
+        // 2. For each game, if any player did not play,
+        //  create a new score with the placement equal to the minimum for that game.
+
+        let participants = self.participants(&mut cloned_match);
+        self.apply_tie_for_last_scores(&mut cloned_match, &participants);
+
+        self.generate_ratings(&cloned_match)
+    }
+
+    /// Returns a vector containing all player ids which participated in this match
+    fn participants(&self, match_: &mut Match) -> Vec<i32> {
+        let scores = match_.games.iter().flat_map(|g| g.scores.iter().map(|s| s.player_id)).collect::<Vec<i32>>();
+        scores.iter().unique().map(|id| *id).collect()
+    }
+
+    fn apply_tie_for_last_scores(&self, match_: &mut Match, ids: &Vec<i32>) {
+        // Iterate through all games etc.
+        for g in match_.games.iter_mut() {
+            // max = worst placement (1 = best)
+            let worst_placement = g.scores.iter().map(|f| f.placement).max().unwrap();
+
+            // We use + 1 here because players who did not participate
+            // are classified as placing worse than the worst player in this lobby
+            let tie_for_last_placement = worst_placement + 1;
+
+            let ids_not_present = ids.iter().filter(|id| !g.scores.iter().any(|s| s.player_id == **id)).collect::<Vec<&i32>>();
+            for id in ids_not_present {
+                // Create the new score
+                g.scores.push(GameScore {
+                    id: 0,
+                    player_id: *id,
+                    game_id: g.id,
+                    score: 0,
+                    placement: tie_for_last_placement,
+                })
+            }
         }
     }
-    
-    /// Form the vector of ratings to feed into the model
-    /// Returns the input to the OpenSkill model
-    fn form_rating_teams(&self, game: &Game, placement: i32) -> (Vec<Vec<Rating>>, Vec<usize>) {
-        // Each score is it's own "team" according to the model (vector of ratings)
-        let mut teams = Vec::new();
+
+    // Rates a game in OpenSkill returning a HashMap<player_id, Rating>
+    fn rate(&self, game: &Game) -> HashMap<i32, Rating> {
+        // We use vectors instead of HashMaps because
+        // the input indices directly correlate to the
+        // OpenSkill output indices.
+        //
+        // If we used HashMaps instead, we would lose the ability
+        // to track inputs with the OpenSkill outputs.
+        let mut player_ratings = Vec::new();
         let mut placements = Vec::new();
+
         for score in &game.scores {
-            let player_rating = self.rating_tracker.get_rating(score.player_id, game.ruleset).expect("Expected player to have a rating");
-            let rating = Rating {
-                mu: player_rating.rating,
-                sigma: player_rating.volatility,
-            };
-            
-            teams.insert((placement - 1) as usize, vec![rating]);
-            placements.push(placement as usize);
+            player_ratings.push(self.rating_tracker.get_rating(score.player_id, game.ruleset)
+                .expect(format!("Expected player {:?} to have a rating for ruleset {:?}", score.player_id, game.ruleset).as_str()));
+            placements.push(score.placement as usize);
         }
 
-        (teams, placements)
-    }
-    
-    fn process_rating_result(
-        &mut self,
-        match_: &Match,
-        unprocessed_performances: &mut HashMap<i32, Vec<Rating>>,
-        player_id: &i32
-    ) -> PlayerRating {
-        let mut current_rating = self
-            .rating_tracker
-            .get_rating(*player_id, match_.ruleset)
-            .unwrap()
-            .clone();
-        let performances = unprocessed_performances.get(player_id).unwrap_or_else(|| {
-            panic!(
-                "Expected player {} to have performances for this match {}!",
-                player_id, match_.id
-            )
-        });
-
-        if n_games == 0 {
-            panic!("Expected at least one game in the match!");
+        let model_input = player_ratings.iter().map(|r| vec![Rating {
+            mu: r.rating,
+            sigma: r.volatility,
+        }]).collect_vec();
+        
+        let model_result = self.model.rate(model_input, placements);
+        
+        // At this point, the model_result output indices are aligned to
+        // our vectors above.
+        let mut map = HashMap::new();
+        for (i, r) in player_ratings.iter().enumerate() {
+            map.insert(r.player_id, model_result[i].first().unwrap().clone());
         }
-
-        let n_performances = performances.len() as i32;
-
-        // A scaling factor based on game performance
-        let performance_frequency = n_performances as f64 / n_games as f64;
-
-        // Calculate differences from the baseline rating
-        // This works because we only update the ratings in the leaderboard once per match
-        // (these performances are from the game level)
         
-        // This is known as rating_change_a in the docs: https://docs.otr.stagec.xyz/rating-calculation.html#ranking-rating-calculation
-        let baseline_mu_change: f64 = performances.iter().map(|f| f.mu - current_rating.rating).mean();
-        let rating_change_a = baseline_mu_change * 0.9;
-        
-        let baseline_volatility_change: f64 = performances.iter().map(|f| f.sigma - current_rating.volatility).mean();
-
-        // Average the sigma changes
-        
-        let scaled_rating = (current_rating.rating + baseline_mu_change) * performance_frequency;
-        let scaled_volatility: f64 = (current_rating.volatility + baseline_volatility_change) * performance_frequency;
-
-        let rating_delta = scaled_rating - current_rating.rating;
-
-        let performance_scaled_rating = Self::performance_scaled_rating(
-            current_rating.rating,
-            rating_delta,
-            performance_frequency,
-            PERFORMANCE_SCALING_FACTOR
-        );
-
-        if scaled_volatility == 0.0 {
-            panic!(
-                "Scaled volatility is 0.0 for player {} in match {}",
-                player_id, match_.id
-            );
-        }
-
-        let adjustment = RatingAdjustment {
-            player_id: *player_id,
-            match_id: Some(match_.id),
-            rating_before: current_rating.rating,
-            rating_after: performance_scaled_rating,
-            volatility_before: current_rating.volatility,
-            volatility_after: scaled_volatility,
-            timestamp: match_.start_time,
-            adjustment_type: RatingAdjustmentType::Match
-        };
-
-        current_rating.rating = scaled_rating;
-        current_rating.volatility = scaled_volatility;
-        current_rating.adjustments.push(adjustment);
-
-        current_rating
+        map
     }
 
     /// Applies decay to all players who participated in this match.
