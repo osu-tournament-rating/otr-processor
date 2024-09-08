@@ -16,6 +16,7 @@ use openskill::{
 };
 use statrs::statistics::Statistics;
 use std::{collections::HashMap, ops::Index};
+use crate::model::constants::{WEIGHT_A, WEIGHT_B};
 
 pub struct OtrModel {
     pub model: PlackettLuce,
@@ -78,7 +79,7 @@ impl OtrModel {
         // 2. Do math
         let calc_a = self.calc_a(ratings_a, match_);
         let calc_b = self.calc_b(ratings_b, match_);
-        
+
         // 3. Update values in the rating tracker
     }
 
@@ -230,6 +231,29 @@ impl OtrModel {
         }
 
         result_map
+    }
+
+    /// Calculates the weighted rating for all players present in a and b
+    fn calc_weighted_rating(map_a: &HashMap<i32, Rating>, map_b: &HashMap<i32, Rating>) -> HashMap<i32, Rating> {
+        let mut final_map: HashMap<i32, Rating> = HashMap::new();
+        for (k, v) in map_a {
+            if !map_b.contains_key(k) {
+                panic!("Expected key {:?} to be present in both maps", k);
+            }
+
+            let result_a = map_a.get(k).unwrap();
+            let result_b = map_b.get(k).unwrap();
+            
+            let rating_final = WEIGHT_A * result_a.mu + WEIGHT_B * result_b.mu;
+            let volatility_final = (WEIGHT_A * result_a.sigma.powf(2.0) + WEIGHT_B * result_b.sigma.powf(2.0)).sqrt();
+
+            final_map.insert(*k, Rating {
+                mu: rating_final,
+                sigma: volatility_final,
+            });
+        }
+
+        final_map
     }
 
     fn calc_rating_a(
