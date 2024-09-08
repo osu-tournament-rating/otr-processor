@@ -73,7 +73,13 @@ impl OtrModel {
         // Apply decay to all players
         self.apply_decay(match_);
 
-        self.rating_tracker.insert_or_update(new_ratings.as_slice())
+        // 1. Generate ratings
+        let ratings_a = self.generate_ratings(match_);
+        let ratings_b = self.generate_ratings_b(match_);
+
+        // 2. Do math
+
+        // 3. Update values in the rating tracker
     }
 
     /// Generates ratings for each player in the match
@@ -83,14 +89,14 @@ impl OtrModel {
             let game_rating_result = self.rate(game);
             for (k, v) in game_rating_result {
                 // Push to the vector of ratings in map for each player
-                map.entry(k).or_insert(Vec::new()).push(v);
+                map.entry(k).or_default().push(v);
             }
         }
-        
+
         map
     }
 
-    // match_ should be cloned on input
+    // TODO: Document
     fn generate_ratings_b(&self, match_: &Match) -> HashMap<i32, Vec<Rating>> {
         let mut cloned_match = match_.clone();
         // 1. Identify all players who played
@@ -154,17 +160,49 @@ impl OtrModel {
             mu: r.rating,
             sigma: r.volatility,
         }]).collect_vec();
-        
+
         let model_result = self.model.rate(model_input, placements);
-        
+
         // At this point, the model_result output indices are aligned to
         // our vectors above.
         let mut map = HashMap::new();
         for (i, r) in player_ratings.iter().enumerate() {
             map.insert(r.player_id, model_result[i].first().unwrap().clone());
         }
-        
+
         map
+    }
+
+    /// Performs method A calculation, combining a vector of ratings for a player
+    /// into a coherent number
+    fn calc_a(&self, rating_map: HashMap<i32, Vec<Rating>>, match_: &Match) -> HashMap<i32, Rating> {
+        let total_game_count = match_.games.len();
+        let mut result_map: HashMap<i32, Rating> = HashMap::new();
+        for (k, v) in rating_map {
+            let current_player_rating = self.rating_tracker.get_rating(k, match_.ruleset).unwrap();
+            result_map.insert(k, Self::calc_rating_a(&v, current_player_rating.rating, current_player_rating.volatility,
+            total_game_count));
+        }
+
+        result_map
+    }
+
+    fn calc_rating_a(ratings: &Vec<Rating>, current_rating: f64,
+                     current_volatility: f64, total_game_count: usize) -> Rating {
+        let rating_sum: f64 = ratings.iter().map(|f| f.mu).sum();
+
+        let count_games_unplayed = total_game_count as f64 - ratings.len() as f64;
+        let adjusted_rating_sum = rating_sum + count_games_unplayed * current_rating;
+        let rating_a = adjusted_rating_sum / total_game_count as f64;
+
+        let volatility_sum: f64 = ratings.iter().map(|f| f.sigma.powf(2.0)).sum();
+        let adjusted_volatility_sum: f64 = volatility_sum + count_games_unplayed * current_volatility.powf(2.0);
+        let volatility_a = (adjusted_volatility_sum / total_game_count as f64).sqrt();
+
+        Rating {
+            mu: rating_a,
+            sigma: volatility_a
+        }
     }
 
     /// Applies decay to all players who participated in this match.
