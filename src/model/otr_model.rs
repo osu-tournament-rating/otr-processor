@@ -230,7 +230,7 @@ impl OtrModel {
     /// Calculates the weighted rating for all players present in a and b
     fn calc_weighted_rating(&self, map_a: &HashMap<i32, Rating>, map_b: &HashMap<i32, Rating>) -> HashMap<i32, Rating> {
         let mut final_map: HashMap<i32, Rating> = HashMap::new();
-        for (k, v) in map_a {
+        for k in map_a.keys() {
             if !map_b.contains_key(k) {
                 panic!("Expected key {:?} to be present in both maps", k);
             }
