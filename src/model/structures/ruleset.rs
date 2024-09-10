@@ -3,7 +3,7 @@ use std::convert::TryFrom;
 use strum_macros::EnumIter;
 
 #[derive(Deserialize_repr, Serialize_repr, Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter)]
-#[repr(u8)]
+#[repr(i32)]
 pub enum Ruleset {
     Osu = 0,
     Taiko = 1,

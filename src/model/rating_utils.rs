@@ -1,52 +1,64 @@
-use crate::{
-    api::api_structs::{Player, PlayerRating},
-    model::{
-        constants,
-        constants::{DEFAULT_RATING, DEFAULT_VOLATILITY, MULTIPLIER, OSU_RATING_CEILING},
-        structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
-    }
+use crate::model::{
+    constants,
+    constants::{DEFAULT_RATING, DEFAULT_VOLATILITY, MULTIPLIER, OSU_RATING_CEILING},
+    db_structs::{Player, PlayerRating, RatingAdjustment},
+    structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
 };
 use chrono::{DateTime, FixedOffset};
 use constants::OSU_RATING_FLOOR;
-use std::collections::HashMap;
 use strum::IntoEnumIterator;
 
-pub fn initial_ratings(players: &[Player]) -> HashMap<(i32, Ruleset), PlayerRating> {
-    let mut map = HashMap::new();
+pub fn initial_ratings(players: &[Player]) -> Vec<PlayerRating> {
+    let mut ratings = Vec::new();
 
     for player in players {
-        for ruleset in Ruleset::iter() {
-            map.insert((player.id, ruleset), create_initial_rating(player, &ruleset));
-        }
+        let initial_ratings = create_initial_ratings(player);
+        ratings.extend(initial_ratings);
     }
 
-    map
+    ratings
 }
 
-fn create_initial_rating(player: &Player, ruleset: &Ruleset) -> PlayerRating {
+fn create_initial_ratings(player: &Player) -> Vec<PlayerRating> {
     let timestamp: DateTime<FixedOffset> = "2007-09-16T00:00:00-00:00".parse().unwrap();
+    let mut ratings = Vec::new();
 
-    PlayerRating {
-        player_id: player.id,
-        ruleset: *ruleset,
-        rating: initial_mu(player, ruleset),
-        volatility: DEFAULT_VOLATILITY,
-        percentile: 0.0,
-        global_rank: 0,
-        country_rank: 0,
-        timestamp,
-        adjustment_type: RatingAdjustmentType::Initial
+    for ruleset in Ruleset::iter() {
+        let rating = initial_rating(player, &ruleset);
+        let adjustment = RatingAdjustment {
+            player_id: player.id,
+            match_id: None,
+            rating_before: 0.0,
+            rating_after: rating,
+            volatility_before: 0.0,
+            volatility_after: DEFAULT_VOLATILITY,
+            timestamp,
+            adjustment_type: RatingAdjustmentType::Initial
+        };
+
+        if rating.is_nan() || rating <= 0.0 {
+            panic!("Initial rating is NaN or <= 0.0 for player: {:?}", player);
+        }
+
+        ratings.push(PlayerRating {
+            id: 0,
+            player_id: player.id,
+            ruleset,
+            rating,
+            volatility: DEFAULT_VOLATILITY,
+            percentile: 0.0,
+            global_rank: 0,
+            country_rank: 0,
+            adjustments: vec![adjustment]
+        });
     }
+
+    ratings
 }
 
-fn initial_mu(player: &Player, ruleset: &Ruleset) -> f64 {
-    let rank = match ruleset {
-        Ruleset::Osu => player.earliest_osu_global_rank.or(player.rank_standard),
-        Ruleset::Taiko => player.earliest_taiko_global_rank.or(player.rank_taiko),
-        Ruleset::Catch => player.earliest_catch_global_rank.or(player.rank_catch),
-        Ruleset::Mania4k => player.earliest_mania_global_rank.or(player.rank_mania),
-        Ruleset::Mania7k => player.earliest_mania_global_rank.or(player.rank_mania)
-    };
+fn initial_rating(player: &Player, ruleset: &Ruleset) -> f64 {
+    let ruleset_data = player.ruleset_data.iter().find(|rd| rd.ruleset == *ruleset);
+    let rank = ruleset_data.and_then(|rd| rd.earliest_global_rank.or(rd.global_rank));
 
     match rank {
         Some(r) => mu_from_rank(r, *ruleset),
@@ -95,17 +107,15 @@ fn std_dev_from_ruleset(ruleset: Ruleset) -> f64 {
 
 #[cfg(test)]
 mod tests {
+    use super::create_initial_ratings;
     use crate::{
-        api::api_structs::Player,
         model::{
             constants::{DEFAULT_VOLATILITY, OSU_RATING_CEILING, OSU_RATING_FLOOR},
+            db_structs::Player,
             rating_utils::{mu_from_rank, std_dev_from_ruleset},
-            structures::{
-                rating_adjustment_type::RatingAdjustmentType,
-                ruleset::Ruleset::{Catch, Mania4k, Mania7k, Osu, Taiko}
-            }
+            structures::ruleset::Ruleset::{Catch, Mania4k, Mania7k, Osu, Taiko}
         },
-        utils::test_utils::generate_player_rating
+        utils::test_utils::{generate_player_rating, generate_ruleset_data}
     };
 
     #[test]
@@ -184,18 +194,14 @@ mod tests {
             id: 1,
             username: Some("Test".to_string()),
             country: None,
-            rank_standard: Some(1),
-            rank_taiko: Some(1),
-            rank_catch: Some(1),
-            rank_mania: Some(1),
-            earliest_osu_global_rank: Some(1),
-            earliest_osu_global_rank_date: None,
-            earliest_taiko_global_rank: Some(1),
-            earliest_taiko_global_rank_date: None,
-            earliest_catch_global_rank: Some(1),
-            earliest_catch_global_rank_date: None,
-            earliest_mania_global_rank: Some(1),
-            earliest_mania_global_rank_date: None
+            // Player who is rank 1 in everything. wow!
+            ruleset_data: vec![
+                generate_ruleset_data(Osu, Some(1), None),
+                generate_ruleset_data(Taiko, Some(1), None),
+                generate_ruleset_data(Catch, Some(1), None),
+                generate_ruleset_data(Mania4k, Some(1), None),
+                generate_ruleset_data(Mania7k, Some(1), None),
+            ]
         };
 
         let expected_osu = mu_from_rank(1, Osu);
@@ -204,11 +210,11 @@ mod tests {
         let expected_mania4k = mu_from_rank(1, Mania4k);
         let expected_mania7k = mu_from_rank(1, Mania7k);
 
-        let actual_osu = super::initial_mu(&player, &Osu);
-        let actual_taiko = super::initial_mu(&player, &Taiko);
-        let actual_catch = super::initial_mu(&player, &Catch);
-        let actual_mania_4k = super::initial_mu(&player, &Mania4k);
-        let actual_mania_7k = super::initial_mu(&player, &Mania7k);
+        let actual_osu = super::initial_rating(&player, &Osu);
+        let actual_taiko = super::initial_rating(&player, &Taiko);
+        let actual_catch = super::initial_rating(&player, &Catch);
+        let actual_mania_4k = super::initial_rating(&player, &Mania4k);
+        let actual_mania_7k = super::initial_rating(&player, &Mania7k);
 
         assert_eq!(expected_osu, actual_osu);
         assert_eq!(expected_taiko, actual_taiko);
@@ -218,23 +224,18 @@ mod tests {
     }
 
     #[test]
-    fn test_create_initial_rating() {
+    fn test_create_initial_adjustment() {
         let player = Player {
             id: 0,
-            username: None,
+            username: Some("Test".to_string()),
             country: None,
-            rank_standard: Some(1),
-            rank_taiko: Some(1),
-            rank_catch: Some(1),
-            rank_mania: Some(1),
-            earliest_osu_global_rank: None,
-            earliest_osu_global_rank_date: None,
-            earliest_taiko_global_rank: None,
-            earliest_taiko_global_rank_date: None,
-            earliest_catch_global_rank: None,
-            earliest_catch_global_rank_date: None,
-            earliest_mania_global_rank: None,
-            earliest_mania_global_rank_date: None
+            ruleset_data: vec![
+                generate_ruleset_data(Osu, Some(1), None),
+                generate_ruleset_data(Taiko, Some(1), None),
+                generate_ruleset_data(Catch, Some(1), None),
+                generate_ruleset_data(Mania4k, Some(1), None),
+                generate_ruleset_data(Mania7k, Some(1), None),
+            ]
         };
 
         let rating_osu = mu_from_rank(1, Osu);
@@ -243,51 +244,53 @@ mod tests {
         let rating_mania4k = mu_from_rank(1, Mania4k);
         let rating_mania7k = mu_from_rank(1, Mania7k);
 
-        let expected_osu =
-            generate_player_rating(0, rating_osu, DEFAULT_VOLATILITY, RatingAdjustmentType::Initial, None);
-        let expected_taiko =
-            generate_player_rating(0, rating_taiko, DEFAULT_VOLATILITY, RatingAdjustmentType::Initial, None);
-        let expected_catch =
-            generate_player_rating(0, rating_catch, DEFAULT_VOLATILITY, RatingAdjustmentType::Initial, None);
-        let expected_mania4k = generate_player_rating(
-            0,
-            rating_mania4k,
-            DEFAULT_VOLATILITY,
-            RatingAdjustmentType::Initial,
-            None
-        );
-        let expected_mania7k = generate_player_rating(
-            0,
-            rating_mania7k,
-            DEFAULT_VOLATILITY,
-            RatingAdjustmentType::Initial,
-            None
-        );
+        let expected_osu = generate_player_rating(0, Osu, rating_osu, DEFAULT_VOLATILITY, 1);
+        let expected_taiko = generate_player_rating(0, Taiko, rating_taiko, DEFAULT_VOLATILITY, 1);
+        let expected_catch = generate_player_rating(0, Catch, rating_catch, DEFAULT_VOLATILITY, 1);
+        let expected_mania4k = generate_player_rating(0, Mania4k, rating_mania4k, DEFAULT_VOLATILITY, 1);
+        let expected_mania7k = generate_player_rating(0, Mania7k, rating_mania7k, DEFAULT_VOLATILITY, 1);
 
-        let actual_osu = super::create_initial_rating(&player, &Osu);
-        let actual_taiko = super::create_initial_rating(&player, &Taiko);
-        let actual_catch = super::create_initial_rating(&player, &Catch);
-        let actual_mania4k = super::create_initial_rating(&player, &Mania4k);
-        let actual_mania7k = super::create_initial_rating(&player, &Mania7k);
+        let initial_ratings = create_initial_ratings(&player);
+
+        let actual_osu = initial_ratings.iter().find(|r| r.ruleset == Osu).unwrap();
+        let actual_taiko = initial_ratings.iter().find(|r| r.ruleset == Taiko).unwrap();
+        let actual_catch = initial_ratings.iter().find(|r| r.ruleset == Catch).unwrap();
+        let actual_mania4k = initial_ratings.iter().find(|r| r.ruleset == Mania4k).unwrap();
+        let actual_mania7k = initial_ratings.iter().find(|r| r.ruleset == Mania7k).unwrap();
 
         assert_eq!(expected_osu.rating, actual_osu.rating);
         assert_eq!(expected_osu.volatility, actual_osu.volatility);
-        assert_eq!(expected_osu.adjustment_type, actual_osu.adjustment_type);
+        assert_eq!(
+            expected_osu.adjustments.first().unwrap().adjustment_type,
+            actual_osu.adjustments.first().unwrap().adjustment_type
+        );
 
         assert_eq!(expected_taiko.rating, actual_taiko.rating);
         assert_eq!(expected_taiko.volatility, actual_taiko.volatility);
-        assert_eq!(expected_taiko.adjustment_type, actual_taiko.adjustment_type);
+        assert_eq!(
+            expected_taiko.adjustments.first().unwrap().adjustment_type,
+            actual_taiko.adjustments.first().unwrap().adjustment_type
+        );
 
         assert_eq!(expected_catch.rating, actual_catch.rating);
         assert_eq!(expected_catch.volatility, actual_catch.volatility);
-        assert_eq!(expected_catch.adjustment_type, actual_catch.adjustment_type);
+        assert_eq!(
+            expected_catch.adjustments.first().unwrap().adjustment_type,
+            actual_catch.adjustments.first().unwrap().adjustment_type
+        );
 
         assert_eq!(expected_mania4k.rating, actual_mania4k.rating);
         assert_eq!(expected_mania4k.volatility, actual_mania4k.volatility);
-        assert_eq!(expected_mania4k.adjustment_type, actual_mania4k.adjustment_type);
+        assert_eq!(
+            expected_mania4k.adjustments.first().unwrap().adjustment_type,
+            actual_mania4k.adjustments.first().unwrap().adjustment_type
+        );
 
         assert_eq!(expected_mania7k.rating, actual_mania7k.rating);
         assert_eq!(expected_mania7k.volatility, actual_mania7k.volatility);
-        assert_eq!(expected_mania7k.adjustment_type, actual_mania7k.adjustment_type);
+        assert_eq!(
+            expected_mania7k.adjustments.first().unwrap().adjustment_type,
+            actual_mania7k.adjustments.first().unwrap().adjustment_type
+        );
     }
 }
