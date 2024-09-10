@@ -351,11 +351,7 @@ impl OtrModel {
 #[cfg(test)]
 mod tests {
     pub use crate::{
-        model::{
-            db_structs::PlayerRating,
-            otr_model::OtrModel,
-            structures::ruleset::{Ruleset, Ruleset::Osu}
-        },
+        model::{db_structs::PlayerRating, otr_model::OtrModel, structures::ruleset::Ruleset::Osu},
         utils::test_utils::*
     };
     use approx::assert_abs_diff_eq;

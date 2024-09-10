@@ -26,6 +26,9 @@ async fn main() {
 
     // 6. Save results in database
     client.save_results(&results).await;
+
+    // 7. Update all match processing statuses
+    client.set_match_processing_status_done(&matches).await
 }
 
 async fn client() -> DbClient {

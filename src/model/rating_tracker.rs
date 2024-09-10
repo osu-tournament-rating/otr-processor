@@ -143,13 +143,16 @@ impl RatingTracker {
                 }
             }
         }
-        
+
         for ruleset in rulesets.iter() {
-            self.insert_or_update(&self.leaderboard
-                .values()
-                .filter(|player_rating| player_rating.ruleset == *ruleset)
-                .cloned()
-                .collect::<Vec<_>>());
+            self.insert_or_update(
+                &self
+                    .leaderboard
+                    .values()
+                    .filter(|player_rating| player_rating.ruleset == *ruleset)
+                    .cloned()
+                    .collect::<Vec<_>>()
+            );
         }
     }
 

@@ -151,8 +151,12 @@ impl DbClient {
             self.save_rating_adjustments(parent_id, &player_rating.adjustments)
                 .await;
 
+            let msg = format!("Saving rating adjustments for player {:?}", player_rating.player_id).to_string();
+            p_bar.set_message(msg);
             p_bar.inc(1);
         }
+
+        p_bar.finish();
     }
 
     /// After the parent PlayerRating is saved, all child RatingAdjustments should be saved
@@ -212,13 +216,32 @@ impl DbClient {
         println!("Truncated player_ratings table!");
     }
 
+    pub async fn set_match_processing_status_done(&self, matches: &[Match]) {
+        let bar = progress_bar(
+            matches.len() as u64,
+            "Updating processing status for all matches".to_string()
+        )
+        .unwrap();
+        for match_ in matches {
+            self.client
+                .execute(
+                    "UPDATE matches SET processing_status = 5 WHERE match_id = $1",
+                    &[&match_.id]
+                )
+                .await
+                .unwrap();
+
+            bar.inc(1)
+        }
+    }
+
     async fn truncate_rating_adjustments(&self) {
         self.client
             .execute("TRUNCATE TABLE rating_adjustments CASCADE", &[])
             .await
             .unwrap();
 
-        println!("Truncated player_ratings table!");
+        println!("Truncated rating_adjustments table!");
     }
 
     // Access the underlying Client
