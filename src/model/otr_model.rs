@@ -1,7 +1,6 @@
 use crate::{
     model::{
         constants::{WEIGHT_A, WEIGHT_B},
-        db_structs::{Game, GameScore, Match, PlayerRating, RatingAdjustment},
         decay::DecayTracker,
         rating_tracker::RatingTracker,
         structures::rating_adjustment_type::RatingAdjustmentType
@@ -15,6 +14,7 @@ use openskill::{
     rating::{default_gamma, Rating}
 };
 use std::collections::HashMap;
+use crate::database::db_structs::{Game, GameScore, Match, PlayerRating, RatingAdjustment};
 
 pub struct OtrModel {
     pub model: PlackettLuce,
@@ -351,11 +351,13 @@ impl OtrModel {
 #[cfg(test)]
 mod tests {
     pub use crate::{
-        model::{db_structs::PlayerRating, otr_model::OtrModel, structures::ruleset::Ruleset::Osu},
         utils::test_utils::*
     };
     use approx::assert_abs_diff_eq;
     use chrono::Utc;
+    use crate::database::db_structs::PlayerRating;
+    use crate::model::otr_model::OtrModel;
+    use crate::model::structures::ruleset::Ruleset::Osu;
 
     #[test]
     fn test_rate() {

@@ -1,9 +1,8 @@
 use chrono::{DateTime, FixedOffset};
-
+use crate::database::db_structs::RatingAdjustment;
 use crate::model::{
     constants,
     constants::DECAY_DAYS,
-    db_structs::RatingAdjustment,
     rating_tracker::RatingTracker,
     structures::{
         rating_adjustment_type::RatingAdjustmentType::{Decay, Initial},
@@ -151,13 +150,13 @@ mod tests {
         model::{
             constants,
             constants::{DECAY_DAYS, MULTIPLIER},
-            db_structs::{PlayerRating, RatingAdjustment},
             decay::{decay_rating, decay_volatility, is_decay_possible, DecayTracker},
             rating_tracker::RatingTracker,
             structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
         },
         utils::test_utils::generate_country_mapping_player_ratings
     };
+    use crate::database::db_structs::{PlayerRating, RatingAdjustment};
 
     #[test]
     fn test_decay_default_days() {

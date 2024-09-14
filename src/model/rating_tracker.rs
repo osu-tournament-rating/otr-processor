@@ -1,9 +1,8 @@
 use indexmap::IndexMap;
 use itertools::Itertools;
 use std::{cmp::Ordering, collections::HashMap};
-
+use crate::database::db_structs::{PlayerRating, RatingAdjustment};
 use crate::model::{
-    db_structs::{PlayerRating, RatingAdjustment},
     structures::ruleset::Ruleset
 };
 

@@ -1,12 +1,13 @@
 use crate::{
     model::{
-        db_structs::{Game, GameScore, Match, Player, PlayerRating, RatingAdjustment, RulesetData},
         structures::ruleset::Ruleset
     },
     utils::progress_utils::progress_bar
 };
 use std::sync::Arc;
 use tokio_postgres::{Client, Error, NoTls};
+
+use super::db_structs::{Game, GameScore, Match, Player, PlayerRating, RatingAdjustment, RulesetData};
 
 #[derive(Clone)]
 pub struct DbClient {
