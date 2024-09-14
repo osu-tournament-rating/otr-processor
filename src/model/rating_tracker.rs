@@ -1,11 +1,10 @@
+use crate::{
+    database::db_structs::{PlayerRating, RatingAdjustment},
+    model::structures::ruleset::Ruleset
+};
 use indexmap::IndexMap;
 use itertools::Itertools;
 use std::{cmp::Ordering, collections::HashMap};
-
-use crate::model::{
-    db_structs::{PlayerRating, RatingAdjustment},
-    structures::ruleset::Ruleset
-};
 
 pub struct RatingTracker {
     // Global leaderboard, used as a reference for country leaderboards also.

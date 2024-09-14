@@ -1,7 +1,7 @@
 use crate::{
+    database::db_structs::{Game, GameScore, Match, PlayerRating, RatingAdjustment},
     model::{
         constants::{WEIGHT_A, WEIGHT_B},
-        db_structs::{Game, GameScore, Match, PlayerRating, RatingAdjustment},
         decay::DecayTracker,
         rating_tracker::RatingTracker,
         structures::rating_adjustment_type::RatingAdjustmentType
@@ -350,9 +350,10 @@ impl OtrModel {
 
 #[cfg(test)]
 mod tests {
-    pub use crate::{
-        model::{db_structs::PlayerRating, otr_model::OtrModel, structures::ruleset::Ruleset::Osu},
-        utils::test_utils::*
+    pub use crate::utils::test_utils::*;
+    use crate::{
+        database::db_structs::PlayerRating,
+        model::{otr_model::OtrModel, structures::ruleset::Ruleset::Osu}
     };
     use approx::assert_abs_diff_eq;
     use chrono::Utc;

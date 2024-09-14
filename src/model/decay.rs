@@ -1,15 +1,16 @@
-use chrono::{DateTime, FixedOffset};
-
-use crate::model::{
-    constants,
-    constants::DECAY_DAYS,
-    db_structs::RatingAdjustment,
-    rating_tracker::RatingTracker,
-    structures::{
-        rating_adjustment_type::RatingAdjustmentType::{Decay, Initial},
-        ruleset::Ruleset
+use crate::{
+    database::db_structs::RatingAdjustment,
+    model::{
+        constants,
+        constants::DECAY_DAYS,
+        rating_tracker::RatingTracker,
+        structures::{
+            rating_adjustment_type::RatingAdjustmentType::{Decay, Initial},
+            ruleset::Ruleset
+        }
     }
 };
+use chrono::{DateTime, FixedOffset};
 
 /// Tracks decay activity for players
 pub struct DecayTracker;
@@ -148,10 +149,10 @@ mod tests {
     use chrono::DateTime;
 
     use crate::{
+        database::db_structs::{PlayerRating, RatingAdjustment},
         model::{
             constants,
             constants::{DECAY_DAYS, MULTIPLIER},
-            db_structs::{PlayerRating, RatingAdjustment},
             decay::{decay_rating, decay_volatility, is_decay_possible, DecayTracker},
             rating_tracker::RatingTracker,
             structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
