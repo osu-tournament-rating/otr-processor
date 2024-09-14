@@ -1,9 +1,4 @@
-use crate::{
-    model::{
-        structures::ruleset::Ruleset
-    },
-    utils::progress_utils::progress_bar
-};
+use crate::{model::structures::ruleset::Ruleset, utils::progress_utils::progress_bar};
 use std::sync::Arc;
 use tokio_postgres::{Client, Error, NoTls};
 

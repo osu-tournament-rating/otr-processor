@@ -1,9 +1,9 @@
 use otr_processor::{
+    database::db::DbClient,
     model::{otr_model::OtrModel, rating_utils::initial_ratings},
     utils::test_utils::generate_country_mapping_players
 };
 use std::{collections::HashMap, env};
-use otr_processor::database::db::DbClient;
 
 #[tokio::main]
 async fn main() {

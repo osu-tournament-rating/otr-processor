@@ -1,12 +1,14 @@
-use crate::model::{
-    constants,
-    constants::{DEFAULT_RATING, DEFAULT_VOLATILITY, MULTIPLIER, OSU_RATING_CEILING},
-    structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
+use crate::{
+    database::db_structs::{Player, PlayerRating, RatingAdjustment},
+    model::{
+        constants,
+        constants::{DEFAULT_RATING, DEFAULT_VOLATILITY, MULTIPLIER, OSU_RATING_CEILING},
+        structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
+    }
 };
 use chrono::{DateTime, FixedOffset};
 use constants::OSU_RATING_FLOOR;
 use strum::IntoEnumIterator;
-use crate::database::db_structs::{Player, PlayerRating, RatingAdjustment};
 
 pub fn initial_ratings(players: &[Player]) -> Vec<PlayerRating> {
     let mut ratings = Vec::new();
@@ -109,6 +111,7 @@ fn std_dev_from_ruleset(ruleset: Ruleset) -> f64 {
 mod tests {
     use super::create_initial_ratings;
     use crate::{
+        database::db_structs::Player,
         model::{
             constants::{DEFAULT_VOLATILITY, OSU_RATING_CEILING, OSU_RATING_FLOOR},
             rating_utils::{mu_from_rank, std_dev_from_ruleset},
@@ -116,7 +119,6 @@ mod tests {
         },
         utils::test_utils::{generate_player_rating, generate_ruleset_data}
     };
-    use crate::database::db_structs::Player;
 
     #[test]
     fn test_ruleset_stddev_osu() {

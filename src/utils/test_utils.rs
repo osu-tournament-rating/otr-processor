@@ -1,10 +1,14 @@
+use crate::{
+    database::db_structs::{
+        Game, GameScore, Match, Player, PlayerPlacement, PlayerRating, RatingAdjustment, RulesetData
+    },
+    model::{
+        constants::{DEFAULT_RATING, DEFAULT_VOLATILITY},
+        structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
+    }
+};
 use chrono::{DateTime, FixedOffset, Utc};
 use std::{collections::HashMap, ops::Add};
-use crate::database::db_structs::{Game, GameScore, Match, Player, PlayerPlacement, PlayerRating, RatingAdjustment, RulesetData};
-use crate::model::{
-    constants::{DEFAULT_RATING, DEFAULT_VOLATILITY},
-    structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
-};
 
 pub fn generate_player_rating(
     player_id: i32,
