@@ -1,5 +1,8 @@
 use crate::{model::structures::ruleset::Ruleset, utils::progress_utils::progress_bar};
-use std::sync::Arc;
+use indexmap::map::Slice;
+use itertools::Itertools;
+use postgres_types::ToSql;
+use std::{collections::HashMap, sync::Arc};
 use tokio_postgres::{Client, Error, NoTls, Row};
 
 use super::db_structs::{Game, GameScore, Match, Player, PlayerRating, RatingAdjustment, RulesetData};
@@ -125,10 +128,16 @@ impl DbClient {
                 current_player_id = row.get("player_id");
             } else {
                 // Same player, new ruleset data
-                
+
                 let data = self.ruleset_data_from_row(&row);
                 match data {
-                    Some(ruleset_data) => players.last_mut().unwrap().ruleset_data.clone().unwrap_or_default().push(ruleset_data),
+                    Some(ruleset_data) => players
+                        .last_mut()
+                        .unwrap()
+                        .ruleset_data
+                        .clone()
+                        .unwrap_or_default()
+                        .push(ruleset_data),
                     None => ()
                 }
             }
@@ -153,7 +162,7 @@ impl DbClient {
                 ruleset: Ruleset::try_from(parsed_ruleset.unwrap()).unwrap(),
                 global_rank: global_rank.unwrap(),
                 earliest_global_rank: earliest_global_rank.unwrap()
-            })
+            });
         }
 
         None
@@ -165,10 +174,11 @@ impl DbClient {
 
         let p_bar = progress_bar(player_ratings.len() as u64, "Saving player ratings to db".to_string()).unwrap();
 
+        let mut mapping: HashMap<i32, Vec<&RatingAdjustment>> = HashMap::new();
         for player_rating in player_ratings {
             let parent_id = self.save_player_rating(player_rating).await;
-            self.save_rating_adjustments(parent_id, &player_rating.adjustments)
-                .await;
+            let insertion = player_rating.adjustments.iter().map(|f| f).collect_vec();
+            mapping.insert(parent_id, insertion);
 
             let msg = format!("Saving rating adjustments for player {:?}", player_rating.player_id).to_string();
             p_bar.set_message(msg);
@@ -179,50 +189,46 @@ impl DbClient {
     }
 
     /// Save all rating adjustments in a single batch query
-    async fn save_rating_adjustments(&self, parent_id: i32, adjustments: &Vec<RatingAdjustment>) {
+    async fn save_rating_adjustments(&self, adjustment_mapping: &HashMap<i32, Vec<&RatingAdjustment>>) {
         // Prepare the base query
-        let query = "INSERT INTO rating_adjustments (player_id, player_rating_id, match_id, \
-    rating_before, rating_after, volatility_before, volatility_after, timestamp, adjustment_type) \
-    VALUES ";
+        let base_query = "INSERT INTO rating_adjustments (player_id, player_rating_id, match_id, \
+        rating_before, rating_after, volatility_before, volatility_after, timestamp, adjustment_type) \
+        VALUES ";
 
         // Collect parameters for batch insertion
-        let mut values: Vec<Box<dyn tokio_postgres::types::ToSql + Sync>> = Vec::new();
-        let mut placeholders = Vec::new();
+        let mut values: Vec<String> = Vec::new();
 
-        for (i, adjustment) in adjustments.iter().enumerate() {
-            let base = i * 9;
-            placeholders.push(format!(
-                "(${}, ${}, ${}, ${}, ${}, ${}, ${}, ${}, ${})",
-                base + 1,
-                base + 2,
-                base + 3,
-                base + 4,
-                base + 5,
-                base + 6,
-                base + 7,
-                base + 8,
-                base + 9
-            ));
+        for (player_rating_id, adjustments) in adjustment_mapping.iter() {
+            for adjustment in adjustments {
+                // Create a tuple for each adjustment
+                let match_id = adjustment.match_id.map_or("NULL".to_string(), |id| id.to_string());
 
-            values.push(Box::new(adjustment.player_id) as Box<dyn tokio_postgres::types::ToSql + Sync>);
-            values.push(Box::new(parent_id) as Box<dyn tokio_postgres::types::ToSql + Sync>);
-            values.push(Box::new(adjustment.match_id) as Box<dyn tokio_postgres::types::ToSql + Sync>);
-            values.push(Box::new(adjustment.rating_before) as Box<dyn tokio_postgres::types::ToSql + Sync>);
-            values.push(Box::new(adjustment.rating_after) as Box<dyn tokio_postgres::types::ToSql + Sync>);
-            values.push(Box::new(adjustment.volatility_before) as Box<dyn tokio_postgres::types::ToSql + Sync>);
-            values.push(Box::new(adjustment.volatility_after) as Box<dyn tokio_postgres::types::ToSql + Sync>);
-            values.push(Box::new(adjustment.timestamp) as Box<dyn tokio_postgres::types::ToSql + Sync>);
-            values.push(Box::new(adjustment.adjustment_type as i32) as Box<dyn tokio_postgres::types::ToSql + Sync>);
+                let value_tuple = format!(
+                    "({}, {}, {}, {}, {}, {}, {}, '{}', {})",
+                    adjustment.player_id,
+                    player_rating_id,
+                    match_id,
+                    adjustment.rating_before,
+                    adjustment.rating_after,
+                    adjustment.volatility_before,
+                    adjustment.volatility_after,
+                    adjustment.timestamp.format("%Y-%m-%d %H:%M:%S"), // Assuming timestamp is NaiveDateTime
+                    adjustment.adjustment_type as i32
+                );
+                values.push(value_tuple);
+            }
         }
 
-        // Combine the query with all placeholders
-        let full_query = format!("{}{}", query, placeholders.join(", "));
+        // Combine the query with all the values
+        let full_query = format!("{}{}", base_query, values.join(", "));
+        let empty: Vec<String> = Vec::new();
 
         // Execute the batch query
         self.client
-            .execute(&full_query, &values.iter().map(|v| &**v).collect::<Vec<_>>()[..])
+            // Params needed here.
+            .execute_raw(&full_query, &empty)
             .await
-            .unwrap();
+            .expect("Failed to execute bulk insert");
     }
 
     /// Saves the PlayerRating, returning the primary key
