@@ -174,22 +174,24 @@ impl DbClient {
 
         let p_bar = progress_bar(player_ratings.len() as u64, "Saving player ratings to db".to_string()).unwrap();
 
-        let mut mapping: HashMap<i32, Vec<&RatingAdjustment>> = HashMap::new();
-        for player_rating in player_ratings {
-            let parent_id = self.save_player_rating(player_rating).await;
-            let insertion = player_rating.adjustments.iter().map(|f| f).collect_vec();
-            mapping.insert(parent_id, insertion);
+        let mut mapping: HashMap<i32, Vec<RatingAdjustment>> = HashMap::new();
+        let parent_ids = self.save_player_ratings(&player_ratings).await;
 
-            let msg = format!("Saving rating adjustments for player {:?}", player_rating.player_id).to_string();
-            p_bar.set_message(msg);
-            p_bar.inc(1);
+        p_bar.inc(1);
+        p_bar.finish();
+
+        for (i, rating) in player_ratings.iter().enumerate() {
+            let parent_id = parent_ids.get(i).unwrap();
+            mapping.insert(*parent_id, rating.adjustments.clone());
         }
 
-        p_bar.finish();
+        println!("Adjustment parent_id mapping created");
+
+        self.save_rating_adjustments(&mapping).await;
     }
 
     /// Save all rating adjustments in a single batch query
-    async fn save_rating_adjustments(&self, adjustment_mapping: &HashMap<i32, Vec<&RatingAdjustment>>) {
+    async fn save_rating_adjustments(&self, adjustment_mapping: &HashMap<i32, Vec<RatingAdjustment>>) {
         // Prepare the base query
         let base_query = "INSERT INTO rating_adjustments (player_id, player_rating_id, match_id, \
         rating_before, rating_after, volatility_before, volatility_after, timestamp, adjustment_type) \
@@ -198,6 +200,7 @@ impl DbClient {
         // Collect parameters for batch insertion
         let mut values: Vec<String> = Vec::new();
 
+        let p_bar = progress_bar(adjustment_mapping.len() as u64, "Creating rating adjustment queries".to_string()).unwrap();
         for (player_rating_id, adjustments) in adjustment_mapping.iter() {
             for adjustment in adjustments {
                 // Create a tuple for each adjustment
@@ -217,7 +220,11 @@ impl DbClient {
                 );
                 values.push(value_tuple);
             }
+
+            p_bar.inc(1);
         }
+
+        p_bar.finish();
 
         // Combine the query with all the values
         let full_query = format!("{}{}", base_query, values.join(", "));
@@ -225,33 +232,41 @@ impl DbClient {
 
         // Execute the batch query
         self.client
-            // Params needed here.
             .execute_raw(&full_query, &empty)
             .await
             .expect("Failed to execute bulk insert");
     }
 
-    /// Saves the PlayerRating, returning the primary key
-    async fn save_player_rating(&self, player_rating: &PlayerRating) -> i32 {
-        let query = "INSERT INTO player_ratings (player_id, ruleset, rating, volatility, \
-        percentile, global_rank, country_rank) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id";
-        let row = self
-            .client
-            .query_one(
-                query,
-                &[
-                    &player_rating.player_id,
-                    &(player_rating.ruleset as i32),
-                    &player_rating.rating,
-                    &player_rating.volatility,
-                    &player_rating.percentile,
-                    &player_rating.global_rank,
-                    &player_rating.country_rank
-                ]
-            )
-            .await
-            .unwrap();
-        row.get("id")
+    /// Saves multiple PlayerRatings, returning a vector of primary keys
+    async fn save_player_ratings(&self, player_ratings: &[PlayerRating]) -> Vec<i32> {
+        // Create a list of value placeholders
+        let mut query = "INSERT INTO player_ratings (player_id, ruleset, rating, volatility, \
+                     percentile, global_rank, country_rank) VALUES"
+            .to_string();
+        let mut value_placeholders: Vec<String> = Vec::new();
+
+        for (i, rating) in player_ratings.iter().enumerate() {
+            // Directly embed the values into the query string
+            value_placeholders.push(format!(
+                "({}, {}, {}, {}, {}, {}, {})",
+                rating.player_id,
+                rating.ruleset as i32,
+                rating.rating,
+                rating.volatility,
+                rating.percentile,
+                rating.global_rank,
+                rating.country_rank
+            ));
+        }
+
+        query += &value_placeholders.join(", ");
+        query += " RETURNING id";
+
+        // Execute the batch insert
+        let rows = self.client.query(query.as_str(), &[]).await.unwrap();
+
+        // Collect and return the IDs
+        rows.iter().map(|row| row.get("id")).collect()
     }
 
     async fn truncate_player_ratings(&self) {
