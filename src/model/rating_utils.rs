@@ -10,6 +10,8 @@ use chrono::{DateTime, FixedOffset};
 use constants::OSU_RATING_FLOOR;
 use strum::IntoEnumIterator;
 
+use super::constants::DEFAULT_RATING;
+
 pub fn initial_ratings(players: &[Player]) -> Vec<PlayerRating> {
     let mut ratings = Vec::new();
 
@@ -59,10 +61,18 @@ fn create_initial_ratings(player: &Player) -> Vec<PlayerRating> {
 }
 
 fn initial_rating(player: &Player, ruleset: &Ruleset) -> f64 {
-    let ruleset_data = player.ruleset_data.iter().find(|rd| rd.ruleset == *ruleset);
-    let rank: i32 = ruleset_data.and_then(|rd| rd.earliest_global_rank.or(Some(rd.global_rank))).unwrap();
+    match &player.ruleset_data {
+        Some(data) => {
+            let ruleset_data = data.iter().find(|rd| rd.ruleset == *ruleset);
+            let rank = ruleset_data.and_then(|rd| rd.earliest_global_rank.or(Some(rd.global_rank)));
 
-    mu_from_rank(rank, *ruleset)
+            match rank {
+                Some(r) => mu_from_rank(r, *ruleset),
+                None => DEFAULT_RATING
+            }
+        },
+        None => DEFAULT_RATING
+    }
 }
 
 fn mu_from_rank(rank: i32, ruleset: Ruleset) -> f64 {
@@ -194,13 +204,13 @@ mod tests {
             username: Some("Test".to_string()),
             country: None,
             // Player who is rank 1 in everything. wow!
-            ruleset_data: vec![
+            ruleset_data: Some(vec![
                 generate_ruleset_data(Osu, 1, None),
                 generate_ruleset_data(Taiko, 1, None),
                 generate_ruleset_data(Catch, 1, None),
                 generate_ruleset_data(Mania4k, 1, None),
                 generate_ruleset_data(Mania7k, 1, None),
-            ]
+            ])
         };
 
         let expected_osu = mu_from_rank(1, Osu);
@@ -228,13 +238,13 @@ mod tests {
             id: 0,
             username: Some("Test".to_string()),
             country: None,
-            ruleset_data: vec![
+            ruleset_data: Some(vec![
                 generate_ruleset_data(Osu, 1, None),
                 generate_ruleset_data(Taiko, 1, None),
                 generate_ruleset_data(Catch, 1, None),
                 generate_ruleset_data(Mania4k, 1, None),
                 generate_ruleset_data(Mania7k, 1, None),
-            ]
+            ])
         };
 
         let rating_osu = mu_from_rank(1, Osu);

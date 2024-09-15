@@ -1,6 +1,6 @@
 use crate::{model::structures::ruleset::Ruleset, utils::progress_utils::progress_bar};
 use std::sync::Arc;
-use tokio_postgres::{Client, Error, NoTls};
+use tokio_postgres::{Client, Error, NoTls, Row};
 
 use super::db_structs::{Game, GameScore, Match, Player, PlayerRating, RatingAdjustment, RulesetData};
 
@@ -116,24 +116,47 @@ impl DbClient {
                     id: row.get("player_id"),
                     username: row.get("username"),
                     country: row.get("country"),
-                    ruleset_data: vec![RulesetData {
-                        ruleset: Ruleset::try_from(row.get::<_, i32>("ruleset")).unwrap(),
-                        global_rank: row.get("global_rank"),
-                        earliest_global_rank: row.get("earliest_global_rank")
-                    }]
+                    ruleset_data: match self.ruleset_data_from_row(&row) {
+                        Some(data) => Some(vec![data]),
+                        None => None
+                    }
                 };
                 players.push(player);
                 current_player_id = row.get("player_id");
             } else {
-                players.last_mut().unwrap().ruleset_data.push(RulesetData {
-                    ruleset: Ruleset::try_from(row.get::<_, i32>("ruleset")).unwrap(),
-                    global_rank: row.get("global_rank"),
-                    earliest_global_rank: row.get("earliest_global_rank")
-                });
+                // Same player, new ruleset data
+                
+                let data = self.ruleset_data_from_row(&row);
+                match data {
+                    Some(ruleset_data) => players.last_mut().unwrap().ruleset_data.clone().unwrap_or_default().push(ruleset_data),
+                    None => ()
+                }
             }
         }
 
         players
+    }
+
+    fn ruleset_data_from_row(&self, row: &Row) -> Option<RulesetData> {
+        let ruleset = row.try_get::<_, i32>("ruleset");
+        let global_rank = row.try_get::<_, i32>("global_rank");
+        let earliest_global_rank = row.try_get::<_, Option<i32>>("earliest_global_rank");
+
+        if ruleset.is_ok() && global_rank.is_ok() && earliest_global_rank.is_ok() {
+            let parsed_ruleset = Ruleset::try_from(ruleset.unwrap());
+            if parsed_ruleset.is_err() {
+                // Return nothing
+                return None;
+            }
+
+            return Some(RulesetData {
+                ruleset: Ruleset::try_from(parsed_ruleset.unwrap()).unwrap(),
+                global_rank: global_rank.unwrap(),
+                earliest_global_rank: earliest_global_rank.unwrap()
+            })
+        }
+
+        None
     }
 
     pub async fn save_results(&self, player_ratings: &[PlayerRating]) {

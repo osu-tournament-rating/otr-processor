@@ -14,7 +14,7 @@ pub struct Player {
     pub id: i32,
     pub username: Option<String>,
     pub country: Option<String>,
-    pub ruleset_data: Vec<RulesetData>
+    pub ruleset_data: Option<Vec<RulesetData>>
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
