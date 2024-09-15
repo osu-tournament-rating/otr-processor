@@ -155,30 +155,51 @@ impl DbClient {
         p_bar.finish();
     }
 
-    /// After the parent PlayerRating is saved, all child RatingAdjustments should be saved
+    /// Save all rating adjustments in a single batch query
     async fn save_rating_adjustments(&self, parent_id: i32, adjustments: &Vec<RatingAdjustment>) {
-        for adjustment in adjustments {
-            let query = "INSERT INTO rating_adjustments (player_id, player_rating_id, match_id, \
-            rating_before, rating_after, volatility_before, volatility_after, timestamp, adjustment_type) \
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)";
-            self.client
-                .execute(
-                    query,
-                    &[
-                        &adjustment.player_id,
-                        &parent_id,
-                        &adjustment.match_id,
-                        &adjustment.rating_before,
-                        &adjustment.rating_after,
-                        &adjustment.volatility_before,
-                        &adjustment.volatility_after,
-                        &adjustment.timestamp,
-                        &(adjustment.adjustment_type as i32)
-                    ]
-                )
-                .await
-                .unwrap();
+        // Prepare the base query
+        let query = "INSERT INTO rating_adjustments (player_id, player_rating_id, match_id, \
+    rating_before, rating_after, volatility_before, volatility_after, timestamp, adjustment_type) \
+    VALUES ";
+
+        // Collect parameters for batch insertion
+        let mut values: Vec<Box<dyn tokio_postgres::types::ToSql + Sync>> = Vec::new();
+        let mut placeholders = Vec::new();
+
+        for (i, adjustment) in adjustments.iter().enumerate() {
+            let base = i * 9;
+            placeholders.push(format!(
+                "(${}, ${}, ${}, ${}, ${}, ${}, ${}, ${}, ${})",
+                base + 1,
+                base + 2,
+                base + 3,
+                base + 4,
+                base + 5,
+                base + 6,
+                base + 7,
+                base + 8,
+                base + 9
+            ));
+
+            values.push(Box::new(adjustment.player_id) as Box<dyn tokio_postgres::types::ToSql + Sync>);
+            values.push(Box::new(parent_id) as Box<dyn tokio_postgres::types::ToSql + Sync>);
+            values.push(Box::new(adjustment.match_id) as Box<dyn tokio_postgres::types::ToSql + Sync>);
+            values.push(Box::new(adjustment.rating_before) as Box<dyn tokio_postgres::types::ToSql + Sync>);
+            values.push(Box::new(adjustment.rating_after) as Box<dyn tokio_postgres::types::ToSql + Sync>);
+            values.push(Box::new(adjustment.volatility_before) as Box<dyn tokio_postgres::types::ToSql + Sync>);
+            values.push(Box::new(adjustment.volatility_after) as Box<dyn tokio_postgres::types::ToSql + Sync>);
+            values.push(Box::new(adjustment.timestamp) as Box<dyn tokio_postgres::types::ToSql + Sync>);
+            values.push(Box::new(adjustment.adjustment_type as i32) as Box<dyn tokio_postgres::types::ToSql + Sync>);
         }
+
+        // Combine the query with all placeholders
+        let full_query = format!("{}{}", query, placeholders.join(", "));
+
+        // Execute the batch query
+        self.client
+            .execute(&full_query, &values.iter().map(|v| &**v).collect::<Vec<_>>()[..])
+            .await
+            .unwrap();
     }
 
     /// Saves the PlayerRating, returning the primary key
