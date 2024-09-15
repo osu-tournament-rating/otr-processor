@@ -20,7 +20,7 @@ pub struct Player {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RulesetData {
     pub ruleset: Ruleset,
-    pub global_rank: Option<i32>,
+    pub global_rank: i32,
     pub earliest_global_rank: Option<i32>
 }
 

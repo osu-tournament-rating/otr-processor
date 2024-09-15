@@ -2,7 +2,7 @@ use crate::{
     database::db_structs::{Player, PlayerRating, RatingAdjustment},
     model::{
         constants,
-        constants::{DEFAULT_RATING, DEFAULT_VOLATILITY, MULTIPLIER, OSU_RATING_CEILING},
+        constants::{DEFAULT_VOLATILITY, MULTIPLIER, OSU_RATING_CEILING},
         structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
     }
 };
@@ -60,12 +60,9 @@ fn create_initial_ratings(player: &Player) -> Vec<PlayerRating> {
 
 fn initial_rating(player: &Player, ruleset: &Ruleset) -> f64 {
     let ruleset_data = player.ruleset_data.iter().find(|rd| rd.ruleset == *ruleset);
-    let rank = ruleset_data.and_then(|rd| rd.earliest_global_rank.or(rd.global_rank));
+    let rank: i32 = ruleset_data.and_then(|rd| rd.earliest_global_rank.or(Some(rd.global_rank))).unwrap();
 
-    match rank {
-        Some(r) => mu_from_rank(r, *ruleset),
-        None => DEFAULT_RATING
-    }
+    mu_from_rank(rank, *ruleset)
 }
 
 fn mu_from_rank(rank: i32, ruleset: Ruleset) -> f64 {
@@ -198,11 +195,11 @@ mod tests {
             country: None,
             // Player who is rank 1 in everything. wow!
             ruleset_data: vec![
-                generate_ruleset_data(Osu, Some(1), None),
-                generate_ruleset_data(Taiko, Some(1), None),
-                generate_ruleset_data(Catch, Some(1), None),
-                generate_ruleset_data(Mania4k, Some(1), None),
-                generate_ruleset_data(Mania7k, Some(1), None),
+                generate_ruleset_data(Osu, 1, None),
+                generate_ruleset_data(Taiko, 1, None),
+                generate_ruleset_data(Catch, 1, None),
+                generate_ruleset_data(Mania4k, 1, None),
+                generate_ruleset_data(Mania7k, 1, None),
             ]
         };
 
@@ -232,11 +229,11 @@ mod tests {
             username: Some("Test".to_string()),
             country: None,
             ruleset_data: vec![
-                generate_ruleset_data(Osu, Some(1), None),
-                generate_ruleset_data(Taiko, Some(1), None),
-                generate_ruleset_data(Catch, Some(1), None),
-                generate_ruleset_data(Mania4k, Some(1), None),
-                generate_ruleset_data(Mania7k, Some(1), None),
+                generate_ruleset_data(Osu, 1, None),
+                generate_ruleset_data(Taiko, 1, None),
+                generate_ruleset_data(Catch, 1, None),
+                generate_ruleset_data(Mania4k, 1, None),
+                generate_ruleset_data(Mania7k, 1, None),
             ]
         };
 
