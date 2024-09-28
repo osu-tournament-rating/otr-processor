@@ -1,11 +1,9 @@
 use crate::{model::structures::ruleset::Ruleset, utils::progress_utils::progress_bar};
-use indexmap::map::Slice;
-use itertools::Itertools;
 use postgres_types::ToSql;
 use std::{collections::HashMap, sync::Arc};
 use tokio_postgres::{Client, Error, NoTls, Row};
 
-use super::db_structs::{Game, GameScore, Match, Player, PlayerRating, RatingAdjustment, RulesetData};
+use super::db_structs::{Game, GameScore, Match, Player, PlayerHighestRank, PlayerRating, RatingAdjustment, RulesetData};
 
 #[derive(Clone)]
 pub struct DbClient {
@@ -172,10 +170,16 @@ impl DbClient {
         self.truncate_rating_adjustments().await;
         self.truncate_player_ratings().await;
 
+        self.save_ratings_and_adjustments_with_mapping(&player_ratings).await;
+
+        self.insert_or_update_highest_ranks(player_ratings).await;
+    }
+
+    async fn save_ratings_and_adjustments_with_mapping(&self, player_ratings: &&[PlayerRating]) {
         let p_bar = progress_bar(player_ratings.len() as u64, "Saving player ratings to db".to_string()).unwrap();
 
         let mut mapping: HashMap<i32, Vec<RatingAdjustment>> = HashMap::new();
-        let parent_ids = self.save_player_ratings(&player_ratings).await;
+        let parent_ids = self.save_player_ratings(player_ratings).await;
 
         p_bar.inc(1);
         p_bar.finish();
@@ -188,6 +192,8 @@ impl DbClient {
         println!("Adjustment parent_id mapping created");
 
         self.save_rating_adjustments(&mapping).await;
+        
+        println!("Rating adjustments saved");
     }
 
     /// Save all rating adjustments in a single batch query
@@ -267,6 +273,85 @@ impl DbClient {
 
         // Collect and return the IDs
         rows.iter().map(|row| row.get("id")).collect()
+    }
+
+    async fn insert_or_update_highest_ranks(&self, player_ratings: &[PlayerRating]) {
+        println!("Fetching all highest ranks");
+        let current_highest_ranks = self.get_highest_ranks().await;
+
+        println!("Found {} highest ranks", current_highest_ranks.len());
+        // If the current rank is None, create it. If the current rank is Some and
+        // either the PlayerRating's global rank or country rank is higher than the current highest
+        // rank, update it.
+        //
+        // Only update values which are higher than the current highest rank
+        
+        let pbar = progress_bar(player_ratings.len() as u64, "Updating highest ranks".to_string()).unwrap();
+        
+        for rating in player_ratings {
+            match current_highest_ranks.get(&(rating.player_id, rating.ruleset)) {
+                Some(current_rank) => {
+                    match current_rank {
+                        Some(current_rank) => {
+                            if rating.global_rank < current_rank.global_rank {
+                                self.update_highest_rank(rating.player_id, rating).await;
+                            }
+                        }
+                        _ => {
+                            self.insert_highest_rank(rating.player_id, rating).await;
+                        }
+                    }
+                }
+                None => {
+                    self.insert_highest_rank(rating.player_id, rating).await;
+                }
+            }
+
+            pbar.inc(1);
+        }
+    }
+
+    async fn get_highest_ranks(&self) -> HashMap<(i32, Ruleset), Option<PlayerHighestRank>> {
+        let query = "SELECT * FROM player_highest_ranks";
+        let row = self.client.query(query, &[]).await.ok();
+        
+        match row {
+            Some(rows) => {
+                let mut map: HashMap<(i32, Ruleset), Option<PlayerHighestRank>> = HashMap::new();
+                for row in rows {
+                    let player_id = row.get::<_, i32>("player_id");
+                    let ruleset = Ruleset::try_from(row.get::<_, i32>("ruleset")).unwrap();
+                    map.insert((player_id, ruleset), Some(PlayerHighestRank {
+                        id: row.get("id"),
+                        player_id,
+                        global_rank: row.get("global_rank"),
+                        global_rank_date: row.get("global_rank_date"),
+                        country_rank: row.get("country_rank"),
+                        country_rank_date: row.get("country_rank_date"),
+                        ruleset
+                    }));
+                }
+
+                map
+            },
+            None => HashMap::new()
+        }
+    }
+
+    async fn insert_highest_rank(&self, player_id: i32, player_rating: &PlayerRating) {
+        let timestamp = player_rating.adjustments.last().unwrap().timestamp;
+        let query = "INSERT INTO player_highest_ranks (player_id, ruleset, global_rank, global_rank_date, country_rank, country_rank_date) VALUES ($1, $2, $3, $4, $5, $6)";
+        let values: &[&(dyn ToSql + Sync)] = &[&player_id, &(player_rating.ruleset as i32), &player_rating.global_rank, &timestamp, &player_rating.country_rank, &timestamp];
+
+        self.client.execute(query, values).await.unwrap();
+    }
+    
+    async fn update_highest_rank(&self, player_id: i32, player_rating: &PlayerRating) {
+        let timestamp = player_rating.adjustments.last().unwrap().timestamp;
+        let query = "UPDATE player_highest_ranks SET global_rank = $1, global_rank_date = $2, country_rank = $3, country_rank_date = $4 WHERE player_id = $5 AND ruleset = $6";
+        let values: &[&(dyn ToSql + Sync)] = &[&player_rating.global_rank, &timestamp, &player_rating.country_rank, &timestamp, &player_id, &(player_rating.ruleset as i32)];
+
+        self.client.execute(query, values).await.unwrap();
     }
 
     async fn truncate_player_ratings(&self) {

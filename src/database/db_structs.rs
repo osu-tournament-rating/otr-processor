@@ -82,3 +82,14 @@ pub struct RatingAdjustment {
     pub timestamp: DateTime<FixedOffset>,
     pub adjustment_type: RatingAdjustmentType
 }
+
+#[derive(Serialize)]
+pub struct PlayerHighestRank {
+    pub id: i32,
+    pub ruleset: Ruleset,
+    pub global_rank: i32,
+    pub global_rank_date: DateTime<FixedOffset>,
+    pub country_rank: i32,
+    pub country_rank_date: DateTime<FixedOffset>,
+    pub player_id: i32
+}
