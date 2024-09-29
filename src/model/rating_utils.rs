@@ -3,8 +3,8 @@ use crate::{
     model::{
         constants,
         constants::{DEFAULT_VOLATILITY, MULTIPLIER, OSU_RATING_CEILING},
-        structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset},
-    },
+        structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
+    }
 };
 use chrono::{DateTime, FixedOffset};
 use constants::OSU_RATING_FLOOR;
@@ -37,7 +37,7 @@ fn create_initial_ratings(player: &Player) -> Vec<PlayerRating> {
             volatility_before: 0.0,
             volatility_after: DEFAULT_VOLATILITY,
             timestamp,
-            adjustment_type: RatingAdjustmentType::Initial,
+            adjustment_type: RatingAdjustmentType::Initial
         };
 
         if rating.is_nan() || rating <= 0.0 {
@@ -53,7 +53,7 @@ fn create_initial_ratings(player: &Player) -> Vec<PlayerRating> {
             percentile: 0.0,
             global_rank: 0,
             country_rank: 0,
-            adjustments: vec![adjustment],
+            adjustments: vec![adjustment]
         });
     }
 
@@ -68,10 +68,10 @@ fn initial_rating(player: &Player, ruleset: &Ruleset) -> f64 {
 
             match rank {
                 Some(r) => mu_from_rank(r, *ruleset),
-                None => DEFAULT_RATING,
+                None => DEFAULT_RATING
             }
         }
-        None => DEFAULT_RATING,
+        None => DEFAULT_RATING
     }
 }
 
@@ -101,7 +101,7 @@ fn mean_from_ruleset(ruleset: Ruleset) -> f64 {
         Ruleset::Osu => 9.91,
         Ruleset::Taiko => 7.59,
         Ruleset::Catch => 6.75,
-        Ruleset::Mania4k | Ruleset::Mania7k => 8.18,
+        Ruleset::Mania4k | Ruleset::Mania7k => 8.18
     }
 }
 
@@ -110,7 +110,7 @@ fn std_dev_from_ruleset(ruleset: Ruleset) -> f64 {
         Ruleset::Osu => 1.59,
         Ruleset::Taiko => 1.56,
         Ruleset::Catch => 1.54,
-        Ruleset::Mania4k | Ruleset::Mania7k => 1.55,
+        Ruleset::Mania4k | Ruleset::Mania7k => 1.55
     }
 }
 
@@ -122,9 +122,9 @@ mod tests {
         model::{
             constants::{DEFAULT_VOLATILITY, OSU_RATING_CEILING, OSU_RATING_FLOOR},
             rating_utils::{mu_from_rank, std_dev_from_ruleset},
-            structures::ruleset::Ruleset::{Catch, Mania4k, Mania7k, Osu, Taiko},
+            structures::ruleset::Ruleset::{Catch, Mania4k, Mania7k, Osu, Taiko}
         },
-        utils::test_utils::{generate_player_rating, generate_ruleset_data},
+        utils::test_utils::{generate_player_rating, generate_ruleset_data}
     };
 
     #[test]
@@ -210,7 +210,7 @@ mod tests {
                 generate_ruleset_data(Catch, 1, None),
                 generate_ruleset_data(Mania4k, 1, None),
                 generate_ruleset_data(Mania7k, 1, None),
-            ]),
+            ])
         };
 
         let expected_osu = mu_from_rank(1, Osu);
@@ -244,7 +244,7 @@ mod tests {
                 generate_ruleset_data(Catch, 1, None),
                 generate_ruleset_data(Mania4k, 1, None),
                 generate_ruleset_data(Mania7k, 1, None),
-            ]),
+            ])
         };
 
         let rating_osu = mu_from_rank(1, Osu);

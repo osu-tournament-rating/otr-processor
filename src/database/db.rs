@@ -4,12 +4,12 @@ use std::{collections::HashMap, sync::Arc};
 use tokio_postgres::{Client, Error, NoTls, Row};
 
 use super::db_structs::{
-    Game, GameScore, Match, Player, PlayerHighestRank, PlayerRating, RatingAdjustment, RulesetData,
+    Game, GameScore, Match, Player, PlayerHighestRank, PlayerRating, RatingAdjustment, RulesetData
 };
 
 #[derive(Clone)]
 pub struct DbClient {
-    client: Arc<Client>,
+    client: Arc<Client>
 }
 
 impl DbClient {
@@ -25,7 +25,7 @@ impl DbClient {
         });
 
         Ok(DbClient {
-            client: Arc::new(client),
+            client: Arc::new(client)
         })
     }
 
@@ -57,7 +57,7 @@ impl DbClient {
                     start_time: row.get("match_start_time"),
                     end_time: row.get("match_end_time"),
                     ruleset: Ruleset::try_from(row.get::<_, i32>("tournament_ruleset")).unwrap(),
-                    games: Vec::new(),
+                    games: Vec::new()
                 };
                 matches.push(match_);
                 current_match_id = row.get("match_id");
@@ -69,7 +69,7 @@ impl DbClient {
                     ruleset: Ruleset::try_from(row.get::<_, i32>("game_ruleset")).unwrap(),
                     start_time: row.get("game_start_time"),
                     end_time: row.get("game_end_time"),
-                    scores: Vec::new(),
+                    scores: Vec::new()
                 };
                 matches.last_mut().unwrap().games.push(game);
                 current_game_id = row.get("game_id");
@@ -81,7 +81,7 @@ impl DbClient {
                     player_id: row.get("game_score_player_id"),
                     game_id: row.get("game_score_game_id"),
                     score: row.get("game_score_score"),
-                    placement: row.get("game_score_placement"),
+                    placement: row.get("game_score_placement")
                 };
                 matches
                     .last_mut()
@@ -107,7 +107,7 @@ impl DbClient {
         p.country AS country, prd.ruleset AS ruleset, prd.earliest_global_rank AS earliest_global_rank,\
           prd.global_rank AS global_rank FROM players p \
         LEFT JOIN player_osu_ruleset_data prd ON prd.player_id = p.id",
-                &[],
+                &[]
             )
             .await
             .unwrap();
@@ -119,7 +119,7 @@ impl DbClient {
                     id: row.get("player_id"),
                     username: row.get("username"),
                     country: row.get("country"),
-                    ruleset_data: self.ruleset_data_from_row(&row).map(|data| vec![data]),
+                    ruleset_data: self.ruleset_data_from_row(&row).map(|data| vec![data])
                 };
                 players.push(player);
                 current_player_id = row.get("player_id");
@@ -157,7 +157,7 @@ impl DbClient {
             return Some(RulesetData {
                 ruleset: parsed_ruleset.unwrap(),
                 global_rank: global_rank.unwrap(),
-                earliest_global_rank: earliest_global_rank.unwrap(),
+                earliest_global_rank: earliest_global_rank.unwrap()
             });
         }
 
@@ -206,7 +206,7 @@ impl DbClient {
 
         let p_bar = progress_bar(
             adjustment_mapping.len() as u64,
-            "Creating rating adjustment queries".to_string(),
+            "Creating rating adjustment queries".to_string()
         )
         .unwrap();
         for (player_rating_id, adjustments) in adjustment_mapping.iter() {
@@ -322,14 +322,14 @@ impl DbClient {
                             global_rank_date: row.get("global_rank_date"),
                             country_rank: row.get("country_rank"),
                             country_rank_date: row.get("country_rank_date"),
-                            ruleset,
-                        }),
+                            ruleset
+                        })
                     );
                 }
 
                 map
             }
-            None => HashMap::new(),
+            None => HashMap::new()
         }
     }
 
@@ -342,7 +342,7 @@ impl DbClient {
             &player_rating.global_rank,
             &timestamp,
             &player_rating.country_rank,
-            &timestamp,
+            &timestamp
         ];
 
         self.client.execute(query, values).await.unwrap();
@@ -357,7 +357,7 @@ impl DbClient {
             &player_rating.country_rank,
             &timestamp,
             &player_id,
-            &(player_rating.ruleset as i32),
+            &(player_rating.ruleset as i32)
         ];
 
         self.client.execute(query, values).await.unwrap();
@@ -374,14 +374,14 @@ impl DbClient {
     pub async fn set_match_processing_status_done(&self, matches: &[Match]) {
         let bar = progress_bar(
             matches.len() as u64,
-            "Updating processing status for all matches".to_string(),
+            "Updating processing status for all matches".to_string()
         )
         .unwrap();
         for match_ in matches {
             self.client
                 .execute(
                     "UPDATE matches SET processing_status = 5 WHERE match_id = $1",
-                    &[&match_.id],
+                    &[&match_.id]
                 )
                 .await
                 .unwrap();

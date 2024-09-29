@@ -1,6 +1,6 @@
 use crate::{
     database::db_structs::{PlayerRating, RatingAdjustment},
-    model::structures::ruleset::Ruleset,
+    model::structures::ruleset::Ruleset
 };
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -16,7 +16,7 @@ pub struct RatingTracker {
     // The PlayerRating here is used as a reference. The rankings are NOT updated here, but the
     // other values are affected by `insert_or_updated`.
     country_leaderboards: HashMap<String, IndexMap<(i32, Ruleset), PlayerRating>>,
-    country_mapping: HashMap<i32, String>,
+    country_mapping: HashMap<i32, String>
 }
 
 impl Default for RatingTracker {
@@ -30,7 +30,7 @@ impl RatingTracker {
         RatingTracker {
             leaderboard: IndexMap::new(),
             country_leaderboards: HashMap::new(),
-            country_mapping: HashMap::new(),
+            country_mapping: HashMap::new()
         }
     }
 
@@ -85,7 +85,7 @@ impl RatingTracker {
             Ruleset::Taiko,
             Ruleset::Catch,
             Ruleset::Mania4k,
-            Ruleset::Mania7k,
+            Ruleset::Mania7k
         ];
 
         for ruleset in rulesets.iter() {
@@ -150,7 +150,7 @@ impl RatingTracker {
                     .values()
                     .filter(|player_rating| player_rating.ruleset == *ruleset)
                     .cloned()
-                    .collect::<Vec<_>>(),
+                    .collect::<Vec<_>>()
             );
         }
     }
@@ -173,9 +173,9 @@ mod tests {
         model::{
             constants::{DEFAULT_RATING, DEFAULT_VOLATILITY},
             rating_tracker::RatingTracker,
-            structures::ruleset::{Ruleset, Ruleset::Osu},
+            structures::ruleset::{Ruleset, Ruleset::Osu}
         },
-        utils::test_utils::{generate_country_mapping_player_ratings, generate_player_rating},
+        utils::test_utils::{generate_country_mapping_player_ratings, generate_player_rating}
     };
     use approx::assert_abs_diff_eq;
 

@@ -4,22 +4,22 @@ use crate::{
         constants::{WEIGHT_A, WEIGHT_B},
         decay::DecayTracker,
         rating_tracker::RatingTracker,
-        structures::rating_adjustment_type::RatingAdjustmentType,
+        structures::rating_adjustment_type::RatingAdjustmentType
     },
-    utils::progress_utils::progress_bar,
+    utils::progress_utils::progress_bar
 };
 use itertools::Itertools;
 use openskill::{
     constant::*,
     model::{model::Model, plackett_luce::PlackettLuce},
-    rating::{default_gamma, Rating},
+    rating::{default_gamma, Rating}
 };
 use std::collections::HashMap;
 
 pub struct OtrModel {
     pub model: PlackettLuce,
     pub rating_tracker: RatingTracker,
-    pub decay_tracker: DecayTracker,
+    pub decay_tracker: DecayTracker
 }
 
 impl OtrModel {
@@ -32,7 +32,7 @@ impl OtrModel {
         OtrModel {
             rating_tracker: tracker,
             decay_tracker: DecayTracker,
-            model: PlackettLuce::new(DEFAULT_BETA, KAPPA, default_gamma),
+            model: PlackettLuce::new(DEFAULT_BETA, KAPPA, default_gamma)
         }
     }
 
@@ -141,7 +141,7 @@ impl OtrModel {
                     player_id: *id,
                     game_id: g.id,
                     score: 0,
-                    placement: tie_for_last_placement,
+                    placement: tie_for_last_placement
                 })
             }
         }
@@ -167,7 +167,7 @@ impl OtrModel {
                             "Expected player {:?} to have a rating for ruleset {:?}",
                             score.player_id, game.ruleset
                         )
-                    }),
+                    })
             );
             placements.push(score.placement as usize);
         }
@@ -177,7 +177,7 @@ impl OtrModel {
             .map(|r| {
                 vec![Rating {
                     mu: r.rating,
-                    sigma: r.volatility,
+                    sigma: r.volatility
                 }]
             })
             .collect_vec();
@@ -207,8 +207,8 @@ impl OtrModel {
                     &v,
                     current_player_rating.rating,
                     current_player_rating.volatility,
-                    total_game_count,
-                ),
+                    total_game_count
+                )
             );
         }
 
@@ -245,8 +245,8 @@ impl OtrModel {
                 *k,
                 Rating {
                     mu: rating_final,
-                    sigma: volatility_final,
-                },
+                    sigma: volatility_final
+                }
             );
         }
 
@@ -257,7 +257,7 @@ impl OtrModel {
         ratings: &[Rating],
         current_rating: f64,
         current_volatility: f64,
-        total_game_count: usize,
+        total_game_count: usize
     ) -> Rating {
         let rating_sum: f64 = ratings.iter().map(|f| f.mu).sum();
 
@@ -271,7 +271,7 @@ impl OtrModel {
 
         Rating {
             mu: rating_a,
-            sigma: volatility_a,
+            sigma: volatility_a
         }
     }
 
@@ -284,7 +284,7 @@ impl OtrModel {
 
         Rating {
             mu: rating_b,
-            sigma: volatility_b,
+            sigma: volatility_b
         }
     }
 
@@ -317,7 +317,7 @@ impl OtrModel {
                 volatility_before: player_rating.volatility,
                 volatility_after: v.sigma,
                 timestamp: match_.start_time,
-                adjustment_type: RatingAdjustmentType::Match,
+                adjustment_type: RatingAdjustmentType::Match
             };
 
             player_rating.adjustments.push(adjustment);
@@ -336,7 +336,7 @@ impl OtrModel {
         current_rating: f64,
         rating_diff: f64,
         performance_frequency: f64,
-        scaling: f64,
+        scaling: f64
     ) -> f64 {
         if rating_diff >= 0.0 {
             return current_rating;
@@ -353,7 +353,7 @@ mod tests {
     pub use crate::utils::test_utils::*;
     use crate::{
         database::db_structs::PlayerRating,
-        model::{otr_model::OtrModel, structures::ruleset::Ruleset::Osu},
+        model::{otr_model::OtrModel, structures::ruleset::Ruleset::Osu}
     };
     use approx::assert_abs_diff_eq;
     use chrono::Utc;
