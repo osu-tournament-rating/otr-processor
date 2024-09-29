@@ -63,11 +63,7 @@ pub fn generate_player_rating(
     }
 }
 
-pub fn generate_ruleset_data(
-    ruleset: Ruleset,
-    global_rank: i32,
-    earliest_global_rank: Option<i32>
-) -> RulesetData {
+pub fn generate_ruleset_data(ruleset: Ruleset, global_rank: i32, earliest_global_rank: Option<i32>) -> RulesetData {
     RulesetData {
         ruleset,
         global_rank,

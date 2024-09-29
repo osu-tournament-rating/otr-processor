@@ -70,7 +70,7 @@ fn initial_rating(player: &Player, ruleset: &Ruleset) -> f64 {
                 Some(r) => mu_from_rank(r, *ruleset),
                 None => DEFAULT_RATING
             }
-        },
+        }
         None => DEFAULT_RATING
     }
 }
