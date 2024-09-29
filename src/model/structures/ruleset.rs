@@ -9,7 +9,7 @@ pub enum Ruleset {
     Taiko = 1,
     Catch = 2,
     Mania4k = 3,
-    Mania7k = 4
+    Mania7k = 4,
 }
 
 impl TryFrom<i32> for Ruleset {
@@ -22,7 +22,7 @@ impl TryFrom<i32> for Ruleset {
             2 => Ok(Ruleset::Catch),
             3 => Ok(Ruleset::Mania4k),
             4 => Ok(Ruleset::Mania7k),
-            _ => Err(())
+            _ => Err(()),
         }
     }
 }

@@ -2,14 +2,14 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use itertools::Itertools;
 use otr_processor::{
     model::otr_model::OtrModel,
-    utils::test_utils::{generate_country_mapping_player_ratings, generate_default_initial_ratings, generate_matches}
+    utils::test_utils::{generate_country_mapping_player_ratings, generate_default_initial_ratings, generate_matches},
 };
 
 fn process_matches(count_players: usize, count_matches: usize) {
     let initial_ratings = generate_default_initial_ratings(count_players.try_into().unwrap());
     let matches = generate_matches(
         count_matches.try_into().unwrap(),
-        &initial_ratings.iter().map(|r| r.player_id).collect_vec()
+        &initial_ratings.iter().map(|r| r.player_id).collect_vec(),
     );
     let country_mapping = generate_country_mapping_player_ratings(initial_ratings.as_slice(), "US");
 

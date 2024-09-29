@@ -1,11 +1,11 @@
 use crate::{
     database::db_structs::{
-        Game, GameScore, Match, Player, PlayerPlacement, PlayerRating, RatingAdjustment, RulesetData
+        Game, GameScore, Match, Player, PlayerPlacement, PlayerRating, RatingAdjustment, RulesetData,
     },
     model::{
         constants::{DEFAULT_RATING, DEFAULT_VOLATILITY},
-        structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
-    }
+        structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset},
+    },
 };
 use chrono::{DateTime, FixedOffset, Utc};
 use std::{collections::HashMap, ops::Add};
@@ -15,7 +15,7 @@ pub fn generate_player_rating(
     ruleset: Ruleset,
     rating: f64,
     volatility: f64,
-    n_adjustments: i32
+    n_adjustments: i32,
 ) -> PlayerRating {
     if n_adjustments < 1 {
         panic!("Number of adjustments must be at least 1");
@@ -29,7 +29,7 @@ pub fn generate_player_rating(
     for i in 1..=n_adjustments {
         let adjustment_type = match i {
             1 => RatingAdjustmentType::Initial,
-            _ => RatingAdjustmentType::Match
+            _ => RatingAdjustmentType::Match,
         };
 
         let rating_before = rating - change_per_adjustment * (i - 1) as f64;
@@ -46,7 +46,7 @@ pub fn generate_player_rating(
             rating_after,
             volatility_before,
             volatility_after,
-            timestamp
+            timestamp,
         });
     }
 
@@ -59,19 +59,15 @@ pub fn generate_player_rating(
         percentile: 0.0,
         global_rank: 0,
         country_rank: 0,
-        adjustments
+        adjustments,
     }
 }
 
-pub fn generate_ruleset_data(
-    ruleset: Ruleset,
-    global_rank: i32,
-    earliest_global_rank: Option<i32>
-) -> RulesetData {
+pub fn generate_ruleset_data(ruleset: Ruleset, global_rank: i32, earliest_global_rank: Option<i32>) -> RulesetData {
     RulesetData {
         ruleset,
         global_rank,
-        earliest_global_rank
+        earliest_global_rank,
     }
 }
 
@@ -87,7 +83,7 @@ pub fn generate_game(id: i32, placements: &[PlayerPlacement]) -> Game {
             player_id: p.player_id,
             game_id: id,
             score: 0,
-            placement: p.placement
+            placement: p.placement,
         })
         .collect();
 
@@ -96,7 +92,7 @@ pub fn generate_game(id: i32, placements: &[PlayerPlacement]) -> Game {
         ruleset: Ruleset::Osu,
         start_time: Default::default(),
         end_time: Default::default(),
-        scores
+        scores,
     }
 }
 
@@ -125,7 +121,7 @@ pub fn generate_match(id: i32, ruleset: Ruleset, games: &[Game], start_time: Dat
         ruleset,
         start_time,
         end_time: start_time.add(chrono::Duration::hours(1)),
-        games: games.to_vec()
+        games: games.to_vec(),
     }
 }
 
@@ -137,7 +133,7 @@ pub fn generate_matches(n: i32, player_ids: &[i32]) -> Vec<Match> {
             i as i32,
             Ruleset::Osu,
             &generate_games(game_count, random_placements(player_ids).as_slice()),
-            Utc::now().fixed_offset()
+            Utc::now().fixed_offset(),
         ));
     }
 
@@ -173,7 +169,7 @@ pub fn generate_default_initial_ratings(n: i32) -> Vec<PlayerRating> {
             Ruleset::Osu,
             DEFAULT_RATING,
             DEFAULT_VOLATILITY,
-            1
+            1,
         ));
     }
 

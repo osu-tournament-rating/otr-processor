@@ -6,9 +6,9 @@ use crate::{
         rating_tracker::RatingTracker,
         structures::{
             rating_adjustment_type::RatingAdjustmentType::{Decay, Initial},
-            ruleset::Ruleset
-        }
-    }
+            ruleset::Ruleset,
+        },
+    },
 };
 use chrono::{DateTime, FixedOffset};
 
@@ -36,7 +36,7 @@ impl DecayTracker {
         rating_tracker: &mut RatingTracker,
         player_id: i32,
         ruleset: Ruleset,
-        d: DateTime<FixedOffset>
+        d: DateTime<FixedOffset>,
     ) {
         let player_rating = rating_tracker.get_rating(player_id, ruleset);
 
@@ -53,7 +53,7 @@ impl DecayTracker {
         // Extract the last adjustment to avoid multiple calls to unwrap and allow mutable borrow later
         let last_adjustment = match clone_rating.adjustments.last() {
             Some(adjustment) => adjustment,
-            None => return // Early return if no last adjustment
+            None => return, // Early return if no last adjustment
         };
 
         // Do not consider the adjustment time if it's the initial adjustment
@@ -91,7 +91,7 @@ impl DecayTracker {
                 volatility_before: old_volatility,
                 volatility_after: new_volatility,
                 timestamp: simulated_time,
-                adjustment_type: Decay
+                adjustment_type: Decay,
             });
 
             old_rating = new_rating;
@@ -155,9 +155,9 @@ mod tests {
             constants::{DECAY_DAYS, MULTIPLIER},
             decay::{decay_rating, decay_volatility, is_decay_possible, DecayTracker},
             rating_tracker::RatingTracker,
-            structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
+            structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset},
         },
-        utils::test_utils::generate_country_mapping_player_ratings
+        utils::test_utils::generate_country_mapping_player_ratings,
     };
 
     #[test]
@@ -201,8 +201,8 @@ mod tests {
                 volatility_after: initial_volatility,
                 timestamp: t,
                 // We use match here because we do not consider initial ratings as markers for decay
-                adjustment_type: RatingAdjustmentType::Match
-            }]
+                adjustment_type: RatingAdjustmentType::Match,
+            }],
         }];
 
         let country = "US";

@@ -3,11 +3,13 @@ use postgres_types::ToSql;
 use std::{collections::HashMap, sync::Arc};
 use tokio_postgres::{Client, Error, NoTls, Row};
 
-use super::db_structs::{Game, GameScore, Match, Player, PlayerHighestRank, PlayerRating, RatingAdjustment, RulesetData};
+use super::db_structs::{
+    Game, GameScore, Match, Player, PlayerHighestRank, PlayerRating, RatingAdjustment, RulesetData,
+};
 
 #[derive(Clone)]
 pub struct DbClient {
-    client: Arc<Client>
+    client: Arc<Client>,
 }
 
 impl DbClient {
@@ -23,7 +25,7 @@ impl DbClient {
         });
 
         Ok(DbClient {
-            client: Arc::new(client)
+            client: Arc::new(client),
         })
     }
 
@@ -55,7 +57,7 @@ impl DbClient {
                     start_time: row.get("match_start_time"),
                     end_time: row.get("match_end_time"),
                     ruleset: Ruleset::try_from(row.get::<_, i32>("tournament_ruleset")).unwrap(),
-                    games: Vec::new()
+                    games: Vec::new(),
                 };
                 matches.push(match_);
                 current_match_id = row.get("match_id");
@@ -67,7 +69,7 @@ impl DbClient {
                     ruleset: Ruleset::try_from(row.get::<_, i32>("game_ruleset")).unwrap(),
                     start_time: row.get("game_start_time"),
                     end_time: row.get("game_end_time"),
-                    scores: Vec::new()
+                    scores: Vec::new(),
                 };
                 matches.last_mut().unwrap().games.push(game);
                 current_game_id = row.get("game_id");
@@ -79,7 +81,7 @@ impl DbClient {
                     player_id: row.get("game_score_player_id"),
                     game_id: row.get("game_score_game_id"),
                     score: row.get("game_score_score"),
-                    placement: row.get("game_score_placement")
+                    placement: row.get("game_score_placement"),
                 };
                 matches
                     .last_mut()
@@ -105,7 +107,7 @@ impl DbClient {
         p.country AS country, prd.ruleset AS ruleset, prd.earliest_global_rank AS earliest_global_rank,\
           prd.global_rank AS global_rank FROM players p \
         LEFT JOIN player_osu_ruleset_data prd ON prd.player_id = p.id",
-                &[]
+                &[],
             )
             .await
             .unwrap();
@@ -117,10 +119,7 @@ impl DbClient {
                     id: row.get("player_id"),
                     username: row.get("username"),
                     country: row.get("country"),
-                    ruleset_data: match self.ruleset_data_from_row(&row) {
-                        Some(data) => Some(vec![data]),
-                        None => None
-                    }
+                    ruleset_data: self.ruleset_data_from_row(&row).map(|data| vec![data]),
                 };
                 players.push(player);
                 current_player_id = row.get("player_id");
@@ -128,15 +127,14 @@ impl DbClient {
                 // Same player, new ruleset data
 
                 let data = self.ruleset_data_from_row(&row);
-                match data {
-                    Some(ruleset_data) => players
+                if let Some(ruleset_data) = data {
+                    players
                         .last_mut()
                         .unwrap()
                         .ruleset_data
                         .clone()
                         .unwrap_or_default()
-                        .push(ruleset_data),
-                    None => ()
+                        .push(ruleset_data);
                 }
             }
         }
@@ -157,9 +155,9 @@ impl DbClient {
             }
 
             return Some(RulesetData {
-                ruleset: Ruleset::try_from(parsed_ruleset.unwrap()).unwrap(),
+                ruleset: parsed_ruleset.unwrap(),
                 global_rank: global_rank.unwrap(),
-                earliest_global_rank: earliest_global_rank.unwrap()
+                earliest_global_rank: earliest_global_rank.unwrap(),
             });
         }
 
@@ -192,7 +190,7 @@ impl DbClient {
         println!("Adjustment parent_id mapping created");
 
         self.save_rating_adjustments(&mapping).await;
-        
+
         println!("Rating adjustments saved");
     }
 
@@ -206,7 +204,11 @@ impl DbClient {
         // Collect parameters for batch insertion
         let mut values: Vec<String> = Vec::new();
 
-        let p_bar = progress_bar(adjustment_mapping.len() as u64, "Creating rating adjustment queries".to_string()).unwrap();
+        let p_bar = progress_bar(
+            adjustment_mapping.len() as u64,
+            "Creating rating adjustment queries".to_string(),
+        )
+        .unwrap();
         for (player_rating_id, adjustments) in adjustment_mapping.iter() {
             for adjustment in adjustments {
                 // Create a tuple for each adjustment
@@ -285,26 +287,16 @@ impl DbClient {
         // rank, update it.
         //
         // Only update values which are higher than the current highest rank
-        
+
         let pbar = progress_bar(player_ratings.len() as u64, "Updating highest ranks".to_string()).unwrap();
-        
+
         for rating in player_ratings {
-            match current_highest_ranks.get(&(rating.player_id, rating.ruleset)) {
-                Some(current_rank) => {
-                    match current_rank {
-                        Some(current_rank) => {
-                            if rating.global_rank < current_rank.global_rank {
-                                self.update_highest_rank(rating.player_id, rating).await;
-                            }
-                        }
-                        _ => {
-                            self.insert_highest_rank(rating.player_id, rating).await;
-                        }
-                    }
+            if let Some(Some(current_rank)) = current_highest_ranks.get(&(rating.player_id, rating.ruleset)) {
+                if rating.global_rank < current_rank.global_rank {
+                    self.update_highest_rank(rating.player_id, rating).await;
                 }
-                None => {
-                    self.insert_highest_rank(rating.player_id, rating).await;
-                }
+            } else {
+                self.insert_highest_rank(rating.player_id, rating).await;
             }
 
             pbar.inc(1);
@@ -314,42 +306,59 @@ impl DbClient {
     async fn get_highest_ranks(&self) -> HashMap<(i32, Ruleset), Option<PlayerHighestRank>> {
         let query = "SELECT * FROM player_highest_ranks";
         let row = self.client.query(query, &[]).await.ok();
-        
+
         match row {
             Some(rows) => {
                 let mut map: HashMap<(i32, Ruleset), Option<PlayerHighestRank>> = HashMap::new();
                 for row in rows {
                     let player_id = row.get::<_, i32>("player_id");
                     let ruleset = Ruleset::try_from(row.get::<_, i32>("ruleset")).unwrap();
-                    map.insert((player_id, ruleset), Some(PlayerHighestRank {
-                        id: row.get("id"),
-                        player_id,
-                        global_rank: row.get("global_rank"),
-                        global_rank_date: row.get("global_rank_date"),
-                        country_rank: row.get("country_rank"),
-                        country_rank_date: row.get("country_rank_date"),
-                        ruleset
-                    }));
+                    map.insert(
+                        (player_id, ruleset),
+                        Some(PlayerHighestRank {
+                            id: row.get("id"),
+                            player_id,
+                            global_rank: row.get("global_rank"),
+                            global_rank_date: row.get("global_rank_date"),
+                            country_rank: row.get("country_rank"),
+                            country_rank_date: row.get("country_rank_date"),
+                            ruleset,
+                        }),
+                    );
                 }
 
                 map
-            },
-            None => HashMap::new()
+            }
+            None => HashMap::new(),
         }
     }
 
     async fn insert_highest_rank(&self, player_id: i32, player_rating: &PlayerRating) {
         let timestamp = player_rating.adjustments.last().unwrap().timestamp;
         let query = "INSERT INTO player_highest_ranks (player_id, ruleset, global_rank, global_rank_date, country_rank, country_rank_date) VALUES ($1, $2, $3, $4, $5, $6)";
-        let values: &[&(dyn ToSql + Sync)] = &[&player_id, &(player_rating.ruleset as i32), &player_rating.global_rank, &timestamp, &player_rating.country_rank, &timestamp];
+        let values: &[&(dyn ToSql + Sync)] = &[
+            &player_id,
+            &(player_rating.ruleset as i32),
+            &player_rating.global_rank,
+            &timestamp,
+            &player_rating.country_rank,
+            &timestamp,
+        ];
 
         self.client.execute(query, values).await.unwrap();
     }
-    
+
     async fn update_highest_rank(&self, player_id: i32, player_rating: &PlayerRating) {
         let timestamp = player_rating.adjustments.last().unwrap().timestamp;
         let query = "UPDATE player_highest_ranks SET global_rank = $1, global_rank_date = $2, country_rank = $3, country_rank_date = $4 WHERE player_id = $5 AND ruleset = $6";
-        let values: &[&(dyn ToSql + Sync)] = &[&player_rating.global_rank, &timestamp, &player_rating.country_rank, &timestamp, &player_id, &(player_rating.ruleset as i32)];
+        let values: &[&(dyn ToSql + Sync)] = &[
+            &player_rating.global_rank,
+            &timestamp,
+            &player_rating.country_rank,
+            &timestamp,
+            &player_id,
+            &(player_rating.ruleset as i32),
+        ];
 
         self.client.execute(query, values).await.unwrap();
     }
@@ -365,14 +374,14 @@ impl DbClient {
     pub async fn set_match_processing_status_done(&self, matches: &[Match]) {
         let bar = progress_bar(
             matches.len() as u64,
-            "Updating processing status for all matches".to_string()
+            "Updating processing status for all matches".to_string(),
         )
         .unwrap();
         for match_ in matches {
             self.client
                 .execute(
                     "UPDATE matches SET processing_status = 5 WHERE match_id = $1",
-                    &[&match_.id]
+                    &[&match_.id],
                 )
                 .await
                 .unwrap();
