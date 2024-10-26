@@ -8,8 +8,9 @@ pub enum Ruleset {
     Osu = 0,
     Taiko = 1,
     Catch = 2,
-    Mania4k = 3,
-    Mania7k = 4
+    ManiaOther = 3,
+    Mania4k = 4,
+    Mania7k = 5
 }
 
 impl TryFrom<i32> for Ruleset {
@@ -20,8 +21,9 @@ impl TryFrom<i32> for Ruleset {
             0 => Ok(Ruleset::Osu),
             1 => Ok(Ruleset::Taiko),
             2 => Ok(Ruleset::Catch),
-            3 => Ok(Ruleset::Mania4k),
-            4 => Ok(Ruleset::Mania7k),
+            3 => Ok(Ruleset::ManiaOther),
+            4 => Ok(Ruleset::Mania4k),
+            5 => Ok(Ruleset::Mania7k),
             _ => Err(())
         }
     }
@@ -48,18 +50,23 @@ mod tests {
     }
 
     #[test]
+    fn test_convert_mania_other() {
+        assert_eq!(Ruleset::try_from(3), Ok(Ruleset::ManiaOther));
+    }
+
+    #[test]
     fn test_convert_mania4k() {
-        assert_eq!(Ruleset::try_from(3), Ok(Ruleset::Mania4k));
+        assert_eq!(Ruleset::try_from(4), Ok(Ruleset::Mania4k));
     }
 
     #[test]
     fn test_convert_mania7k() {
-        assert_eq!(Ruleset::try_from(4), Ok(Ruleset::Mania7k));
+        assert_eq!(Ruleset::try_from(5), Ok(Ruleset::Mania7k))
     }
 
     #[test]
     fn test_convert_invalid() {
-        assert_eq!(Ruleset::try_from(5), Err(()));
+        assert_eq!(Ruleset::try_from(6), Err(()));
     }
 
     #[test]
@@ -71,6 +78,7 @@ mod tests {
                 Ruleset::Osu,
                 Ruleset::Taiko,
                 Ruleset::Catch,
+                Ruleset::ManiaOther,
                 Ruleset::Mania4k,
                 Ruleset::Mania7k
             ]

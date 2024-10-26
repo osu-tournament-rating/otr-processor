@@ -101,7 +101,7 @@ fn mean_from_ruleset(ruleset: Ruleset) -> f64 {
         Ruleset::Osu => 9.91,
         Ruleset::Taiko => 7.59,
         Ruleset::Catch => 6.75,
-        Ruleset::Mania4k | Ruleset::Mania7k => 8.18
+        Ruleset::Mania4k | Ruleset::Mania7k | Ruleset::ManiaOther => 8.18
     }
 }
 
@@ -110,7 +110,7 @@ fn std_dev_from_ruleset(ruleset: Ruleset) -> f64 {
         Ruleset::Osu => 1.59,
         Ruleset::Taiko => 1.56,
         Ruleset::Catch => 1.54,
-        Ruleset::Mania4k | Ruleset::Mania7k => 1.55
+        Ruleset::Mania4k | Ruleset::Mania7k | Ruleset::ManiaOther => 1.55
     }
 }
 
@@ -122,7 +122,7 @@ mod tests {
         model::{
             constants::{DEFAULT_VOLATILITY, OSU_RATING_CEILING, OSU_RATING_FLOOR},
             rating_utils::{mu_from_rank, std_dev_from_ruleset},
-            structures::ruleset::Ruleset::{Catch, Mania4k, Mania7k, Osu, Taiko}
+            structures::ruleset::Ruleset::{Catch, ManiaOther, Mania4k, Osu, Taiko}
         },
         utils::test_utils::{generate_player_rating, generate_ruleset_data}
     };
@@ -154,8 +154,8 @@ mod tests {
     #[test]
     fn test_ruleset_stddev_mania_4k_7k() {
         let expected = 1.55;
-        let actual_4k = std_dev_from_ruleset(Mania4k);
-        let actual_7k = std_dev_from_ruleset(Mania7k);
+        let actual_4k = std_dev_from_ruleset(ManiaOther);
+        let actual_7k = std_dev_from_ruleset(Mania4k);
 
         assert_eq!(expected, actual_4k);
         assert_eq!(expected, actual_7k);
@@ -169,8 +169,8 @@ mod tests {
         let actual_mu_osu = mu_from_rank(rank, Osu);
         let actual_mu_taiko = mu_from_rank(rank, Taiko);
         let actual_mu_catch = mu_from_rank(rank, Catch);
-        let actual_mu_mania_4k = mu_from_rank(rank, Mania4k);
-        let actual_mu_mania_7k = mu_from_rank(rank, Mania7k);
+        let actual_mu_mania_4k = mu_from_rank(rank, ManiaOther);
+        let actual_mu_mania_7k = mu_from_rank(rank, Mania4k);
 
         assert_eq!(expected_mu, actual_mu_osu);
         assert_eq!(expected_mu, actual_mu_taiko);
@@ -187,8 +187,8 @@ mod tests {
         let actual_mu_osu = mu_from_rank(rank, Osu);
         let actual_mu_taiko = mu_from_rank(rank, Taiko);
         let actual_mu_catch = mu_from_rank(rank, Catch);
-        let actual_mu_mania_4k = mu_from_rank(rank, Mania4k);
-        let actual_mu_mania_7k = mu_from_rank(rank, Mania7k);
+        let actual_mu_mania_4k = mu_from_rank(rank, ManiaOther);
+        let actual_mu_mania_7k = mu_from_rank(rank, Mania4k);
 
         assert_eq!(expected_mu, actual_mu_osu);
         assert_eq!(expected_mu, actual_mu_taiko);
@@ -208,22 +208,22 @@ mod tests {
                 generate_ruleset_data(Osu, 1, None),
                 generate_ruleset_data(Taiko, 1, None),
                 generate_ruleset_data(Catch, 1, None),
+                generate_ruleset_data(ManiaOther, 1, None),
                 generate_ruleset_data(Mania4k, 1, None),
-                generate_ruleset_data(Mania7k, 1, None),
             ])
         };
 
         let expected_osu = mu_from_rank(1, Osu);
         let expected_taiko = mu_from_rank(1, Taiko);
         let expected_catch = mu_from_rank(1, Catch);
-        let expected_mania4k = mu_from_rank(1, Mania4k);
-        let expected_mania7k = mu_from_rank(1, Mania7k);
+        let expected_mania4k = mu_from_rank(1, ManiaOther);
+        let expected_mania7k = mu_from_rank(1, Mania4k);
 
         let actual_osu = super::initial_rating(&player, &Osu);
         let actual_taiko = super::initial_rating(&player, &Taiko);
         let actual_catch = super::initial_rating(&player, &Catch);
-        let actual_mania_4k = super::initial_rating(&player, &Mania4k);
-        let actual_mania_7k = super::initial_rating(&player, &Mania7k);
+        let actual_mania_4k = super::initial_rating(&player, &ManiaOther);
+        let actual_mania_7k = super::initial_rating(&player, &Mania4k);
 
         assert_eq!(expected_osu, actual_osu);
         assert_eq!(expected_taiko, actual_taiko);
@@ -242,30 +242,30 @@ mod tests {
                 generate_ruleset_data(Osu, 1, None),
                 generate_ruleset_data(Taiko, 1, None),
                 generate_ruleset_data(Catch, 1, None),
+                generate_ruleset_data(ManiaOther, 1, None),
                 generate_ruleset_data(Mania4k, 1, None),
-                generate_ruleset_data(Mania7k, 1, None),
             ])
         };
 
         let rating_osu = mu_from_rank(1, Osu);
         let rating_taiko = mu_from_rank(1, Taiko);
         let rating_catch = mu_from_rank(1, Catch);
-        let rating_mania4k = mu_from_rank(1, Mania4k);
-        let rating_mania7k = mu_from_rank(1, Mania7k);
+        let rating_mania4k = mu_from_rank(1, ManiaOther);
+        let rating_mania7k = mu_from_rank(1, Mania4k);
 
         let expected_osu = generate_player_rating(0, Osu, rating_osu, DEFAULT_VOLATILITY, 1);
         let expected_taiko = generate_player_rating(0, Taiko, rating_taiko, DEFAULT_VOLATILITY, 1);
         let expected_catch = generate_player_rating(0, Catch, rating_catch, DEFAULT_VOLATILITY, 1);
-        let expected_mania4k = generate_player_rating(0, Mania4k, rating_mania4k, DEFAULT_VOLATILITY, 1);
-        let expected_mania7k = generate_player_rating(0, Mania7k, rating_mania7k, DEFAULT_VOLATILITY, 1);
+        let expected_mania4k = generate_player_rating(0, ManiaOther, rating_mania4k, DEFAULT_VOLATILITY, 1);
+        let expected_mania7k = generate_player_rating(0, Mania4k, rating_mania7k, DEFAULT_VOLATILITY, 1);
 
         let initial_ratings = create_initial_ratings(&player);
 
         let actual_osu = initial_ratings.iter().find(|r| r.ruleset == Osu).unwrap();
         let actual_taiko = initial_ratings.iter().find(|r| r.ruleset == Taiko).unwrap();
         let actual_catch = initial_ratings.iter().find(|r| r.ruleset == Catch).unwrap();
-        let actual_mania4k = initial_ratings.iter().find(|r| r.ruleset == Mania4k).unwrap();
-        let actual_mania7k = initial_ratings.iter().find(|r| r.ruleset == Mania7k).unwrap();
+        let actual_mania4k = initial_ratings.iter().find(|r| r.ruleset == ManiaOther).unwrap();
+        let actual_mania7k = initial_ratings.iter().find(|r| r.ruleset == Mania4k).unwrap();
 
         assert_eq!(expected_osu.rating, actual_osu.rating);
         assert_eq!(expected_osu.volatility, actual_osu.volatility);
