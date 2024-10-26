@@ -41,8 +41,8 @@ impl DbClient {
         LEFT JOIN matches m ON t.id = m.tournament_id
         LEFT JOIN games g ON m.id = g.match_id
         LEFT JOIN game_scores gs ON g.id = gs.game_id
-        WHERE t.verification_status = 4 AND m.verification_status = 4 AND g.verification_status = 4
-        AND gs.verification_status = 4
+        WHERE t.verification_status = 2 AND m.verification_status = 2 AND g.verification_status = 2
+        AND gs.verification_status = 2
         ORDER BY gs.id", &[]).await.unwrap();
 
         let mut current_match_id = -1;
