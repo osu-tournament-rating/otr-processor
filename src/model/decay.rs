@@ -89,7 +89,7 @@ impl DecayTracker {
         for i in 0..decay_weeks {
             // Increment time by 7 days for each decay application (this is for accurate timestamps)
             let simulated_time = last_adjustment.timestamp + chrono::Duration::days(i * 7);
-            let new_rating = decay_floor.max(decay_rating(old_rating));
+            let new_rating = decay_rating(old_rating, decay_floor);
             let new_volatility = decay_volatility(old_volatility);
 
             clone_rating.rating = new_rating;
@@ -147,10 +147,10 @@ fn decay_volatility(sigma: f64) -> f64 {
     new_sigma.min(constants::DEFAULT_VOLATILITY)
 }
 
-fn decay_rating(mu: f64) -> f64 {
+fn decay_rating(mu: f64, decay_floor: f64) -> f64 {
     let new_mu = mu - constants::DECAY_RATE;
 
-    new_mu.max(constants::DECAY_MINIMUM)
+    new_mu.max(decay_floor)
 }
 
 /// The minimum possible decay value based on a player's peak rating
@@ -172,8 +172,8 @@ mod tests {
 
     use crate::{
         model::{
-            constants::{self, DECAY_DAYS, MULTIPLIER},
-            decay::{decay_floor, decay_rating, decay_volatility, is_decay_possible, DecayTracker},
+            constants::{self, DECAY_DAYS, DECAY_MINIMUM, MULTIPLIER},
+            decay::{decay_floor, decay_rating, decay_volatility, is_decay_possible, peak_rating, DecayTracker},
             rating_tracker::RatingTracker,
             structures::ruleset::Ruleset
         },
@@ -221,11 +221,13 @@ mod tests {
         let decayed_rating = rating_tracker.get_rating(1, ruleset).unwrap();
 
         let n_decay = DecayTracker::n_decay(d, t);
+        let decay_floor = decay_floor(peak_rating(&player_ratings.first().unwrap()).unwrap().rating_after);
+        
         let mut expected_decay_rating = initial_rating;
         let mut expected_decay_volatility = initial_volatility;
 
         for i in 0..n_decay {
-            expected_decay_rating = decay_rating(expected_decay_rating);
+            expected_decay_rating = decay_rating(expected_decay_rating, decay_floor);
             expected_decay_volatility = decay_volatility(expected_decay_volatility);
         }
 
@@ -303,7 +305,7 @@ mod tests {
     #[test]
     fn test_decay_mu_standard() {
         let mu = 2000.0;
-        let new_mu = decay_rating(mu);
+        let new_mu = decay_rating(mu, DECAY_MINIMUM);
         let expected = mu - constants::DECAY_RATE;
 
         assert_eq!(new_mu, expected);
@@ -312,7 +314,7 @@ mod tests {
     #[test]
     fn test_decay_mu_min_decay() {
         let mu = MULTIPLIER * 15.0;
-        let new_mu = decay_rating(mu);
+        let new_mu = decay_rating(mu, DECAY_MINIMUM);
         let expected = MULTIPLIER * 15.0;
 
         assert_eq!(new_mu, expected);
