@@ -90,6 +90,11 @@ impl DecayTracker {
             let new_rating = decay_rating(old_rating, decay_floor);
             let new_volatility = decay_volatility(old_volatility);
 
+            if new_rating == old_rating {
+                // Don't add any duplicate decays unnecessarily
+                break;
+            }
+
             clone_rating.rating = new_rating;
             clone_rating.volatility = new_volatility;
 
