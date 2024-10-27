@@ -1,8 +1,8 @@
 use crate::{
-    database::db_structs::RatingAdjustment,
+    database::db_structs::{PlayerRating, RatingAdjustment},
     model::{
         constants,
-        constants::DECAY_DAYS,
+        constants::{DECAY_DAYS, MULTIPLIER},
         rating_tracker::RatingTracker,
         structures::{
             rating_adjustment_type::RatingAdjustmentType::{Decay, Initial},
@@ -11,8 +11,6 @@ use crate::{
     }
 };
 use chrono::{DateTime, FixedOffset};
-use crate::database::db_structs::PlayerRating;
-use crate::model::constants::MULTIPLIER;
 
 use super::constants::DECAY_MINIMUM;
 
@@ -159,7 +157,9 @@ fn decay_floor(peak_rating: f64) -> f64 {
 }
 
 fn peak_rating(player_rating: &PlayerRating) -> Option<&RatingAdjustment> {
-    player_rating.adjustments.iter()
+    player_rating
+        .adjustments
+        .iter()
         .max_by(|a, b| a.rating_after.partial_cmp(&b.rating_after).unwrap())
 }
 
@@ -203,9 +203,8 @@ mod tests {
             .fixed_offset();
         let d = t.add(chrono::Duration::days(decay_days as i64));
 
-        let mut player_rating = generate_player_rating(1, Ruleset::Osu, 
-            initial_rating, initial_volatility, 5);
-        
+        let mut player_rating = generate_player_rating(1, Ruleset::Osu, initial_rating, initial_volatility, 5);
+
         player_rating.adjustments.last_mut().unwrap().timestamp = t;
 
         let player_ratings = vec![player_rating];
@@ -222,7 +221,7 @@ mod tests {
 
         let n_decay = DecayTracker::n_decay(d, t);
         let decay_floor = decay_floor(peak_rating(&player_ratings.first().unwrap()).unwrap().rating_after);
-        
+
         let mut expected_decay_rating = initial_rating;
         let mut expected_decay_volatility = initial_volatility;
 

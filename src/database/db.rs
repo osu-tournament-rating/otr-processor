@@ -40,7 +40,7 @@ impl DbClient {
 
         // Link game ids and score ids
         let mut game_scores_link_map: HashMap<i32, Vec<i32>> = HashMap::new();
-    
+
         let rows = self.client.query("
             SELECT
                 t.id AS tournament_id, t.name AS tournament_name, t.ruleset AS tournament_ruleset,
@@ -54,39 +54,45 @@ impl DbClient {
             WHERE t.verification_status = 4 AND m.verification_status = 4 AND g.verification_status = 4
             AND gs.verification_status = 4
             ORDER BY gs.id", &[]).await.unwrap();
-    
+
         for row in rows {
             let match_id = row.get::<_, i32>("match_id");
             let game_id = row.get::<_, i32>("game_id");
             let score_id = row.get::<_, i32>("game_score_id"); // Ensuring the score has the correct game_id
-    
+
             // Insert or retrieve the Match entry
-            let match_entry = matches_map.entry(match_id)
+            let match_entry = matches_map
+                .entry(match_id)
                 .or_insert_with(|| Self::match_from_row(&row));
-    
+
             // Insert or retrieve the Game entry
-            let game_entry = games_map.entry(game_id)
-                .or_insert_with(|| Self::game_from_row(&row));
-            
+            let game_entry = games_map.entry(game_id).or_insert_with(|| Self::game_from_row(&row));
+
             // Insert or retrieve the Score entry
-            let score_entry = scores_map.entry(score_id)
-                .or_insert_with(|| Self::score_from_row(&row));
+            let score_entry = scores_map.entry(score_id).or_insert_with(|| Self::score_from_row(&row));
 
             // Link ids back to parents
             match_games_link_map.entry(match_id).or_default().push(game_id);
             game_scores_link_map.entry(game_id).or_default().push(score_id);
         }
 
-    
         for (game_id, score_ids) in game_scores_link_map {
             for score_id in score_ids {
-                games_map.get_mut(&game_id).unwrap().scores.push(scores_map.get(&score_id).unwrap().clone());
+                games_map
+                    .get_mut(&game_id)
+                    .unwrap()
+                    .scores
+                    .push(scores_map.get(&score_id).unwrap().clone());
             }
         }
 
         for (match_id, game_ids) in match_games_link_map {
             for game_id in game_ids {
-                matches_map.get_mut(&match_id).unwrap().games.push(games_map.get(&game_id).unwrap().clone());
+                matches_map
+                    .get_mut(&match_id)
+                    .unwrap()
+                    .games
+                    .push(games_map.get(&game_id).unwrap().clone());
             }
         }
 
@@ -408,10 +414,7 @@ impl DbClient {
         .unwrap();
         for match_ in matches {
             self.client
-                .execute(
-                    "UPDATE matches SET processing_status = 5 WHERE id = $1",
-                    &[&match_.id]
-                )
+                .execute("UPDATE matches SET processing_status = 5 WHERE id = $1", &[&match_.id])
                 .await
                 .unwrap();
 

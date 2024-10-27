@@ -122,7 +122,7 @@ mod tests {
         model::{
             constants::{DEFAULT_VOLATILITY, OSU_RATING_CEILING, OSU_RATING_FLOOR},
             rating_utils::{mu_from_rank, std_dev_from_ruleset},
-            structures::ruleset::Ruleset::{Catch, ManiaOther, Mania4k, Osu, Taiko}
+            structures::ruleset::Ruleset::{Catch, Mania4k, ManiaOther, Osu, Taiko}
         },
         utils::test_utils::{generate_player_rating, generate_ruleset_data}
     };

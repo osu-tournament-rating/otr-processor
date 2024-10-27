@@ -50,6 +50,7 @@ impl OtrModel {
     ///     end of the match.
     pub fn process(&mut self, matches: &[Match]) -> Vec<PlayerRating> {
         let progress_bar = progress_bar(matches.len() as u64, "Processing match data".to_string());
+
         for m in matches {
             self.process_match(m);
 
@@ -421,7 +422,7 @@ mod tests {
         model.rating_tracker.sort();
 
         let rating_1 = model.rating_tracker.get_rating(1, Osu).unwrap();
-        let rating_2 = model.rating_tracker.get_rating(2, Osu).unwrap();
+        let rating_2: &PlayerRating = model.rating_tracker.get_rating(2, Osu).unwrap();
         let rating_3 = model.rating_tracker.get_rating(3, Osu).unwrap();
         let rating_4 = model.rating_tracker.get_rating(4, Osu).unwrap();
 
