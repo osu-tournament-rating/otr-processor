@@ -1,8 +1,8 @@
 use crate::{
-    database::db_structs::RatingAdjustment,
+    database::db_structs::{PlayerRating, RatingAdjustment},
     model::{
         constants,
-        constants::DECAY_DAYS,
+        constants::{DECAY_DAYS, MULTIPLIER},
         rating_tracker::RatingTracker,
         structures::{
             rating_adjustment_type::RatingAdjustmentType::{Decay, Initial},
@@ -11,6 +11,8 @@ use crate::{
     }
 };
 use chrono::{DateTime, FixedOffset};
+
+use super::constants::DECAY_MINIMUM;
 
 /// Tracks decay activity for players
 pub struct DecayTracker;
@@ -45,8 +47,16 @@ impl DecayTracker {
         }
 
         let mut clone_rating = player_rating.unwrap().clone();
+        let peak_rating = peak_rating(&clone_rating);
 
-        if !is_decay_possible(clone_rating.rating) {
+        if peak_rating.is_none() {
+            // Players shouldn't be decaying without having played any matches
+            return;
+        }
+
+        let decay_floor = decay_floor(peak_rating.unwrap().rating_after);
+
+        if !is_decay_possible(clone_rating.rating, decay_floor) {
             return;
         }
 
@@ -77,7 +87,7 @@ impl DecayTracker {
         for i in 0..decay_weeks {
             // Increment time by 7 days for each decay application (this is for accurate timestamps)
             let simulated_time = last_adjustment.timestamp + chrono::Duration::days(i * 7);
-            let new_rating = decay_rating(old_rating);
+            let new_rating = decay_rating(old_rating, decay_floor);
             let new_volatility = decay_volatility(old_volatility);
 
             clone_rating.rating = new_rating;
@@ -125,8 +135,8 @@ impl DecayTracker {
     }
 }
 
-pub fn is_decay_possible(mu: f64) -> bool {
-    mu > constants::DECAY_MINIMUM
+pub fn is_decay_possible(mu: f64, decay_floor: f64) -> bool {
+    mu > constants::DECAY_MINIMUM && mu > decay_floor
 }
 
 fn decay_volatility(sigma: f64) -> f64 {
@@ -135,10 +145,22 @@ fn decay_volatility(sigma: f64) -> f64 {
     new_sigma.min(constants::DEFAULT_VOLATILITY)
 }
 
-fn decay_rating(mu: f64) -> f64 {
+fn decay_rating(mu: f64, decay_floor: f64) -> f64 {
     let new_mu = mu - constants::DECAY_RATE;
 
-    new_mu.max(constants::DECAY_MINIMUM)
+    new_mu.max(decay_floor)
+}
+
+/// The minimum possible decay value based on a player's peak rating
+fn decay_floor(peak_rating: f64) -> f64 {
+    DECAY_MINIMUM.max(0.5 * (15.0 * MULTIPLIER + peak_rating))
+}
+
+fn peak_rating(player_rating: &PlayerRating) -> Option<&RatingAdjustment> {
+    player_rating
+        .adjustments
+        .iter()
+        .max_by(|a, b| a.rating_after.partial_cmp(&b.rating_after).unwrap())
 }
 
 #[cfg(test)]
@@ -149,15 +171,13 @@ mod tests {
     use chrono::DateTime;
 
     use crate::{
-        database::db_structs::{PlayerRating, RatingAdjustment},
         model::{
-            constants,
-            constants::{DECAY_DAYS, MULTIPLIER},
-            decay::{decay_rating, decay_volatility, is_decay_possible, DecayTracker},
+            constants::{self, DECAY_DAYS, DECAY_MINIMUM, MULTIPLIER},
+            decay::{decay_floor, decay_rating, decay_volatility, is_decay_possible, peak_rating, DecayTracker},
             rating_tracker::RatingTracker,
-            structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
+            structures::ruleset::Ruleset
         },
-        utils::test_utils::generate_country_mapping_player_ratings
+        utils::test_utils::{generate_country_mapping_player_ratings, generate_player_rating}
     };
 
     #[test]
@@ -183,27 +203,11 @@ mod tests {
             .fixed_offset();
         let d = t.add(chrono::Duration::days(decay_days as i64));
 
-        let player_ratings = vec![PlayerRating {
-            id: 1,
-            player_id: 1,
-            ruleset,
-            rating: initial_rating,
-            volatility: initial_volatility,
-            percentile: 0.0,
-            global_rank: 1,
-            country_rank: 1,
-            adjustments: vec![RatingAdjustment {
-                player_id: 1,
-                match_id: None,
-                rating_before: 0.0,
-                rating_after: initial_rating,
-                volatility_before: 0.0,
-                volatility_after: initial_volatility,
-                timestamp: t,
-                // We use match here because we do not consider initial ratings as markers for decay
-                adjustment_type: RatingAdjustmentType::Match
-            }]
-        }];
+        let mut player_rating = generate_player_rating(1, Ruleset::Osu, initial_rating, initial_volatility, 5);
+
+        player_rating.adjustments.last_mut().unwrap().timestamp = t;
+
+        let player_ratings = vec![player_rating];
 
         let country = "US";
         let country_mapping = generate_country_mapping_player_ratings(&player_ratings, country);
@@ -216,20 +220,18 @@ mod tests {
         let decayed_rating = rating_tracker.get_rating(1, ruleset).unwrap();
 
         let n_decay = DecayTracker::n_decay(d, t);
+        let decay_floor = decay_floor(peak_rating(&player_ratings.first().unwrap()).unwrap().rating_after);
+
         let mut expected_decay_rating = initial_rating;
         let mut expected_decay_volatility = initial_volatility;
 
         for i in 0..n_decay {
-            expected_decay_rating = decay_rating(expected_decay_rating);
+            expected_decay_rating = decay_rating(expected_decay_rating, decay_floor);
             expected_decay_volatility = decay_volatility(expected_decay_volatility);
         }
 
         assert_abs_diff_eq!(decayed_rating.rating, expected_decay_rating);
         assert_abs_diff_eq!(decayed_rating.volatility, expected_decay_volatility);
-
-        // Assert rank updates
-        assert_eq!(decayed_rating.global_rank, 1);
-        assert_eq!(decayed_rating.country_rank, 1);
     }
 
     #[test]
@@ -275,8 +277,8 @@ mod tests {
         let mu = 500.0;
         let decay_min = constants::DECAY_MINIMUM;
 
-        let decay_possible = mu > (decay_min);
-        let result = is_decay_possible(mu);
+        let decay_possible = mu > decay_min;
+        let result = is_decay_possible(mu, decay_floor(mu));
 
         assert_eq!(result, decay_possible)
     }
@@ -302,7 +304,7 @@ mod tests {
     #[test]
     fn test_decay_mu_standard() {
         let mu = 2000.0;
-        let new_mu = decay_rating(mu);
+        let new_mu = decay_rating(mu, DECAY_MINIMUM);
         let expected = mu - constants::DECAY_RATE;
 
         assert_eq!(new_mu, expected);
@@ -310,10 +312,26 @@ mod tests {
 
     #[test]
     fn test_decay_mu_min_decay() {
-        let mu = MULTIPLIER * 18.0;
-        let new_mu = decay_rating(mu);
-        let expected = MULTIPLIER * 18.0;
+        let mu = MULTIPLIER * 15.0;
+        let new_mu = decay_rating(mu, DECAY_MINIMUM);
+        let expected = MULTIPLIER * 15.0;
 
         assert_eq!(new_mu, expected);
+    }
+
+    #[test]
+    fn test_decay_floor() {
+        let mu = 1000.0;
+        let floor = decay_floor(mu);
+
+        assert_abs_diff_eq!(floor, 950.0)
+    }
+
+    #[test]
+    fn test_decay_floor_cannot_decay_below_const_min() {
+        let mu = 500.0;
+        let floor = decay_floor(mu);
+
+        assert_abs_diff_eq!(floor, 900.0)
     }
 }

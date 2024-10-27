@@ -84,8 +84,8 @@ impl RatingTracker {
             Ruleset::Osu,
             Ruleset::Taiko,
             Ruleset::Catch,
-            Ruleset::Mania4k,
-            Ruleset::Mania7k
+            Ruleset::ManiaOther,
+            Ruleset::Mania4k
         ];
 
         for ruleset in rulesets.iter() {

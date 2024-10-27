@@ -1,4 +1,5 @@
 use crate::{model::structures::ruleset::Ruleset, utils::progress_utils::progress_bar};
+use itertools::Itertools;
 use postgres_types::ToSql;
 use std::{collections::HashMap, sync::Arc};
 use tokio_postgres::{Client, Error, NoTls, Row};
@@ -30,72 +31,106 @@ impl DbClient {
     }
 
     pub async fn get_matches(&self) -> Vec<Match> {
-        let mut matches: Vec<Match> = Vec::new();
-        let rows = self.client.query("
-        SELECT
-            t.id AS tournament_id, t.name AS tournament_name, t.ruleset AS tournament_ruleset,
-            m.id AS match_id, m.name AS match_name, m.start_time AS match_start_time, m.end_time AS match_end_time, m.tournament_id AS match_tournament_id,
-            g.id AS game_id, g.ruleset AS game_ruleset, g.start_time AS game_start_time, g.end_time AS game_end_time, g.match_id AS game_match_id,
-            gs.id AS game_score_id, gs.player_id AS game_score_player_id, gs.game_id AS game_score_game_id, gs.score AS game_score_score, gs.placement AS game_score_placement
-        FROM tournaments t
-        LEFT JOIN matches m ON t.id = m.tournament_id
-        LEFT JOIN games g ON m.id = g.match_id
-        LEFT JOIN game_scores gs ON g.id = gs.game_id
-        WHERE t.verification_status = 4 AND m.verification_status = 4 AND g.verification_status = 4
-        AND gs.verification_status = 4
-        ORDER BY gs.id", &[]).await.unwrap();
+        let mut matches_map: HashMap<i32, Match> = HashMap::new();
+        let mut games_map: HashMap<i32, Game> = HashMap::new();
+        let mut scores_map: HashMap<i32, GameScore> = HashMap::new();
 
-        let mut current_match_id = -1;
-        let mut current_game_id = -1;
-        let mut current_game_score_id = -1;
+        // Link match ids and game ids
+        let mut match_games_link_map: HashMap<i32, Vec<i32>> = HashMap::new();
+
+        // Link game ids and score ids
+        let mut game_scores_link_map: HashMap<i32, Vec<i32>> = HashMap::new();
+
+        let rows = self.client.query("
+            SELECT
+                t.id AS tournament_id, t.name AS tournament_name, t.ruleset AS tournament_ruleset,
+                m.id AS match_id, m.name AS match_name, m.start_time AS match_start_time, m.end_time AS match_end_time, m.tournament_id AS match_tournament_id,
+                g.id AS game_id, g.ruleset AS game_ruleset, g.start_time AS game_start_time, g.end_time AS game_end_time, g.match_id AS game_match_id,
+                gs.id AS game_score_id, gs.player_id AS game_score_player_id, gs.game_id AS game_score_game_id, gs.score AS game_score_score, gs.placement AS game_score_placement
+            FROM tournaments t
+            LEFT JOIN matches m ON t.id = m.tournament_id
+            LEFT JOIN games g ON m.id = g.match_id
+            LEFT JOIN game_scores gs ON g.id = gs.game_id
+            WHERE t.verification_status = 4 AND m.verification_status = 4 AND g.verification_status = 4
+            AND gs.verification_status = 4
+            ORDER BY gs.id", &[]).await.unwrap();
 
         for row in rows {
-            if row.get::<_, i32>("match_id") != current_match_id {
-                let match_ = Match {
-                    id: row.get("match_id"),
-                    name: row.get("match_name"),
-                    start_time: row.get("match_start_time"),
-                    end_time: row.get("match_end_time"),
-                    ruleset: Ruleset::try_from(row.get::<_, i32>("tournament_ruleset")).unwrap(),
-                    games: Vec::new()
-                };
-                matches.push(match_);
-                current_match_id = row.get("match_id");
-            }
+            let match_id = row.get::<_, i32>("match_id");
+            let game_id = row.get::<_, i32>("game_id");
+            let score_id = row.get::<_, i32>("game_score_id"); // Ensuring the score has the correct game_id
 
-            if row.get::<_, i32>("game_id") != current_game_id {
-                let game = Game {
-                    id: row.get("game_id"),
-                    ruleset: Ruleset::try_from(row.get::<_, i32>("game_ruleset")).unwrap(),
-                    start_time: row.get("game_start_time"),
-                    end_time: row.get("game_end_time"),
-                    scores: Vec::new()
-                };
-                matches.last_mut().unwrap().games.push(game);
-                current_game_id = row.get("game_id");
-            }
+            // Insert or retrieve the Match entry
+            let match_entry = matches_map
+                .entry(match_id)
+                .or_insert_with(|| Self::match_from_row(&row));
 
-            if row.get::<_, i32>("game_score_id") != current_game_score_id {
-                let game_score = GameScore {
-                    id: row.get("game_score_id"),
-                    player_id: row.get("game_score_player_id"),
-                    game_id: row.get("game_score_game_id"),
-                    score: row.get("game_score_score"),
-                    placement: row.get("game_score_placement")
-                };
-                matches
-                    .last_mut()
-                    .unwrap()
-                    .games
-                    .last_mut()
+            // Insert or retrieve the Game entry
+            let game_entry = games_map.entry(game_id).or_insert_with(|| Self::game_from_row(&row));
+
+            // Insert or retrieve the Score entry
+            let score_entry = scores_map.entry(score_id).or_insert_with(|| Self::score_from_row(&row));
+
+            // Link ids back to parents
+            match_games_link_map.entry(match_id).or_default().push(game_id);
+            game_scores_link_map.entry(game_id).or_default().push(score_id);
+        }
+
+        for (game_id, score_ids) in game_scores_link_map {
+            for score_id in score_ids {
+                games_map
+                    .get_mut(&game_id)
                     .unwrap()
                     .scores
-                    .push(game_score);
-                current_game_score_id = row.get("game_score_id");
+                    .push(scores_map.get(&score_id).unwrap().clone());
             }
         }
 
+        for (match_id, game_ids) in match_games_link_map {
+            for game_id in game_ids {
+                matches_map
+                    .get_mut(&match_id)
+                    .unwrap()
+                    .games
+                    .push(games_map.get(&game_id).unwrap().clone());
+            }
+        }
+
+        let mut matches = matches_map.values().cloned().collect_vec();
+        matches.sort_by(|a, b| a.start_time.cmp(&b.start_time));
+
         matches
+    }
+
+    fn match_from_row(row: &Row) -> Match {
+        Match {
+            id: row.get("match_id"),
+            name: row.get("match_name"),
+            start_time: row.get("match_start_time"),
+            end_time: row.get("match_end_time"),
+            ruleset: Ruleset::try_from(row.get::<_, i32>("tournament_ruleset")).unwrap(),
+            games: Vec::new()
+        }
+    }
+
+    fn game_from_row(row: &Row) -> Game {
+        Game {
+            id: row.get("game_id"),
+            ruleset: Ruleset::try_from(row.get::<_, i32>("game_ruleset")).unwrap(),
+            start_time: row.get("game_start_time"),
+            end_time: row.get("game_end_time"),
+            scores: Vec::new()
+        }
+    }
+
+    fn score_from_row(row: &Row) -> GameScore {
+        GameScore {
+            id: row.get("game_score_id"),
+            player_id: row.get("game_score_player_id"),
+            game_id: row.get("game_score_game_id"),
+            score: row.get("game_score_score"),
+            placement: row.get("game_score_placement")
+        }
     }
 
     pub async fn get_players(&self) -> Vec<Player> {
@@ -379,10 +414,7 @@ impl DbClient {
         .unwrap();
         for match_ in matches {
             self.client
-                .execute(
-                    "UPDATE matches SET processing_status = 5 WHERE match_id = $1",
-                    &[&match_.id]
-                )
+                .execute("UPDATE matches SET processing_status = 5 WHERE id = $1", &[&match_.id])
                 .await
                 .unwrap();
 
