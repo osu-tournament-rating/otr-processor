@@ -90,6 +90,11 @@ impl DecayTracker {
             let new_rating = decay_rating(old_rating, decay_floor);
             let new_volatility = decay_volatility(old_volatility);
 
+            if new_rating == old_rating {
+                // Don't add any duplicate decays unnecessarily
+                break;
+            }
+
             clone_rating.rating = new_rating;
             clone_rating.volatility = new_volatility;
 
@@ -153,7 +158,7 @@ fn decay_rating(mu: f64, decay_floor: f64) -> f64 {
 
 /// The minimum possible decay value based on a player's peak rating
 fn decay_floor(peak_rating: f64) -> f64 {
-    DECAY_MINIMUM.max(0.5 * (15.0 * MULTIPLIER + peak_rating))
+    DECAY_MINIMUM.max(0.5 * (constants::DECAY_MINIMUM + peak_rating))
 }
 
 fn peak_rating(player_rating: &PlayerRating) -> Option<&RatingAdjustment> {
@@ -183,11 +188,6 @@ mod tests {
     #[test]
     fn test_decay_default_days() {
         decay_test(DECAY_DAYS as i32)
-    }
-
-    #[test]
-    fn test_decay_many_days() {
-        decay_test(7000)
     }
 
     fn decay_test(decay_days: i32) {

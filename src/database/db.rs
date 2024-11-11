@@ -65,18 +65,17 @@ impl DbClient {
                 .entry(match_id)
                 .or_insert_with(|| Self::match_from_row(&row));
 
-            // Insert or retrieve the Game entry
-            let game_entry = games_map.entry(game_id).or_insert_with(|| Self::game_from_row(&row));
-
-            // Insert or retrieve the Score entry
-            let score_entry = scores_map.entry(score_id).or_insert_with(|| Self::score_from_row(&row));
+            games_map.entry(game_id).or_insert_with(|| Self::game_from_row(&row));
+            scores_map.entry(score_id).or_insert_with(|| Self::score_from_row(&row));
 
             // Link ids back to parents
             match_games_link_map.entry(match_id).or_default().push(game_id);
             game_scores_link_map.entry(game_id).or_default().push(score_id);
         }
 
-        for (game_id, score_ids) in game_scores_link_map {
+        for (game_id, mut score_ids) in game_scores_link_map {
+            score_ids.dedup();
+
             for score_id in score_ids {
                 games_map
                     .get_mut(&game_id)
@@ -86,7 +85,9 @@ impl DbClient {
             }
         }
 
-        for (match_id, game_ids) in match_games_link_map {
+        for (match_id, mut game_ids) in match_games_link_map {
+            game_ids.dedup();
+
             for game_id in game_ids {
                 matches_map
                     .get_mut(&match_id)
