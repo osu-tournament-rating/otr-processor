@@ -15,6 +15,7 @@ use openskill::{
     rating::{default_gamma, Rating}
 };
 use std::collections::HashMap;
+use openskill::rating::TeamRating;
 
 pub struct OtrModel {
     pub model: PlackettLuce,
@@ -23,6 +24,10 @@ pub struct OtrModel {
 }
 
 impl OtrModel {
+    fn default_gamma_2(c: f64, k: f64, team: &TeamRating) -> f64 {
+        1.0 / k
+    }
+
     pub fn new(initial_player_ratings: &[PlayerRating], country_mapping: &HashMap<i32, String>) -> OtrModel {
         let mut tracker = RatingTracker::new();
 
@@ -32,7 +37,7 @@ impl OtrModel {
         OtrModel {
             rating_tracker: tracker,
             decay_tracker: DecayTracker,
-            model: PlackettLuce::new(DEFAULT_BETA, KAPPA, default_gamma)
+            model: PlackettLuce::new(DEFAULT_BETA, KAPPA, Self::default_gamma_2)
         }
     }
 

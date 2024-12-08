@@ -401,7 +401,7 @@ impl DbClient {
 
     async fn truncate_player_ratings(&self) {
         self.client
-            .execute("TRUNCATE TABLE player_ratings CASCADE", &[])
+            .execute("TRUNCATE TABLE player_ratings RESTART IDENTITY CASCADE", &[])
             .await
             .unwrap();
         println!("Truncated player_ratings table!");
@@ -425,7 +425,7 @@ impl DbClient {
 
     async fn truncate_rating_adjustments(&self) {
         self.client
-            .execute("TRUNCATE TABLE rating_adjustments CASCADE", &[])
+            .execute("TRUNCATE TABLE rating_adjustments RESTART IDENTITY CASCADE", &[])
             .await
             .unwrap();
 
