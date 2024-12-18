@@ -1,12 +1,14 @@
-use crate::{model::structures::ruleset::Ruleset, utils::progress_utils::progress_bar};
+use super::db_structs::{
+    Game, GameScore, Match, Player, PlayerHighestRank, PlayerRating, RatingAdjustment, RulesetData
+};
+use crate::{
+    model::structures::ruleset::Ruleset,
+    utils::progress_utils::{progress_bar, progress_bar_spinner}
+};
 use itertools::Itertools;
 use postgres_types::ToSql;
 use std::{collections::HashMap, sync::Arc};
 use tokio_postgres::{Client, Error, NoTls, Row};
-use crate::utils::progress_utils::progress_bar_spinner;
-use super::db_structs::{
-    Game, GameScore, Match, Player, PlayerHighestRank, PlayerRating, RatingAdjustment, RulesetData
-};
 
 #[derive(Clone)]
 pub struct DbClient {
@@ -41,17 +43,15 @@ impl DbClient {
         // Link game ids and score ids
         let mut game_scores_link_map: HashMap<i32, Vec<i32>> = HashMap::new();
 
-        /**
-        The WHERE query here does the following:
-
-        1. Only consider matches with a processing_status of 'NeedsProcessorData'.
-            This is fine because tournaments which are rejected have matches with a
-            processing_status of 'Done'.
-        2. From these matches, we only want the games and scores which are verified.
-
-         We can safely assume that for all matches awaiting processor data every
-            game and game score is completely done with processing
-        */
+        // The WHERE query here does the following:
+        //
+        // 1. Only consider matches with a processing_status of 'NeedsProcessorData'.
+        //     This is fine because tournaments which are rejected have matches with a
+        //     processing_status of 'Done'.
+        // 2. From these matches, we only want the games and scores which are verified.
+        //
+        //  We can safely assume that for all matches awaiting processor data every
+        //     game and game score is completely done with processing
         let rows = self.client.query("
             SELECT
                 t.id AS tournament_id, t.name AS tournament_name, t.ruleset AS tournament_ruleset,
@@ -71,8 +71,7 @@ impl DbClient {
             let game_id = row.get::<_, i32>("game_id");
             let score_id = row.get::<_, i32>("game_score_id"); // Ensuring the score has the correct game_id
 
-            // Insert or retrieve the Match entry
-            let match_entry = matches_map
+            matches_map
                 .entry(match_id)
                 .or_insert_with(|| Self::match_from_row(&row));
 
@@ -123,9 +122,12 @@ impl DbClient {
         let id_result = self.client.query(tournament_id_sql, &[]).await;
 
         if id_result.is_ok() {
-            for (i, row) in id_result.unwrap().iter().enumerate() {
-                tournament_update_sql.push(format!("UPDATE tournaments SET processing_status = 4 \
-                WHERE id = {};\n", row.get::<_, i32>(0).to_string()));
+            for (_, row) in id_result.unwrap().iter().enumerate() {
+                tournament_update_sql.push(format!(
+                    "UPDATE tournaments SET processing_status = 4 \
+                WHERE id = {};\n",
+                    row.get::<_, i32>(0)
+                ));
             }
         } else {
             panic!("Failed to fetch tournament ids");
@@ -135,7 +137,8 @@ impl DbClient {
 
         // Update tournaments
         self.client
-            .batch_execute(tournament_update_sql.join("\n").as_str()).await
+            .batch_execute(tournament_update_sql.join("\n").as_str())
+            .await
             .expect("Failed to batch execute tournament processing status rollback");
 
         p_bar.inc(1);
@@ -143,7 +146,8 @@ impl DbClient {
 
         // Update matches
         self.client
-            .execute(match_update_sql, &[]).await
+            .execute(match_update_sql, &[])
+            .await
             .expect("Failed to execute match processing status rollback");
 
         p_bar.inc(1);
@@ -336,7 +340,7 @@ impl DbClient {
             .to_string();
         let mut value_placeholders: Vec<String> = Vec::new();
 
-        for (i, rating) in player_ratings.iter().enumerate() {
+        for (_, rating) in player_ratings.iter().enumerate() {
             // Directly embed the values into the query string
             value_placeholders.push(format!(
                 "({}, {}, {}, {}, {}, {}, {})",

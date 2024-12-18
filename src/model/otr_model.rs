@@ -12,10 +12,9 @@ use itertools::Itertools;
 use openskill::{
     constant::*,
     model::{model::Model, plackett_luce::PlackettLuce},
-    rating::{default_gamma, Rating}
+    rating::{Rating, TeamRating}
 };
 use std::collections::HashMap;
-use openskill::rating::TeamRating;
 
 pub struct OtrModel {
     pub model: PlackettLuce,
@@ -24,7 +23,7 @@ pub struct OtrModel {
 }
 
 impl OtrModel {
-    fn default_gamma_2(c: f64, k: f64, team: &TeamRating) -> f64 {
+    fn default_gamma_2(_: f64, k: f64, _: &TeamRating) -> f64 {
         0.5 / k
     }
 

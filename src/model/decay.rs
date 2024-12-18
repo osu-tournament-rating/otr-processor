@@ -2,7 +2,7 @@ use crate::{
     database::db_structs::{PlayerRating, RatingAdjustment},
     model::{
         constants,
-        constants::{DECAY_DAYS, MULTIPLIER},
+        constants::DECAY_DAYS,
         rating_tracker::RatingTracker,
         structures::{
             rating_adjustment_type::RatingAdjustmentType::{Decay, Initial},
