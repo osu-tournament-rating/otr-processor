@@ -25,7 +25,7 @@ pub struct OtrModel {
 
 impl OtrModel {
     fn default_gamma_2(c: f64, k: f64, team: &TeamRating) -> f64 {
-        1.0 / k
+        0.5 / k
     }
 
     pub fn new(initial_player_ratings: &[PlayerRating], country_mapping: &HashMap<i32, String>) -> OtrModel {

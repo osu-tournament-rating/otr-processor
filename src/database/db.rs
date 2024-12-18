@@ -3,7 +3,7 @@ use itertools::Itertools;
 use postgres_types::ToSql;
 use std::{collections::HashMap, sync::Arc};
 use tokio_postgres::{Client, Error, NoTls, Row};
-
+use crate::utils::progress_utils::progress_bar_spinner;
 use super::db_structs::{
     Game, GameScore, Match, Player, PlayerHighestRank, PlayerRating, RatingAdjustment, RulesetData
 };
@@ -41,6 +41,17 @@ impl DbClient {
         // Link game ids and score ids
         let mut game_scores_link_map: HashMap<i32, Vec<i32>> = HashMap::new();
 
+        /**
+        The WHERE query here does the following:
+
+        1. Only consider matches with a processing_status of 'NeedsProcessorData'.
+            This is fine because tournaments which are rejected have matches with a
+            processing_status of 'Done'.
+        2. From these matches, we only want the games and scores which are verified.
+
+         We can safely assume that for all matches awaiting processor data every
+            game and game score is completely done with processing
+        */
         let rows = self.client.query("
             SELECT
                 t.id AS tournament_id, t.name AS tournament_name, t.ruleset AS tournament_ruleset,
@@ -48,11 +59,11 @@ impl DbClient {
                 g.id AS game_id, g.ruleset AS game_ruleset, g.start_time AS game_start_time, g.end_time AS game_end_time, g.match_id AS game_match_id,
                 gs.id AS game_score_id, gs.player_id AS game_score_player_id, gs.game_id AS game_score_game_id, gs.score AS game_score_score, gs.placement AS game_score_placement
             FROM tournaments t
-            LEFT JOIN matches m ON t.id = m.tournament_id
-            LEFT JOIN games g ON m.id = g.match_id
-            LEFT JOIN game_scores gs ON g.id = gs.game_id
-            WHERE t.verification_status = 4 AND m.verification_status = 4 AND g.verification_status = 4
-            AND gs.verification_status = 4
+            JOIN matches m ON t.id = m.tournament_id
+            JOIN games g ON m.id = g.match_id
+            JOIN game_scores gs ON g.id = gs.game_id
+            WHERE m.processing_status = 4 AND g.verification_status = 4
+                AND gs.verification_status = 4
             ORDER BY gs.id", &[]).await.unwrap();
 
         for row in rows {
@@ -101,6 +112,42 @@ impl DbClient {
         matches.sort_by(|a, b| a.start_time.cmp(&b.start_time));
 
         matches
+    }
+
+    pub async fn rollback_processing_statuses(&self) {
+        let tournament_id_sql = "SELECT tournament_id FROM matches WHERE processing_status = 5;";
+        let match_update_sql = "UPDATE matches SET processing_status = 4 \
+        WHERE processing_status = 5;";
+
+        let mut tournament_update_sql = Vec::new();
+        let id_result = self.client.query(tournament_id_sql, &[]).await;
+
+        if id_result.is_ok() {
+            for (i, row) in id_result.unwrap().iter().enumerate() {
+                tournament_update_sql.push(format!("UPDATE tournaments SET processing_status = 4 \
+                WHERE id = {};\n", row.get::<_, i32>(0).to_string()));
+            }
+        } else {
+            panic!("Failed to fetch tournament ids");
+        }
+
+        let p_bar = progress_bar_spinner(2, "Rolling back tournament processing statuses".to_string()).unwrap();
+
+        // Update tournaments
+        self.client
+            .batch_execute(tournament_update_sql.join("\n").as_str()).await
+            .expect("Failed to batch execute tournament processing status rollback");
+
+        p_bar.inc(1);
+        p_bar.set_message("Rolling back match processing statuses");
+
+        // Update matches
+        self.client
+            .execute(match_update_sql, &[]).await
+            .expect("Failed to execute match processing status rollback");
+
+        p_bar.inc(1);
+        p_bar.finish_with_message("Completed processing status rollback for tournaments and matches")
     }
 
     fn match_from_row(row: &Row) -> Match {
