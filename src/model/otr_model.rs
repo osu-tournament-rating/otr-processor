@@ -364,6 +364,7 @@ mod tests {
     };
     use approx::assert_abs_diff_eq;
     use chrono::Utc;
+    use crate::model::constants::{ABSOLUTE_RATING_FLOOR};
 
     #[test]
     fn test_rate() {
@@ -490,5 +491,40 @@ mod tests {
 
         let scaled_rating = OtrModel::performance_scaled_rating(rating.rating, rating_diff, frequency, scaling);
         assert_abs_diff_eq!(scaled_rating, 990.0);
+    }
+
+    #[test]
+    fn test_minimum_rating() {
+        let player_ratings = vec![
+            generate_player_rating(1, Osu, 100.1, 100.0, 1),
+            generate_player_rating(2, Osu, 100.0, 100.0, 1),
+            generate_player_rating(3, Osu, 100.0, 100.0, 1),
+            generate_player_rating(4, Osu, 100.0, 100.0, 1),
+        ];
+
+        let countries = generate_country_mapping_player_ratings(player_ratings.as_slice(), "US");
+        let mut model = OtrModel::new(player_ratings.as_slice(), &countries);
+
+        let placements = vec![
+            generate_placement(1, 1),
+            generate_placement(2, 2),
+            generate_placement(3, 3),
+            generate_placement(4, 4),
+        ];
+
+        let games = vec![
+            generate_game(1, &placements),
+            generate_game(2, &placements),
+            generate_game(3, &placements),
+        ];
+
+        let matches = vec![generate_match(1, Osu, &games, Utc::now().fixed_offset())];
+        model.process(&matches);
+
+        for i in 1..5 {
+            let rating = model.rating_tracker.get_rating(i, Osu).unwrap();
+
+            assert!(rating.rating >= ABSOLUTE_RATING_FLOOR);
+        }
     }
 }
