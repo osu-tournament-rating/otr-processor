@@ -23,7 +23,9 @@ pub struct OtrModel {
 }
 
 impl OtrModel {
-    fn default_gamma_2(_: f64, k: f64, _: &TeamRating) -> f64 {
+    /// Custom gamma function, passed into the PlackettLuce model.
+    /// This controls how quickly volatility decreases over time.
+    fn gamma_override(_: f64, k: f64, _: &TeamRating) -> f64 {
         0.5 / k
     }
 
@@ -36,7 +38,7 @@ impl OtrModel {
         OtrModel {
             rating_tracker: tracker,
             decay_tracker: DecayTracker,
-            model: PlackettLuce::new(DEFAULT_BETA, KAPPA, Self::default_gamma_2)
+            model: PlackettLuce::new(DEFAULT_BETA, KAPPA, Self::gamma_override)
         }
     }
 
