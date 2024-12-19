@@ -9,27 +9,32 @@ use std::{collections::HashMap, env};
 async fn main() {
     let client: DbClient = client().await;
 
-    // 1. Fetch matches and players for processing
+    // 1. Rollback processing statuses of matches & tournaments
+    client.rollback_processing_statuses().await;
+
+    // 2. Fetch matches and players for processing
     let matches = client.get_matches().await;
     let players = client.get_players().await;
 
-    // 2. Generate initial ratings
+    // 3. Generate initial ratings
     let initial_ratings = initial_ratings(&players);
 
-    // 3. Generate country mapping and set
+    // 4. Generate country mapping and set
     let country_mapping: HashMap<i32, String> = generate_country_mapping_players(&players);
 
-    // 4. Create the model
+    // 5. Create the model
     let mut model = OtrModel::new(&initial_ratings, &country_mapping);
 
-    // 5. Process matches
+    // 6. Process matches
     let results = model.process(&matches);
 
-    // 6. Save results in database
+    // 7. Save results in database
     client.save_results(&results).await;
 
-    // 7. Update all match processing statuses
-    client.set_match_processing_status_done(&matches).await
+    // 8. Update all match processing statuses
+    client.set_match_processing_status_done(&matches).await;
+
+    println!("Processing complete");
 }
 
 async fn client() -> DbClient {

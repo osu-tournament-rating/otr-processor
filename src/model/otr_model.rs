@@ -12,7 +12,7 @@ use itertools::Itertools;
 use openskill::{
     constant::*,
     model::{model::Model, plackett_luce::PlackettLuce},
-    rating::{default_gamma, Rating}
+    rating::{Rating, TeamRating}
 };
 use std::collections::HashMap;
 
@@ -23,6 +23,12 @@ pub struct OtrModel {
 }
 
 impl OtrModel {
+    /// Custom gamma function, passed into the PlackettLuce model.
+    /// This controls how quickly volatility decreases over time.
+    fn gamma_override(_: f64, k: f64, _: &TeamRating) -> f64 {
+        1.0 / k
+    }
+
     pub fn new(initial_player_ratings: &[PlayerRating], country_mapping: &HashMap<i32, String>) -> OtrModel {
         let mut tracker = RatingTracker::new();
 
@@ -32,7 +38,7 @@ impl OtrModel {
         OtrModel {
             rating_tracker: tracker,
             decay_tracker: DecayTracker,
-            model: PlackettLuce::new(DEFAULT_BETA, KAPPA, default_gamma)
+            model: PlackettLuce::new(DEFAULT_BETA, KAPPA, Self::gamma_override)
         }
     }
 

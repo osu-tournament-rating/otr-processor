@@ -2,7 +2,7 @@ use crate::{
     database::db_structs::{PlayerRating, RatingAdjustment},
     model::{
         constants,
-        constants::{DECAY_DAYS, MULTIPLIER},
+        constants::DECAY_DAYS,
         rating_tracker::RatingTracker,
         structures::{
             rating_adjustment_type::RatingAdjustmentType::{Decay, Initial},
@@ -158,7 +158,7 @@ fn decay_rating(mu: f64, decay_floor: f64) -> f64 {
 
 /// The minimum possible decay value based on a player's peak rating
 fn decay_floor(peak_rating: f64) -> f64 {
-    DECAY_MINIMUM.max(0.5 * (constants::DECAY_MINIMUM + peak_rating))
+    DECAY_MINIMUM.max(0.5 * (DECAY_MINIMUM + peak_rating))
 }
 
 fn peak_rating(player_rating: &PlayerRating) -> Option<&RatingAdjustment> {
@@ -321,10 +321,10 @@ mod tests {
 
     #[test]
     fn test_decay_floor() {
-        let mu = 1000.0;
-        let floor = decay_floor(mu);
+        let peak_rating = 5000.0;
+        let floor = decay_floor(peak_rating);
 
-        assert_abs_diff_eq!(floor, 950.0)
+        assert_abs_diff_eq!(floor, DECAY_MINIMUM.max(0.5 * (DECAY_MINIMUM + peak_rating)))
     }
 
     #[test]
@@ -332,6 +332,7 @@ mod tests {
         let mu = 500.0;
         let floor = decay_floor(mu);
 
-        assert_abs_diff_eq!(floor, 900.0)
+        assert_abs_diff_eq!(floor, 15.0 * MULTIPLIER);
+        assert!(mu < floor);
     }
 }
