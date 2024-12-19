@@ -1,7 +1,7 @@
 use crate::{
     database::db_structs::{Game, GameScore, Match, PlayerRating, RatingAdjustment},
     model::{
-        constants::{WEIGHT_A, WEIGHT_B},
+        constants::{ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY, WEIGHT_A, WEIGHT_B},
         decay::DecayTracker,
         rating_tracker::RatingTracker,
         structures::rating_adjustment_type::RatingAdjustmentType
@@ -15,7 +15,6 @@ use openskill::{
     rating::{Rating, TeamRating}
 };
 use std::collections::HashMap;
-use crate::model::constants::{ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY};
 
 pub struct OtrModel {
     pub model: PlackettLuce,
@@ -361,11 +360,14 @@ mod tests {
     pub use crate::utils::test_utils::*;
     use crate::{
         database::db_structs::PlayerRating,
-        model::{otr_model::OtrModel, structures::ruleset::Ruleset::Osu}
+        model::{
+            constants::{ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY},
+            otr_model::OtrModel,
+            structures::ruleset::Ruleset::Osu
+        }
     };
     use approx::assert_abs_diff_eq;
     use chrono::Utc;
-    use crate::model::constants::{ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY};
 
     #[test]
     fn test_rate() {
