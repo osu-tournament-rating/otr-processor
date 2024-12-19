@@ -1,7 +1,7 @@
 use crate::{
     database::db_structs::{Game, GameScore, Match, PlayerRating, RatingAdjustment},
     model::{
-        constants::{WEIGHT_A, WEIGHT_B},
+        constants::{ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY, WEIGHT_A, WEIGHT_B},
         decay::DecayTracker,
         rating_tracker::RatingTracker,
         structures::rating_adjustment_type::RatingAdjustmentType
@@ -251,8 +251,8 @@ impl OtrModel {
             final_map.insert(
                 *k,
                 Rating {
-                    mu: rating_final,
-                    sigma: volatility_final
+                    mu: rating_final.max(ABSOLUTE_RATING_FLOOR),
+                    sigma: volatility_final.min(DEFAULT_VOLATILITY)
                 }
             );
         }
@@ -360,7 +360,11 @@ mod tests {
     pub use crate::utils::test_utils::*;
     use crate::{
         database::db_structs::PlayerRating,
-        model::{otr_model::OtrModel, structures::ruleset::Ruleset::Osu}
+        model::{
+            constants::{ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY},
+            otr_model::OtrModel,
+            structures::ruleset::Ruleset::Osu
+        }
     };
     use approx::assert_abs_diff_eq;
     use chrono::Utc;
@@ -490,5 +494,41 @@ mod tests {
 
         let scaled_rating = OtrModel::performance_scaled_rating(rating.rating, rating_diff, frequency, scaling);
         assert_abs_diff_eq!(scaled_rating, 990.0);
+    }
+
+    #[test]
+    fn test_minimum_rating_maximum_volatility() {
+        let player_ratings = vec![
+            generate_player_rating(1, Osu, ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY * 10.0, 1),
+            generate_player_rating(2, Osu, ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY * 10.0, 1),
+            generate_player_rating(3, Osu, ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY * 10.0, 1),
+            generate_player_rating(4, Osu, ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY * 10.0, 1),
+        ];
+
+        let countries = generate_country_mapping_player_ratings(player_ratings.as_slice(), "US");
+        let mut model = OtrModel::new(player_ratings.as_slice(), &countries);
+
+        let placements = vec![
+            generate_placement(1, 1),
+            generate_placement(2, 2),
+            generate_placement(3, 3),
+            generate_placement(4, 4),
+        ];
+
+        let games = vec![
+            generate_game(1, &placements),
+            generate_game(2, &placements),
+            generate_game(3, &placements),
+        ];
+
+        let matches = vec![generate_match(1, Osu, &games, Utc::now().fixed_offset())];
+        model.process(&matches);
+
+        for i in 1..5 {
+            let rating = model.rating_tracker.get_rating(i, Osu).unwrap();
+
+            assert!(rating.rating >= ABSOLUTE_RATING_FLOOR);
+            assert!(rating.volatility <= DEFAULT_VOLATILITY);
+        }
     }
 }
