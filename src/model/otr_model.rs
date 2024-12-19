@@ -15,6 +15,7 @@ use openskill::{
     rating::{Rating, TeamRating}
 };
 use std::collections::HashMap;
+use crate::model::constants::{ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY};
 
 pub struct OtrModel {
     pub model: PlackettLuce,
@@ -251,8 +252,8 @@ impl OtrModel {
             final_map.insert(
                 *k,
                 Rating {
-                    mu: rating_final,
-                    sigma: volatility_final
+                    mu: rating_final.max(ABSOLUTE_RATING_FLOOR),
+                    sigma: volatility_final.min(DEFAULT_VOLATILITY)
                 }
             );
         }
@@ -364,7 +365,7 @@ mod tests {
     };
     use approx::assert_abs_diff_eq;
     use chrono::Utc;
-    use crate::model::constants::{ABSOLUTE_RATING_FLOOR};
+    use crate::model::constants::{ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY};
 
     #[test]
     fn test_rate() {
@@ -494,12 +495,12 @@ mod tests {
     }
 
     #[test]
-    fn test_minimum_rating() {
+    fn test_minimum_rating_maximum_volatility() {
         let player_ratings = vec![
-            generate_player_rating(1, Osu, 100.1, 100.0, 1),
-            generate_player_rating(2, Osu, 100.0, 100.0, 1),
-            generate_player_rating(3, Osu, 100.0, 100.0, 1),
-            generate_player_rating(4, Osu, 100.0, 100.0, 1),
+            generate_player_rating(1, Osu, 100.1, 500.0, 1),
+            generate_player_rating(2, Osu, 100.0, 500.0, 1),
+            generate_player_rating(3, Osu, 100.0, 500.0, 1),
+            generate_player_rating(4, Osu, 100.0, 500.0, 1),
         ];
 
         let countries = generate_country_mapping_player_ratings(player_ratings.as_slice(), "US");
@@ -525,6 +526,7 @@ mod tests {
             let rating = model.rating_tracker.get_rating(i, Osu).unwrap();
 
             assert!(rating.rating >= ABSOLUTE_RATING_FLOOR);
+            assert!(rating.volatility <= DEFAULT_VOLATILITY);
         }
     }
 }
