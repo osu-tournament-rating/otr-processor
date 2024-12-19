@@ -500,7 +500,7 @@ mod tests {
             generate_player_rating(1, Osu, ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY * 10.0, 1),
             generate_player_rating(2, Osu, ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY * 10.0, 1),
             generate_player_rating(3, Osu, ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY * 10.0, 1),
-            generate_player_rating(4, Osu, ABSOLUTE_RATING_FLOOR + 1.0, DEFAULT_VOLATILITY * 10.0, 1),
+            generate_player_rating(4, Osu, ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY * 10.0, 1),
         ];
 
         let countries = generate_country_mapping_player_ratings(player_ratings.as_slice(), "US");
