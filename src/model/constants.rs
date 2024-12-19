@@ -1,6 +1,6 @@
 // Model constants
-pub const MULTIPLIER: f64 = 66.67;
-pub const DEFAULT_VOLATILITY: f64 = 6.0 * MULTIPLIER;
+pub const MULTIPLIER: f64 = 60.0;
+pub const DEFAULT_VOLATILITY: f64 = 5.0 * MULTIPLIER;
 pub const DEFAULT_RATING: f64 = 15.0 * MULTIPLIER;
 pub const TAU: f64 = DEFAULT_VOLATILITY / 100.0;
 pub const BETA: f64 = DEFAULT_VOLATILITY / 2.0;

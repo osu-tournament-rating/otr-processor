@@ -26,7 +26,7 @@ impl OtrModel {
     /// Custom gamma function, passed into the PlackettLuce model.
     /// This controls how quickly volatility decreases over time.
     fn gamma_override(_: f64, k: f64, _: &TeamRating) -> f64 {
-        0.5 / k
+        1.0 / k
     }
 
     pub fn new(initial_player_ratings: &[PlayerRating], country_mapping: &HashMap<i32, String>) -> OtrModel {
