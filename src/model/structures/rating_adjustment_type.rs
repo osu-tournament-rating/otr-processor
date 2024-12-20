@@ -32,13 +32,13 @@ mod tests {
     }
 
     #[test]
-    fn test_convert_match() {
-        assert_eq!(RatingAdjustmentType::try_from(1), Ok(RatingAdjustmentType::Match));
+    fn test_convert_decay() {
+        assert_eq!(RatingAdjustmentType::try_from(1), Ok(RatingAdjustmentType::Decay));
     }
 
     #[test]
-    fn test_convert_decay() {
-        assert_eq!(RatingAdjustmentType::try_from(2), Ok(RatingAdjustmentType::Decay));
+    fn test_convert_match() {
+        assert_eq!(RatingAdjustmentType::try_from(2), Ok(RatingAdjustmentType::Match));
     }
 
     #[test]
