@@ -122,7 +122,7 @@ impl DbClient {
         let id_result = self.client.query(tournament_id_sql, &[]).await;
 
         if id_result.is_ok() {
-            for (_, row) in id_result.unwrap().iter().enumerate() {
+            for row in id_result.unwrap().iter() {
                 tournament_update_sql.push(format!(
                     "UPDATE tournaments SET processing_status = 4 \
                 WHERE id = {};\n",
@@ -341,7 +341,7 @@ impl DbClient {
             .to_string();
         let mut value_placeholders: Vec<String> = Vec::new();
 
-        for (_, rating) in player_ratings.iter().enumerate() {
+        for rating in player_ratings.iter() {
             // Directly embed the values into the query string
             value_placeholders.push(format!(
                 "({}, {}, {}, {}, {}, {}, {})",
