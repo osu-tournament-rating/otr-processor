@@ -100,6 +100,7 @@ impl DecayTracker {
 
             decay_ratings.push(RatingAdjustment {
                 player_id,
+                ruleset,
                 match_id: None,
                 rating_before: old_rating,
                 rating_after: new_rating,

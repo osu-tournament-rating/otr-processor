@@ -40,6 +40,7 @@ pub fn generate_player_rating(
 
         adjustments.push(RatingAdjustment {
             player_id,
+            ruleset,
             adjustment_type,
             match_id: None,
             rating_before,

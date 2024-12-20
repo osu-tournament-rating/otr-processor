@@ -318,6 +318,7 @@ impl OtrModel {
             // Create the adjustment
             let adjustment = RatingAdjustment {
                 player_id: *k,
+                ruleset: match_.ruleset,
                 match_id: Some(match_.id),
                 rating_before: player_rating.rating,
                 rating_after: v.mu,

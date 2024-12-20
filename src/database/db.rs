@@ -122,7 +122,7 @@ impl DbClient {
         let id_result = self.client.query(tournament_id_sql, &[]).await;
 
         if id_result.is_ok() {
-            for (_, row) in id_result.unwrap().iter().enumerate() {
+            for row in id_result.unwrap().iter() {
                 tournament_update_sql.push(format!(
                     "UPDATE tournaments SET processing_status = 4 \
                 WHERE id = {};\n",
@@ -284,7 +284,7 @@ impl DbClient {
     /// Save all rating adjustments in a single batch query
     async fn save_rating_adjustments(&self, adjustment_mapping: &HashMap<i32, Vec<RatingAdjustment>>) {
         // Prepare the base query
-        let base_query = "INSERT INTO rating_adjustments (player_id, player_rating_id, match_id, \
+        let base_query = "INSERT INTO rating_adjustments (player_id, ruleset, player_rating_id, match_id, \
         rating_before, rating_after, volatility_before, volatility_after, timestamp, adjustment_type) \
         VALUES ";
 
@@ -302,8 +302,9 @@ impl DbClient {
                 let match_id = adjustment.match_id.map_or("NULL".to_string(), |id| id.to_string());
 
                 let value_tuple = format!(
-                    "({}, {}, {}, {}, {}, {}, {}, '{}', {})",
+                    "({}, {}, {}, {}, {}, {}, {}, {}, '{}', {})",
                     adjustment.player_id,
+                    adjustment.ruleset as i32,
                     player_rating_id,
                     match_id,
                     adjustment.rating_before,
@@ -340,7 +341,7 @@ impl DbClient {
             .to_string();
         let mut value_placeholders: Vec<String> = Vec::new();
 
-        for (_, rating) in player_ratings.iter().enumerate() {
+        for rating in player_ratings.iter() {
             // Directly embed the values into the query string
             value_placeholders.push(format!(
                 "({}, {}, {}, {}, {}, {}, {})",
