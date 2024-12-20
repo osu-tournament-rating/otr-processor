@@ -5,8 +5,8 @@ use std::convert::TryFrom;
 #[repr(u8)]
 pub enum RatingAdjustmentType {
     Initial = 0,
-    Match = 1,
-    Decay = 2
+    Decay = 1,
+    Match = 2
 }
 
 impl TryFrom<i32> for RatingAdjustmentType {
@@ -14,8 +14,8 @@ impl TryFrom<i32> for RatingAdjustmentType {
     fn try_from(v: i32) -> Result<Self, Self::Error> {
         match v {
             0 => Ok(RatingAdjustmentType::Initial),
-            1 => Ok(RatingAdjustmentType::Match),
-            2 => Ok(RatingAdjustmentType::Decay),
+            1 => Ok(RatingAdjustmentType::Decay),
+            2 => Ok(RatingAdjustmentType::Match),
             _ => Err(())
         }
     }
