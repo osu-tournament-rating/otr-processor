@@ -32,7 +32,7 @@ async fn main() {
     client.save_results(&results).await;
 
     // 8. Update all match processing statuses
-    client.set_match_processing_status_done(&matches).await;
+    client.roll_forward_processing_statuses(&matches).await;
 
     println!("Processing complete");
 }
