@@ -340,7 +340,7 @@ impl DbClient {
             .to_string();
         let mut value_placeholders: Vec<String> = Vec::new();
 
-        for (_, rating) in player_ratings.iter().enumerate() {
+        for rating in player_ratings.iter() {
             // Directly embed the values into the query string
             value_placeholders.push(format!(
                 "({}, {}, {}, {}, {}, {}, {})",
@@ -465,10 +465,14 @@ impl DbClient {
         let match_id_str = data.into_iter().join(",");
 
         // Fetch the tournament ids
-        let tournament_fetch_sql = format!("SELECT tournament_id FROM matches \
-        WHERE id = ANY(ARRAY[{}])", match_id_str);
+        let tournament_fetch_sql = format!(
+            "SELECT tournament_id FROM matches \
+        WHERE id = ANY(ARRAY[{}])",
+            match_id_str
+        );
 
-        let tournament_ids: Vec<i32> = self.client
+        let tournament_ids: Vec<i32> = self
+            .client
             .query(tournament_fetch_sql.as_str(), &[])
             .await
             .unwrap()
@@ -476,21 +480,22 @@ impl DbClient {
             .map(|f| f.get::<_, i32>("tournament_id"))
             .collect_vec();
 
-        let match_update_sql = format!("UPDATE matches SET processing_status \
-        = 5 WHERE id = ANY(ARRAY[{}])", match_id_str);
+        let match_update_sql = format!(
+            "UPDATE matches SET processing_status \
+        = 5 WHERE id = ANY(ARRAY[{}])",
+            match_id_str
+        );
 
-        self.client
-            .execute(match_update_sql.as_str(), &[])
-            .await
-            .unwrap();
-        
+        self.client.execute(match_update_sql.as_str(), &[]).await.unwrap();
+
         let tournament_id_str = tournament_ids.into_iter().join(",");
-        let tournament_update_sql = format!("UPDATE tournaments SET processing_status \
-        = 5 WHERE id = ANY(ARRAY[{}])", tournament_id_str);
-        
-        self.client.execute(tournament_update_sql.as_str(), &[])
-            .await
-            .unwrap();
+        let tournament_update_sql = format!(
+            "UPDATE tournaments SET processing_status \
+        = 5 WHERE id = ANY(ARRAY[{}])",
+            tournament_id_str
+        );
+
+        self.client.execute(tournament_update_sql.as_str(), &[]).await.unwrap();
     }
 
     async fn truncate_rating_adjustments(&self) {
