@@ -252,8 +252,9 @@ impl DbClient {
     }
 
     pub async fn save_results(&self, player_ratings: &[PlayerRating]) {
-        self.truncate_rating_adjustments().await;
-        self.truncate_player_ratings().await;
+        self.truncate_table("rating_adjustments").await;
+        self.truncate_table("player_ratings").await;
+        self.truncate_table("player_tournament_stats").await;
 
         self.save_ratings_and_adjustments_with_mapping(&player_ratings).await;
 
@@ -450,14 +451,6 @@ impl DbClient {
         self.client.execute(query, values).await.unwrap();
     }
 
-    async fn truncate_player_ratings(&self) {
-        self.client
-            .execute("TRUNCATE TABLE player_ratings RESTART IDENTITY CASCADE", &[])
-            .await
-            .unwrap();
-        println!("Truncated player_ratings table!");
-    }
-
     pub async fn roll_forward_processing_statuses(&self, matches: &[Match]) {
         println!("Updating processing status for all matches");
 
@@ -498,13 +491,16 @@ impl DbClient {
         self.client.execute(tournament_update_sql.as_str(), &[]).await.unwrap();
     }
 
-    async fn truncate_rating_adjustments(&self) {
+    async fn truncate_table(&self, table: &str) {
         self.client
-            .execute("TRUNCATE TABLE rating_adjustments RESTART IDENTITY CASCADE", &[])
+            .execute(
+                format!("TRUNCATE TABLE {} RESTART IDENTITY CASCADE", table).as_str(),
+                &[]
+            )
             .await
             .unwrap();
 
-        println!("Truncated rating_adjustments table!");
+        println!("Truncated the {} table!", table);
     }
 
     // Access the underlying Client
