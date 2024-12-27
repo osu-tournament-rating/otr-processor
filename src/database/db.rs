@@ -252,8 +252,9 @@ impl DbClient {
     }
 
     pub async fn save_results(&self, player_ratings: &[PlayerRating]) {
-        self.truncate_rating_adjustments().await;
-        self.truncate_player_ratings().await;
+        self.truncate_table("rating_adjustments").await;
+        self.truncate_table("player_ratings").await;
+        self.truncate_table("player_tournament_stats").await;
 
         self.save_ratings_and_adjustments_with_mapping(&player_ratings).await;
 
@@ -451,37 +452,56 @@ impl DbClient {
         self.client.execute(query, values).await.unwrap();
     }
 
-    async fn truncate_player_ratings(&self) {
-        self.client
-            .execute("TRUNCATE TABLE player_ratings RESTART IDENTITY CASCADE", &[])
+    pub async fn roll_forward_processing_statuses(&self, matches: &[Match]) {
+        println!("Updating processing status for all matches");
+
+        let data = matches.iter().map(|f| f.id).collect_vec();
+        let match_id_str = data.into_iter().join(",");
+
+        // Fetch the tournament ids
+        let tournament_fetch_sql = format!(
+            "SELECT tournament_id FROM matches \
+        WHERE id = ANY(ARRAY[{}])",
+            match_id_str
+        );
+
+        let tournament_ids: Vec<i32> = self
+            .client
+            .query(tournament_fetch_sql.as_str(), &[])
             .await
-            .unwrap();
-        println!("Truncated player_ratings table!");
+            .unwrap()
+            .iter()
+            .map(|f| f.get::<_, i32>("tournament_id"))
+            .collect_vec();
+
+        let match_update_sql = format!(
+            "UPDATE matches SET processing_status \
+        = 5 WHERE id = ANY(ARRAY[{}])",
+            match_id_str
+        );
+
+        self.client.execute(match_update_sql.as_str(), &[]).await.unwrap();
+
+        let tournament_id_str = tournament_ids.into_iter().join(",");
+        let tournament_update_sql = format!(
+            "UPDATE tournaments SET processing_status \
+        = 5 WHERE id = ANY(ARRAY[{}])",
+            tournament_id_str
+        );
+
+        self.client.execute(tournament_update_sql.as_str(), &[]).await.unwrap();
     }
 
-    pub async fn set_match_processing_status_done(&self, matches: &[Match]) {
-        let bar = progress_bar(
-            matches.len() as u64,
-            "Updating processing status for all matches".to_string()
-        )
-        .unwrap();
-        for match_ in matches {
-            self.client
-                .execute("UPDATE matches SET processing_status = 5 WHERE id = $1", &[&match_.id])
-                .await
-                .unwrap();
-
-            bar.inc(1)
-        }
-    }
-
-    async fn truncate_rating_adjustments(&self) {
+    async fn truncate_table(&self, table: &str) {
         self.client
-            .execute("TRUNCATE TABLE rating_adjustments RESTART IDENTITY CASCADE", &[])
+            .execute(
+                format!("TRUNCATE TABLE {} RESTART IDENTITY CASCADE", table).as_str(),
+                &[]
+            )
             .await
             .unwrap();
 
-        println!("Truncated rating_adjustments table!");
+        println!("Truncated the {} table!", table);
     }
 
     // Access the underlying Client
