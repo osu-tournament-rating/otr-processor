@@ -86,7 +86,7 @@ impl DecayTracker {
         let mut decay_ratings = Vec::new();
         for i in 0..decay_weeks {
             // Increment time by 7 days for each decay application (this is for accurate timestamps)
-            let simulated_time = last_adjustment.timestamp + chrono::Duration::days(i * 7);
+            let simulated_time = last_adjustment.timestamp + chrono::Duration::days((i + 1) * 7);
             let new_rating = decay_rating(old_rating, decay_floor);
             let new_volatility = decay_volatility(old_volatility);
 
@@ -240,7 +240,7 @@ mod tests {
         let t = DateTime::parse_from_rfc3339("2021-01-01T00:00:00+00:00")
             .unwrap()
             .fixed_offset();
-        let d = t.add(chrono::Duration::days(constants::DECAY_DAYS as i64));
+        let d = t.add(chrono::Duration::days(DECAY_DAYS as i64));
 
         let n = DecayTracker::n_decay(d, t);
 
@@ -276,7 +276,7 @@ mod tests {
     #[test]
     fn test_decay_possible() {
         let mu = 500.0;
-        let decay_min = constants::DECAY_MINIMUM;
+        let decay_min = DECAY_MINIMUM;
 
         let decay_possible = mu > decay_min;
         let result = is_decay_possible(mu, decay_floor(mu));
