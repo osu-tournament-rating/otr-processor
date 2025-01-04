@@ -1,37 +1,60 @@
+use super::constants::DEFAULT_RATING;
+use crate::database::db_structs::{Match, RatingAdjustment};
 use crate::{
-    database::db_structs::{Player, PlayerRating, RatingAdjustment},
+    database::db_structs::{Player, PlayerRating},
     model::{
         constants,
-        constants::{DEFAULT_VOLATILITY, MULTIPLIER, OSU_RATING_CEILING},
+        constants::DEFAULT_VOLATILITY,
+        constants::MULTIPLIER,
+        constants::OSU_RATING_CEILING,
         structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
     }
 };
 use chrono::{DateTime, FixedOffset};
 use constants::OSU_RATING_FLOOR;
-use strum::IntoEnumIterator;
+use std::collections::HashMap;
 
-use super::constants::DEFAULT_RATING;
-
-pub fn initial_ratings(players: &[Player]) -> Vec<PlayerRating> {
+pub fn initial_ratings(players: &[Player], matches: &[Match]) -> Vec<PlayerRating> {
     let mut ratings = Vec::new();
 
     for player in players {
-        let initial_ratings = create_initial_ratings(player);
+        let initial_ratings = create_initial_ratings(player, matches);
         ratings.extend(initial_ratings);
     }
 
     ratings
 }
 
-fn create_initial_ratings(player: &Player) -> Vec<PlayerRating> {
-    let timestamp: DateTime<FixedOffset> = "2007-09-16T00:00:00-00:00".parse().unwrap();
-    let mut ratings = Vec::new();
+fn create_initial_ratings(player: &Player, matches: &[Match]) -> Vec<PlayerRating> {
+    // Identify which players have played in each ruleset
+    let mut ruleset_activity: HashMap<Ruleset, HashMap<i32, DateTime<FixedOffset>>> = HashMap::new();
 
-    for ruleset in Ruleset::iter() {
-        let rating = initial_rating(player, &ruleset);
+    for match_ in matches {
+        for game in &match_.games {
+            for score in &game.scores {
+                // Store the player id and match start time.
+                // Allows us to accurately set the timestamp of the initial rating adjustment
+                // and avoid creating initial adjustments for players who are inactive in
+                // any ruleset.
+                ruleset_activity.entry(game.ruleset)
+                    .or_default()
+                    .insert(score.player_id, match_.start_time);
+            }
+        }
+    }
+
+    let mut ratings = Vec::new();
+    for ruleset in ruleset_activity.keys() {
+        let rating = initial_rating(player, ruleset);
+        let timestamp = *ruleset_activity
+            .get(ruleset)
+            .unwrap()
+            .get(&player.id)
+            .unwrap_or_else(|| panic!("Expected player {} to be present in ruleset_activity mapping: {:?}", player.id, ruleset));
+
         let adjustment = RatingAdjustment {
             player_id: player.id,
-            ruleset,
+            ruleset: *ruleset,
             match_id: None,
             rating_before: 0.0,
             rating_after: rating,
@@ -46,11 +69,13 @@ fn create_initial_ratings(player: &Player) -> Vec<PlayerRating> {
         }
 
         ratings.push(PlayerRating {
-            id: 0,
+            id: 0, // database id, leave default
             player_id: player.id,
-            ruleset,
+            ruleset: *ruleset,
             rating,
             volatility: DEFAULT_VOLATILITY,
+            // percentile, global_rank, and country_rank
+            // are managed by the rating_tracker
             percentile: 0.0,
             global_rank: 0,
             country_rank: 0,
@@ -127,6 +152,7 @@ mod tests {
         },
         utils::test_utils::{generate_player_rating, generate_ruleset_data}
     };
+    use crate::utils::test_utils::{generate_game, generate_match};
 
     #[test]
     fn test_ruleset_stddev_osu() {

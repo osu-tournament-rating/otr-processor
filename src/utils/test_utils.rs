@@ -26,14 +26,15 @@ pub fn generate_player_rating(
     let change_per_adjustment = rating / n_adjustments as f64;
     let mut adjustments = Vec::new();
 
-    for i in 1..=n_adjustments {
+    for i in (1..=n_adjustments).rev() {
         let adjustment_type = match i {
-            1 => RatingAdjustmentType::Initial,
+            // If `i` is equal to `n_adjustments`, set to Initial
+            val if val == n_adjustments => RatingAdjustmentType::Initial,
             _ => RatingAdjustmentType::Match
         };
 
-        let rating_before = rating - change_per_adjustment * (i - 1) as f64;
-        let rating_after = rating - change_per_adjustment * i as f64;
+        let rating_before = rating - change_per_adjustment * ((n_adjustments - i) - 1) as f64;
+        let rating_after = rating - change_per_adjustment * (n_adjustments - i) as f64;
         let volatility_before = volatility;
         let volatility_after = volatility;
         let timestamp = default_time.add(chrono::Duration::days(i as i64));

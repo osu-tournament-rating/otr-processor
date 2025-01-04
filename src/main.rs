@@ -17,7 +17,7 @@ async fn main() {
     let players = client.get_players().await;
 
     // 3. Generate initial ratings
-    let initial_ratings = initial_ratings(&players);
+    let initial_ratings = initial_ratings(&players, &matches);
 
     // 4. Generate country mapping and set
     let country_mapping: HashMap<i32, String> = generate_country_mapping_players(&players);
