@@ -1,8 +1,9 @@
+use rayon::iter::ParallelIterator;
 use crate::{
     database::db_structs::{Game, GameScore, Match, PlayerRating, RatingAdjustment},
     model::{
         constants::{ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY, WEIGHT_A, WEIGHT_B},
-        decay::DecayTracker,
+        decay::decay,
         rating_tracker::RatingTracker,
         structures::rating_adjustment_type::RatingAdjustmentType
     },
@@ -15,11 +16,16 @@ use openskill::{
     rating::{Rating, TeamRating}
 };
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+use chrono::{DateTime, FixedOffset, Utc};
+use rayon::prelude::IntoParallelRefIterator;
+use strum::IntoEnumIterator;
+use crate::model::structures::ruleset::Ruleset;
+use crate::utils::progress_utils::progress_bar_spinner;
 
 pub struct OtrModel {
     pub model: PlackettLuce,
-    pub rating_tracker: RatingTracker,
-    pub decay_tracker: DecayTracker
+    pub rating_tracker: RatingTracker
 }
 
 impl OtrModel {
@@ -37,7 +43,6 @@ impl OtrModel {
 
         OtrModel {
             rating_tracker: tracker,
-            decay_tracker: DecayTracker,
             model: PlackettLuce::new(DEFAULT_BETA, KAPPA, Self::gamma_override)
         }
     }
@@ -69,8 +74,41 @@ impl OtrModel {
             pb.finish();
         }
 
+        self.final_decay_pass();
         self.rating_tracker.sort();
         self.rating_tracker.get_all_ratings()
+    }
+
+    /// For each PlayerRating (all rulesets), apply decay using the current UTC time.
+    /// This ensures currently inactive players are actively decaying with each processor run.
+    fn final_decay_pass(&mut self) {
+        let current_time: DateTime<FixedOffset> = Utc::now().fixed_offset();
+        let leaderboards = Ruleset::iter().collect::<Vec<_>>()
+            .iter().map(|r| self.rating_tracker.get_leaderboard(r.clone())).collect_vec();
+
+        let vecs = Arc::new(Mutex::new(Vec::new()));
+        leaderboards.par_iter().for_each(|leaderboard: &Vec<PlayerRating>| {
+            let ruleset = leaderboard.first().expect("Expected a first item in the leaderboard").ruleset;
+            let p_bar = progress_bar_spinner(leaderboard.len() as u64,
+                                            format!("Final decay pass: [{:?}]", ruleset)).unwrap();
+
+            let mut to_update = Vec::new();
+            for player_rating in leaderboard {
+                let clone_rating = &mut player_rating.clone();
+                if let Some(decay_rating) = decay(clone_rating, current_time) {
+                    to_update.push(decay_rating.clone());
+                }
+
+                p_bar.inc(1);
+            }
+
+            vecs.lock().unwrap().push(to_update);
+            p_bar.finish();
+        });
+
+        for vec in vecs.lock().unwrap().iter() {
+            self.rating_tracker.insert_or_update(vec);
+        }
     }
 
     fn process_match(&mut self, match_: &Match) {
@@ -304,8 +342,17 @@ impl OtrModel {
             .collect();
 
         for p_id in player_ids {
-            self.decay_tracker
-                .decay(&mut self.rating_tracker, p_id, match_.ruleset, match_.start_time);
+            if let Some(rating) = self.rating_tracker.get_rating(p_id, match_.ruleset).as_mut() {
+                if let Some(decayed_rating) = decay(&mut rating.clone(), match_.start_time) {
+                    self.rating_tracker.insert_or_update(&[decayed_rating.clone()])
+                }
+            } else {
+                println!(
+                    "No rating found for player [Id: {} | Ruleset: {:?}]",
+                    p_id, match_.ruleset
+                );
+                continue;
+            }
         }
     }
 
