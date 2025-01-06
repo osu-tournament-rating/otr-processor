@@ -21,19 +21,20 @@ pub fn generate_player_rating(
         panic!("Number of adjustments must be at least 1");
     }
 
-    let default_time = "2007-09-16T00:00:00-00:00".parse::<DateTime<FixedOffset>>().unwrap();
+    let default_time: DateTime<FixedOffset> = Utc::now().fixed_offset();
 
     let change_per_adjustment = rating / n_adjustments as f64;
     let mut adjustments = Vec::new();
 
-    for i in 1..=n_adjustments {
+    for i in (1..=n_adjustments).rev() {
         let adjustment_type = match i {
-            1 => RatingAdjustmentType::Initial,
+            // If `i` is equal to `n_adjustments`, set to Initial
+            val if val == n_adjustments => RatingAdjustmentType::Initial,
             _ => RatingAdjustmentType::Match
         };
 
-        let rating_before = rating - change_per_adjustment * (i - 1) as f64;
-        let rating_after = rating - change_per_adjustment * i as f64;
+        let rating_before = rating - change_per_adjustment * ((n_adjustments - i) - 1) as f64;
+        let rating_after = rating - change_per_adjustment * (n_adjustments - i) as f64;
         let volatility_before = volatility;
         let volatility_after = volatility;
         let timestamp = default_time.add(chrono::Duration::days(i as i64));
@@ -128,10 +129,10 @@ pub fn generate_match(id: i32, ruleset: Ruleset, games: &[Game], start_time: Dat
 
 pub fn generate_matches(n: i32, player_ids: &[i32]) -> Vec<Match> {
     let mut matches = Vec::new();
-    for (i, _) in player_ids.iter().enumerate() {
+    for i in 0..n {
         let game_count = 9;
         matches.push(generate_match(
-            i as i32,
+            i,
             Ruleset::Osu,
             &generate_games(game_count, random_placements(player_ids).as_slice()),
             Utc::now().fixed_offset()

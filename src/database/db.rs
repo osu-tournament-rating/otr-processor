@@ -52,6 +52,7 @@ impl DbClient {
         //
         //  We can safely assume that for all matches awaiting processor data every
         //     game and game score is completely done with processing
+        println!("Fetching matches...");
         let rows = self.client.query("
             SELECT
                 t.id AS tournament_id, t.name AS tournament_name, t.ruleset AS tournament_ruleset,
@@ -65,6 +66,8 @@ impl DbClient {
             WHERE m.processing_status = 4 AND g.verification_status = 4
                 AND gs.verification_status = 4
             ORDER BY gs.id", &[]).await.unwrap();
+
+        println!("Matches fetched, iterating...");
 
         for row in rows {
             let match_id = row.get::<_, i32>("match_id");
@@ -83,6 +86,7 @@ impl DbClient {
             game_scores_link_map.entry(game_id).or_default().push(score_id);
         }
 
+        println!("Linking ids...");
         for (game_id, mut score_ids) in game_scores_link_map {
             score_ids.dedup();
 
@@ -110,6 +114,7 @@ impl DbClient {
         let mut matches = matches_map.values().cloned().collect_vec();
         matches.sort_by(|a, b| a.start_time.cmp(&b.start_time));
 
+        println!("Match fetching complete");
         matches
     }
 
@@ -186,6 +191,7 @@ impl DbClient {
     }
 
     pub async fn get_players(&self) -> Vec<Player> {
+        println!("Fetching players...");
         let mut players: Vec<Player> = Vec::new();
         let rows = self
             .client
@@ -226,6 +232,7 @@ impl DbClient {
             }
         }
 
+        println!("Players fetched");
         players
     }
 
