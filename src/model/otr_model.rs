@@ -97,10 +97,6 @@ impl OtrModel {
             let p_bar = progress_bar(leaderboard.len() as u64, format!("Final decay pass: [{:?}]", ruleset));
 
             for player_rating in leaderboard {
-                if player_rating.player_id == 334 {
-                    println!("vaxei");
-                }
-
                 let clone_rating = &mut player_rating.clone();
                 if let Some(decay_rating) = decay(clone_rating, current_time) {
                     to_update.push(decay_rating.clone());
