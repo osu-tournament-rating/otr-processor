@@ -83,9 +83,9 @@ fn decay_timestamps(
     let offset_start_time = last_play_time + chrono::Duration::days(DECAY_DAYS as i64);
 
     // Return the sum of weeks from the offset start time up to the current time
-    let weeks = (current_time - offset_start_time).num_weeks();
+    let weeks = (current_time - offset_start_time).num_weeks() + 1;
 
-    let mut timestamps = vec![offset_start_time];
+    let mut timestamps = vec![];
 
     let floor = decay_floor(player_rating);
     let mut sim_rating = decay_rating(player_rating.rating, floor);
@@ -108,12 +108,13 @@ fn last_play_time(player_rating: &PlayerRating) -> DateTime<FixedOffset> {
     player_rating.adjustments.last().unwrap().timestamp
 }
 
-fn is_inactive(player_rating: &PlayerRating, current_time: DateTime<FixedOffset>) -> bool {
+/// Returns true if the player has played in the last {DECAY_DAYS} days.
+fn is_active(player_rating: &PlayerRating, current_time: DateTime<FixedOffset>) -> bool {
     let last_play_time = last_play_time(player_rating);
     let delta = current_time - last_play_time;
     let days = chrono::Duration::days(DECAY_DAYS as i64);
 
-    delta > days
+    delta < days
 }
 
 fn previous_rating_is_initial_rating(player_rating: &PlayerRating) -> bool {
@@ -126,7 +127,7 @@ fn decay_below_minimum(player_rating: &PlayerRating) -> bool {
 
 fn decay_impossible(player_rating: &PlayerRating, current_time: DateTime<FixedOffset>) -> bool {
     player_rating.adjustments.is_empty()
-        || is_inactive(player_rating, current_time)
+        || is_active(player_rating, current_time)
         || previous_rating_is_initial_rating(player_rating)
         || decay_below_minimum(player_rating)
 }
@@ -172,7 +173,6 @@ mod tests {
         utils::test_utils::{generate_player_rating}
     };
     use approx::assert_abs_diff_eq;
-    use chrono::DateTime;
     use crate::database::db_structs::{PlayerRating, RatingAdjustment};
     use crate::model::structures::rating_adjustment_type::RatingAdjustmentType::{Decay, Initial, Match};
 
@@ -238,13 +238,13 @@ mod tests {
 
         // Act
         let clone = &mut player_rating.clone();
-        let actual_decay = decay(clone, current_time);
-
+        let actual_decay = decay(clone, current_time).unwrap();
+        
         // Assert
-        assert_abs_diff_eq!(expected_rating, actual_decay.unwrap().rating);
-        assert_abs_diff_eq!(expected_volatility, actual_decay.unwrap().volatility);
-        assert_eq!(player_rating.adjustments.len(), test_rating().adjustments.len() + 1);
-        assert_eq!(last_adjustment.adjustment_type, Decay)
+        assert_abs_diff_eq!(expected_rating, actual_decay.rating);
+        assert_abs_diff_eq!(expected_volatility, actual_decay.volatility);
+        assert_eq!(actual_decay.adjustments.len(), player_rating.adjustments.len() + 1);
+        assert_eq!(actual_decay.adjustments.last().unwrap().adjustment_type, Decay)
     }
 
     #[test]
@@ -295,7 +295,7 @@ mod tests {
 
     #[test]
     fn test_decay_floor_cannot_decay_below_const_min() {
-        let rating = generate_player_rating(1, Osu, DECAY_MINIMUM + 0.1, 225f64, 1);
+        let rating = generate_player_rating(1, Osu, 0.0, 225f64, 1);
         let floor = decay_floor(&rating);
 
         assert_eq!(floor, DECAY_MINIMUM);

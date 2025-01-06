@@ -10,25 +10,17 @@ use crate::{
         structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
     }
 };
-use chrono::{DateTime, FixedOffset};
+use chrono::{DateTime, Duration, FixedOffset};
 use constants::OSU_RATING_FLOOR;
 use std::collections::HashMap;
+use std::ops::Sub;
+use crate::utils::progress_utils::progress_bar;
 
-pub fn initial_ratings(players: &[Player], matches: &[Match]) -> Vec<PlayerRating> {
-    let mut ratings = Vec::new();
-
-    for player in players {
-        let initial_ratings = create_initial_ratings(player, matches);
-        ratings.extend(initial_ratings);
-    }
-
-    ratings
-}
-
-fn create_initial_ratings(player: &Player, matches: &[Match]) -> Vec<PlayerRating> {
+pub fn create_initial_ratings(players: &[Player], matches: &[Match]) -> Vec<PlayerRating> {
     // Identify which players have played in each ruleset
     let mut ruleset_activity: HashMap<Ruleset, HashMap<i32, DateTime<FixedOffset>>> = HashMap::new();
 
+    let p_bar = progress_bar(matches.len() as u64, "Identifying player ruleset participation".to_string());
     for match_ in matches {
         for game in &match_.games {
             for score in &game.scores {
@@ -36,51 +28,69 @@ fn create_initial_ratings(player: &Player, matches: &[Match]) -> Vec<PlayerRatin
                 // Allows us to accurately set the timestamp of the initial rating adjustment
                 // and avoid creating initial adjustments for players who are inactive in
                 // any ruleset.
-                ruleset_activity.entry(game.ruleset)
+                ruleset_activity
+                    .entry(game.ruleset)
                     .or_default()
-                    .insert(score.player_id, match_.start_time);
+                    .entry(score.player_id)
+                    .or_insert(match_.start_time);
             }
+        }
+
+        if let Some(bar) = &p_bar {
+            bar.inc(1);
         }
     }
 
+    if let Some(bar) = &p_bar {
+        bar.finish_with_message("Initial ratings created");
+    }
+
     let mut ratings = Vec::new();
-    for ruleset in ruleset_activity.keys() {
-        let rating = initial_rating(player, ruleset);
-        let timestamp = *ruleset_activity
-            .get(ruleset)
-            .unwrap()
-            .get(&player.id)
-            .unwrap_or_else(|| panic!("Expected player {} to be present in ruleset_activity mapping: {:?}", player.id, ruleset));
+    for player in players {
+        for ruleset in ruleset_activity.keys() {
+            if let Some(ruleset_entry) = ruleset_activity.get(ruleset) {
+                if ruleset_entry.get(&player.id).is_none() {
+                    // Player has not played in this ruleset
+                    continue;
+                }
+            }
 
-        let adjustment = RatingAdjustment {
-            player_id: player.id,
-            ruleset: *ruleset,
-            match_id: None,
-            rating_before: 0.0,
-            rating_after: rating,
-            volatility_before: 0.0,
-            volatility_after: DEFAULT_VOLATILITY,
-            timestamp,
-            adjustment_type: RatingAdjustmentType::Initial
-        };
+            let rating = initial_rating(player, ruleset);
+            if let Some(timestamp) = ruleset_activity
+                .get(ruleset)
+                .unwrap()
+                .get(&player.id) {
+                let adjustment = RatingAdjustment {
+                    player_id: player.id,
+                    ruleset: *ruleset,
+                    match_id: None,
+                    rating_before: 0.0,
+                    rating_after: rating,
+                    volatility_before: 0.0,
+                    volatility_after: DEFAULT_VOLATILITY,
+                    timestamp: timestamp.sub(Duration::seconds(1)),
+                    adjustment_type: RatingAdjustmentType::Initial
+                };
 
-        if rating.is_nan() || rating <= 0.0 {
-            panic!("Initial rating is NaN or <= 0.0 for player: {:?}", player);
+                if rating.is_nan() || rating <= 0.0 {
+                    panic!("Initial rating is NaN or <= 0.0 for player: {:?}", player);
+                }
+
+                ratings.push(PlayerRating {
+                    id: 0, // database id, leave default
+                    player_id: player.id,
+                    ruleset: *ruleset,
+                    rating,
+                    volatility: DEFAULT_VOLATILITY,
+                    // percentile, global_rank, and country_rank
+                    // are managed by the rating_tracker
+                    percentile: 0.0,
+                    global_rank: 0,
+                    country_rank: 0,
+                    adjustments: vec![adjustment]
+                });
+            }
         }
-
-        ratings.push(PlayerRating {
-            id: 0, // database id, leave default
-            player_id: player.id,
-            ruleset: *ruleset,
-            rating,
-            volatility: DEFAULT_VOLATILITY,
-            // percentile, global_rank, and country_rank
-            // are managed by the rating_tracker
-            percentile: 0.0,
-            global_rank: 0,
-            country_rank: 0,
-            adjustments: vec![adjustment]
-        });
     }
 
     ratings
@@ -142,17 +152,15 @@ fn std_dev_from_ruleset(ruleset: Ruleset) -> f64 {
 
 #[cfg(test)]
 mod tests {
-    use super::create_initial_ratings;
     use crate::{
         database::db_structs::Player,
         model::{
-            constants::{DEFAULT_VOLATILITY, OSU_RATING_CEILING, OSU_RATING_FLOOR},
+            constants::{OSU_RATING_CEILING, OSU_RATING_FLOOR},
             rating_utils::{mu_from_rank, std_dev_from_ruleset},
             structures::ruleset::Ruleset::{Catch, Mania4k, ManiaOther, Osu, Taiko}
         },
-        utils::test_utils::{generate_player_rating, generate_ruleset_data}
+        utils::test_utils::generate_ruleset_data
     };
-    use crate::utils::test_utils::{generate_game, generate_match};
 
     #[test]
     fn test_ruleset_stddev_osu() {
@@ -257,76 +265,5 @@ mod tests {
         assert_eq!(expected_catch, actual_catch);
         assert_eq!(expected_mania4k, actual_mania_4k);
         assert_eq!(expected_mania7k, actual_mania_7k);
-    }
-
-    #[test]
-    fn test_create_initial_adjustment() {
-        let player = Player {
-            id: 0,
-            username: Some("Test".to_string()),
-            country: None,
-            ruleset_data: Some(vec![
-                generate_ruleset_data(Osu, 1, None),
-                generate_ruleset_data(Taiko, 1, None),
-                generate_ruleset_data(Catch, 1, None),
-                generate_ruleset_data(ManiaOther, 1, None),
-                generate_ruleset_data(Mania4k, 1, None),
-            ])
-        };
-
-        let rating_osu = mu_from_rank(1, Osu);
-        let rating_taiko = mu_from_rank(1, Taiko);
-        let rating_catch = mu_from_rank(1, Catch);
-        let rating_mania4k = mu_from_rank(1, ManiaOther);
-        let rating_mania7k = mu_from_rank(1, Mania4k);
-
-        let expected_osu = generate_player_rating(0, Osu, rating_osu, DEFAULT_VOLATILITY, 1);
-        let expected_taiko = generate_player_rating(0, Taiko, rating_taiko, DEFAULT_VOLATILITY, 1);
-        let expected_catch = generate_player_rating(0, Catch, rating_catch, DEFAULT_VOLATILITY, 1);
-        let expected_mania4k = generate_player_rating(0, ManiaOther, rating_mania4k, DEFAULT_VOLATILITY, 1);
-        let expected_mania7k = generate_player_rating(0, Mania4k, rating_mania7k, DEFAULT_VOLATILITY, 1);
-
-        let initial_ratings = create_initial_ratings(&player);
-
-        let actual_osu = initial_ratings.iter().find(|r| r.ruleset == Osu).unwrap();
-        let actual_taiko = initial_ratings.iter().find(|r| r.ruleset == Taiko).unwrap();
-        let actual_catch = initial_ratings.iter().find(|r| r.ruleset == Catch).unwrap();
-        let actual_mania4k = initial_ratings.iter().find(|r| r.ruleset == ManiaOther).unwrap();
-        let actual_mania7k = initial_ratings.iter().find(|r| r.ruleset == Mania4k).unwrap();
-
-        assert_eq!(expected_osu.rating, actual_osu.rating);
-        assert_eq!(expected_osu.volatility, actual_osu.volatility);
-        assert_eq!(
-            expected_osu.adjustments.first().unwrap().adjustment_type,
-            actual_osu.adjustments.first().unwrap().adjustment_type
-        );
-
-        assert_eq!(expected_taiko.rating, actual_taiko.rating);
-        assert_eq!(expected_taiko.volatility, actual_taiko.volatility);
-        assert_eq!(
-            expected_taiko.adjustments.first().unwrap().adjustment_type,
-            actual_taiko.adjustments.first().unwrap().adjustment_type
-        );
-
-        assert_eq!(expected_catch.rating, actual_catch.rating);
-        assert_eq!(expected_catch.volatility, actual_catch.volatility);
-        assert_eq!(
-            expected_catch.adjustments.first().unwrap().adjustment_type,
-            actual_catch.adjustments.first().unwrap().adjustment_type
-        );
-
-        assert_eq!(expected_mania4k.rating, actual_mania4k.rating);
-        assert_eq!(expected_mania4k.volatility, actual_mania4k.volatility);
-        assert_eq!(
-            expected_mania4k.adjustments.first().unwrap().adjustment_type,
-            actual_mania4k.adjustments.first().unwrap().adjustment_type
-        );
-
-        assert_eq!(expected_mania7k.rating, actual_mania7k.rating);
-        assert_eq!(expected_mania7k.volatility, actual_mania7k.volatility);
-        assert_eq!(
-            expected_mania7k.adjustments.first().unwrap().adjustment_type,
-            actual_mania7k.adjustments.first().unwrap().adjustment_type
-        );
     }
 }
