@@ -42,7 +42,6 @@ pub fn decay(player_rating: &mut PlayerRating, current_time: DateTime<FixedOffse
     let mut v = player_rating.volatility;
     let floor = decay_floor(player_rating);
     for timestamp in decay_timestamps {
-        // Increment time by 7 days for each decay application (this is for accurate timestamps)
         let new_rating = decay_rating(r, floor);
         let new_volatility = decay_volatility(v);
 
@@ -82,15 +81,14 @@ fn decay_timestamps(
     // (4 months after their last play time)
     let offset_start_time = last_play_time + chrono::Duration::days(DECAY_DAYS as i64);
 
-    // Return the sum of weeks from the offset start time up to the current time
-    let weeks = (current_time - offset_start_time).num_weeks() + 1;
-
     let mut timestamps = vec![];
 
     let floor = decay_floor(player_rating);
     let mut sim_rating = decay_rating(player_rating.rating, floor);
-    for i in 0..weeks {
-        let simulated_time = offset_start_time + chrono::Duration::weeks(i);
+    let mut sim_time = offset_start_time;
+    while sim_time <= current_time {
+        // Increment time by 7 days for each decay application to ensure
+        // the produced RatingAdjustments have accurate timestamps
         let decay_sim = decay_rating(sim_rating, floor);
 
         if sim_rating == decay_sim {
@@ -98,14 +96,25 @@ fn decay_timestamps(
         }
 
         sim_rating = decay_sim;
-        timestamps.push(simulated_time);
+        timestamps.push(sim_time);
+
+        sim_time += chrono::Duration::weeks(1);
     }
 
     timestamps
 }
 
 fn last_play_time(player_rating: &PlayerRating) -> DateTime<FixedOffset> {
-    player_rating.adjustments.last().unwrap().timestamp
+    player_rating
+        .adjustments
+        .last()
+        .unwrap_or_else(|| {
+            panic!(
+                "No rating adjustments found while trying to identify last play time! [Player: {}]",
+                player_rating.player_id
+            )
+        })
+        .timestamp
 }
 
 /// Returns true if the player has played in the last {DECAY_DAYS} days.
@@ -126,8 +135,7 @@ fn decay_below_minimum(player_rating: &PlayerRating) -> bool {
 }
 
 fn decay_impossible(player_rating: &PlayerRating, current_time: DateTime<FixedOffset>) -> bool {
-    player_rating.adjustments.is_empty()
-        || is_active(player_rating, current_time)
+    is_active(player_rating, current_time)
         || previous_rating_is_initial_rating(player_rating)
         || decay_below_minimum(player_rating)
 }
@@ -146,10 +154,10 @@ fn decay_rating(mu: f64, decay_floor: f64) -> f64 {
 
 /// The minimum possible decay value based on a player's peak rating
 fn decay_floor(player_rating: &PlayerRating) -> f64 {
-    DECAY_MINIMUM.max(0.5 * (DECAY_MINIMUM + peak_rating(player_rating).rating_after))
+    DECAY_MINIMUM.max(0.5 * (DECAY_MINIMUM + peak_rating_adjustment(player_rating).rating_after))
 }
 
-fn peak_rating(player_rating: &PlayerRating) -> &RatingAdjustment {
+fn peak_rating_adjustment(player_rating: &PlayerRating) -> &RatingAdjustment {
     player_rating
         .adjustments
         .iter()
@@ -164,7 +172,7 @@ mod tests {
         model::{
             constants,
             constants::{DECAY_DAYS, DECAY_MINIMUM, MULTIPLIER},
-            decay::{decay, decay_floor, decay_rating, decay_volatility, peak_rating},
+            decay::{decay, decay_floor, decay_rating, decay_volatility, peak_rating_adjustment},
             structures::{
                 rating_adjustment_type::RatingAdjustmentType::{Decay, Initial, Match},
                 ruleset::Ruleset::Osu
@@ -285,7 +293,7 @@ mod tests {
         let rating = generate_player_rating(1, Osu, 2300f64, 225f64, 10);
         let floor = decay_floor(&rating);
 
-        let peak = peak_rating(&rating).rating_after;
+        let peak = peak_rating_adjustment(&rating).rating_after;
 
         assert_abs_diff_eq!(floor, DECAY_MINIMUM.max(0.5 * (DECAY_MINIMUM + peak)))
     }
