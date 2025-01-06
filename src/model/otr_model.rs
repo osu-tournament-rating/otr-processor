@@ -4,10 +4,11 @@ use crate::{
         constants::{ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY, WEIGHT_A, WEIGHT_B},
         decay::decay,
         rating_tracker::RatingTracker,
-        structures::rating_adjustment_type::RatingAdjustmentType
+        structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
     },
     utils::progress_utils::progress_bar
 };
+use chrono::{DateTime, FixedOffset, Utc};
 use itertools::Itertools;
 use openskill::{
     constant::*,
@@ -15,9 +16,7 @@ use openskill::{
     rating::{Rating, TeamRating}
 };
 use std::collections::HashMap;
-use chrono::{DateTime, FixedOffset, Utc};
 use strum::IntoEnumIterator;
-use crate::model::structures::ruleset::Ruleset;
 
 pub struct OtrModel {
     pub model: PlackettLuce,
@@ -79,24 +78,29 @@ impl OtrModel {
     /// This ensures currently inactive players are actively decaying with each processor run.
     fn final_decay_pass(&mut self) {
         let current_time: DateTime<FixedOffset> = Utc::now().fixed_offset();
-        let leaderboards = Ruleset::iter().collect::<Vec<_>>()
-            .iter().map(|r| self.rating_tracker.get_leaderboard(*r)).collect_vec();
+        let leaderboards = Ruleset::iter()
+            .collect::<Vec<_>>()
+            .iter()
+            .map(|r| self.rating_tracker.get_leaderboard(*r))
+            .collect_vec();
 
         let mut to_update = Vec::new();
         for leaderboard in leaderboards {
             if leaderboard.is_empty() {
                 continue;
             }
-            
-            let ruleset = leaderboard.first().expect("Expected a first item in the leaderboard").ruleset;
-            let p_bar = progress_bar(leaderboard.len() as u64,
-                                            format!("Final decay pass: [{:?}]", ruleset));
+
+            let ruleset = leaderboard
+                .first()
+                .expect("Expected a first item in the leaderboard")
+                .ruleset;
+            let p_bar = progress_bar(leaderboard.len() as u64, format!("Final decay pass: [{:?}]", ruleset));
 
             for player_rating in leaderboard {
                 if player_rating.player_id == 334 {
                     println!("vaxei");
                 }
-                
+
                 let clone_rating = &mut player_rating.clone();
                 if let Some(decay_rating) = decay(clone_rating, current_time) {
                     to_update.push(decay_rating.clone());
@@ -547,11 +551,10 @@ mod tests {
         let scaled_rating = OtrModel::performance_scaled_rating(rating.rating, rating_diff, frequency, scaling);
         assert_abs_diff_eq!(scaled_rating, 990.0);
     }
-    
+
     #[test]
     fn test_initial_rating_not_generated_when_no_match_data() {
         let player_rating = generate_player_rating(1, Osu, 1000.0, 100.0, 1);
-        
     }
 
     #[test]

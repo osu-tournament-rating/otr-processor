@@ -1,26 +1,25 @@
 use super::constants::DEFAULT_RATING;
-use crate::database::db_structs::{Match, RatingAdjustment};
 use crate::{
-    database::db_structs::{Player, PlayerRating},
+    database::db_structs::{Match, Player, PlayerRating, RatingAdjustment},
     model::{
         constants,
-        constants::DEFAULT_VOLATILITY,
-        constants::MULTIPLIER,
-        constants::OSU_RATING_CEILING,
+        constants::{DEFAULT_VOLATILITY, MULTIPLIER, OSU_RATING_CEILING},
         structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
-    }
+    },
+    utils::progress_utils::progress_bar
 };
 use chrono::{DateTime, Duration, FixedOffset};
 use constants::OSU_RATING_FLOOR;
-use std::collections::HashMap;
-use std::ops::Sub;
-use crate::utils::progress_utils::progress_bar;
+use std::{collections::HashMap, ops::Sub};
 
 pub fn create_initial_ratings(players: &[Player], matches: &[Match]) -> Vec<PlayerRating> {
     // Identify which players have played in each ruleset
     let mut ruleset_activity: HashMap<Ruleset, HashMap<i32, DateTime<FixedOffset>>> = HashMap::new();
 
-    let p_bar = progress_bar(matches.len() as u64, "Identifying player ruleset participation".to_string());
+    let p_bar = progress_bar(
+        matches.len() as u64,
+        "Identifying player ruleset participation".to_string()
+    );
     for match_ in matches {
         for game in &match_.games {
             for score in &game.scores {
@@ -56,10 +55,7 @@ pub fn create_initial_ratings(players: &[Player], matches: &[Match]) -> Vec<Play
             }
 
             let rating = initial_rating(player, ruleset);
-            if let Some(timestamp) = ruleset_activity
-                .get(ruleset)
-                .unwrap()
-                .get(&player.id) {
+            if let Some(timestamp) = ruleset_activity.get(ruleset).unwrap().get(&player.id) {
                 let adjustment = RatingAdjustment {
                     player_id: player.id,
                     ruleset: *ruleset,

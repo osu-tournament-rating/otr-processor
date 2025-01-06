@@ -160,21 +160,19 @@ fn peak_rating(player_rating: &PlayerRating) -> &RatingAdjustment {
 #[cfg(test)]
 mod tests {
     use crate::{
-        model::decay::decay,
-        model::decay::decay_floor,
-        model::decay::decay_rating,
-        model::decay::decay_volatility,
-        model::decay::peak_rating,
-        model::constants,
-        model::constants::DECAY_DAYS,
-        model::constants::DECAY_MINIMUM,
-        model::constants::MULTIPLIER,
-        model::structures::ruleset::Ruleset::Osu,
-        utils::test_utils::{generate_player_rating}
+        database::db_structs::{PlayerRating, RatingAdjustment},
+        model::{
+            constants,
+            constants::{DECAY_DAYS, DECAY_MINIMUM, MULTIPLIER},
+            decay::{decay, decay_floor, decay_rating, decay_volatility, peak_rating},
+            structures::{
+                rating_adjustment_type::RatingAdjustmentType::{Decay, Initial, Match},
+                ruleset::Ruleset::Osu
+            }
+        },
+        utils::test_utils::generate_player_rating
     };
     use approx::assert_abs_diff_eq;
-    use crate::database::db_structs::{PlayerRating, RatingAdjustment};
-    use crate::model::structures::rating_adjustment_type::RatingAdjustmentType::{Decay, Initial, Match};
 
     fn test_rating() -> PlayerRating {
         PlayerRating {
@@ -196,7 +194,7 @@ mod tests {
                     volatility_before: 0.0,
                     volatility_after: 300f64,
                     timestamp: "2007-09-16T00:00:00-00:00".parse().unwrap(),
-                    adjustment_type: Initial,
+                    adjustment_type: Initial
                 },
                 RatingAdjustment {
                     player_id: 1,
@@ -207,7 +205,7 @@ mod tests {
                     volatility_before: 300f64,
                     volatility_after: 280.221f64,
                     timestamp: "2007-09-17T00:00:00-00:00".parse().unwrap(),
-                    adjustment_type: Match,
+                    adjustment_type: Match
                 },
                 RatingAdjustment {
                     player_id: 1,
@@ -218,9 +216,9 @@ mod tests {
                     volatility_before: 280.221f64,
                     volatility_after: 225f64,
                     timestamp: "2007-09-18T00:00:00-00:00".parse().unwrap(),
-                    adjustment_type: Match,
-                }
-            ],
+                    adjustment_type: Match
+                },
+            ]
         }
     }
 
@@ -229,8 +227,7 @@ mod tests {
         // Arrange
         let player_rating = &mut test_rating();
         let last_adjustment = player_rating.adjustments.last().unwrap();
-        let current_time =
-            last_adjustment.timestamp + chrono::Duration::days(DECAY_DAYS as i64);
+        let current_time = last_adjustment.timestamp + chrono::Duration::days(DECAY_DAYS as i64);
 
         // Decay once
         let expected_rating = decay_rating(player_rating.rating, decay_floor(player_rating));
@@ -239,7 +236,7 @@ mod tests {
         // Act
         let clone = &mut player_rating.clone();
         let actual_decay = decay(clone, current_time).unwrap();
-        
+
         // Assert
         assert_abs_diff_eq!(expected_rating, actual_decay.rating);
         assert_abs_diff_eq!(expected_volatility, actual_decay.volatility);
