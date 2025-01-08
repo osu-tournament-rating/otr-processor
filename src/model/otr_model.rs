@@ -425,9 +425,9 @@ mod tests {
     fn test_rate() {
         // Add 3 players to model
         let player_ratings = vec![
-            generate_player_rating(1, Osu, 1000.0, 100.0, 1),
-            generate_player_rating(2, Osu, 1000.0, 100.0, 1),
-            generate_player_rating(3, Osu, 1000.0, 100.0, 1),
+            generate_player_rating(1, Osu, 1000.0, 100.0, 1, None, None),
+            generate_player_rating(2, Osu, 1000.0, 100.0, 1, None, None),
+            generate_player_rating(3, Osu, 1000.0, 100.0, 1, None, None),
         ];
 
         let countries = generate_country_mapping_player_ratings(player_ratings.as_slice(), "US");
@@ -457,10 +457,10 @@ mod tests {
     fn test_process() {
         // Add 4 players to model
         let player_ratings = vec![
-            generate_player_rating(1, Osu, 1000.0, 100.0, 2),
-            generate_player_rating(2, Osu, 1000.0, 100.0, 2),
-            generate_player_rating(3, Osu, 1000.0, 100.0, 2),
-            generate_player_rating(4, Osu, 1000.0, 100.0, 2),
+            generate_player_rating(1, Osu, 1000.0, 100.0, 2, None, None),
+            generate_player_rating(2, Osu, 1000.0, 100.0, 2, None, None),
+            generate_player_rating(3, Osu, 1000.0, 100.0, 2, None, None),
+            generate_player_rating(4, Osu, 1000.0, 100.0, 2, None, None),
         ];
 
         let countries = generate_country_mapping_player_ratings(player_ratings.as_slice(), "US");
@@ -535,7 +535,7 @@ mod tests {
 
     #[test]
     fn test_negative_performance_scaling() {
-        let rating: PlayerRating = generate_player_rating(1, Osu, 1000.0, 100.0, 1);
+        let rating: PlayerRating = generate_player_rating(1, Osu, 1000.0, 100.0, 1, None, None);
         let rating_diff = -100.0;
         let games_played = 1;
         let games_total = 10;
@@ -550,16 +550,18 @@ mod tests {
 
     #[test]
     fn test_initial_rating_not_generated_when_no_match_data() {
-        let player_rating = generate_player_rating(1, Osu, 1000.0, 100.0, 1);
+        let player_rating = generate_player_rating(1, Osu, 1000.0, 100.0, 1, None, None);
     }
 
     #[test]
     fn test_minimum_rating_maximum_volatility() {
+        let time = Utc::now().fixed_offset();
+
         let player_ratings = vec![
-            generate_player_rating(1, Osu, ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY * 10.0, 1),
-            generate_player_rating(2, Osu, ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY * 10.0, 1),
-            generate_player_rating(3, Osu, ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY * 10.0, 1),
-            generate_player_rating(4, Osu, ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY * 10.0, 1),
+            generate_player_rating(1, Osu, ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY * 10.0, 1, Some(time), Some(time)),
+            generate_player_rating(2, Osu, ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY * 10.0, 1, Some(time), Some(time)),
+            generate_player_rating(3, Osu, ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY * 10.0, 1, Some(time), Some(time)),
+            generate_player_rating(4, Osu, ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY * 10.0, 1, Some(time), Some(time)),
         ];
 
         let countries = generate_country_mapping_player_ratings(player_ratings.as_slice(), "US");
@@ -578,7 +580,7 @@ mod tests {
             generate_game(3, &placements),
         ];
 
-        let matches = vec![generate_match(1, Osu, &games, Utc::now().fixed_offset())];
+        let matches = vec![generate_match(1, Osu, &games, time)];
         model.process(&matches);
 
         for i in 1..5 {

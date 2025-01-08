@@ -290,7 +290,7 @@ mod tests {
 
     #[test]
     fn test_decay_floor() {
-        let rating = generate_player_rating(1, Osu, 2300f64, 225f64, 10);
+        let rating = generate_player_rating(1, Osu, 2300f64, 225f64, 10, None, None);
         let floor = decay_floor(&rating);
 
         let peak = peak_rating_adjustment(&rating).rating_after;
@@ -300,7 +300,7 @@ mod tests {
 
     #[test]
     fn test_decay_floor_cannot_decay_below_const_min() {
-        let rating = generate_player_rating(1, Osu, 0.0, 225f64, 1);
+        let rating = generate_player_rating(1, Osu, 0.0, 225f64, 1, None, None);
         let floor = decay_floor(&rating);
 
         assert_eq!(floor, DECAY_MINIMUM);

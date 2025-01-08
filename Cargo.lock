@@ -802,6 +802,8 @@ dependencies = [
  "lazy_static",
  "openskill",
  "postgres-types",
+ "rand",
+ "rand_chacha",
  "serde",
  "serde_repr",
  "strum",

@@ -184,7 +184,7 @@ mod tests {
         let mut rating_tracker = RatingTracker::new();
 
         // Initialize new player
-        let player_ratings = vec![generate_player_rating(1, Osu, DEFAULT_RATING, DEFAULT_VOLATILITY, 1)];
+        let player_ratings = vec![generate_player_rating(1, Osu, DEFAULT_RATING, DEFAULT_VOLATILITY, 1, None, None)];
 
         let country_mapping = generate_country_mapping_player_ratings(player_ratings.as_slice(), "US");
         rating_tracker.set_country_mapping(country_mapping);
@@ -197,7 +197,7 @@ mod tests {
         assert_eq!(player_rating.adjustments.len(), 1); // First adjustment contains the default adjustment
 
         // Update player with a new match result - overrides previous value
-        let player_ratings = vec![generate_player_rating(1, Ruleset::Osu, 200.0, 85.0, 2)];
+        let player_ratings = vec![generate_player_rating(1, Ruleset::Osu, 200.0, 85.0, 2, None, None)];
         rating_tracker.insert_or_update(&player_ratings);
 
         // Verify the player was updated with the new rating and has an adjustment
@@ -212,8 +212,8 @@ mod tests {
     fn test_sort() {
         let mut rating_tracker = RatingTracker::new();
         let player_ratings = vec![
-            generate_player_rating(1, Osu, 100.0, 100.0, 1),
-            generate_player_rating(2, Osu, 200.0, 100.0, 1),
+            generate_player_rating(1, Osu, 100.0, 100.0, 1, None, None),
+            generate_player_rating(2, Osu, 200.0, 100.0, 1, None, None),
         ];
 
         let country_mapping = generate_country_mapping_player_ratings(&player_ratings, "US");
