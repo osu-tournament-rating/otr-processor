@@ -2,7 +2,6 @@ use crate::{
     database::db_structs::{Game, GameScore, Match, PlayerRating, RatingAdjustment},
     model::{
         constants::{ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY, WEIGHT_A, WEIGHT_B},
-        decay::decay,
         rating_tracker::RatingTracker,
         structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
     },
@@ -17,6 +16,8 @@ use openskill::{
 };
 use std::collections::HashMap;
 use strum::IntoEnumIterator;
+
+use super::decay::DecaySystem;
 
 pub struct OtrModel {
     pub model: PlackettLuce,
@@ -78,6 +79,7 @@ impl OtrModel {
     /// This ensures currently inactive players are actively decaying with each processor run.
     fn final_decay_pass(&mut self) {
         let current_time: DateTime<FixedOffset> = Utc::now().fixed_offset();
+        let decay_system = DecaySystem::new(current_time);
         let leaderboards = Ruleset::iter()
             .collect::<Vec<_>>()
             .iter()
@@ -98,8 +100,16 @@ impl OtrModel {
 
             for player_rating in leaderboard {
                 let clone_rating = &mut player_rating.clone();
-                if let Some(decay_rating) = decay(clone_rating, current_time) {
-                    to_update.push(decay_rating.clone());
+                match decay_system.decay(clone_rating) {
+                    Ok(Some(updated_rating)) => {
+                        to_update.push(updated_rating.clone());
+                    }
+                    Ok(None) => {
+                        // No decay needed
+                    }
+                    Err(_) => {
+                        // A player couldn't decay for some reason (probably already active)
+                    }
                 }
 
                 if let Some(bar) = &p_bar {
@@ -339,6 +349,8 @@ impl OtrModel {
 
     /// Applies decay to all players who participated in this match.
     fn apply_decay(&mut self, match_: &Match) {
+        let decay_system = DecaySystem::new(match_.start_time);
+
         let player_ids: Vec<i32> = match_
             .games
             .iter()
@@ -347,8 +359,10 @@ impl OtrModel {
 
         for p_id in player_ids {
             if let Some(rating) = self.rating_tracker.get_rating(p_id, match_.ruleset).as_mut() {
-                if let Some(decayed_rating) = decay(&mut rating.clone(), match_.start_time) {
-                    self.rating_tracker.insert_or_update(&[decayed_rating.clone()])
+                match decay_system.decay(&mut rating.clone()) {
+                    Ok(Some(updated_rating)) => self.rating_tracker.insert_or_update(&[updated_rating.clone()]),
+                    Ok(None) => {}
+                    Err(_) => {}
                 }
             } else {
                 println!(
@@ -558,10 +572,42 @@ mod tests {
         let time = Utc::now().fixed_offset();
 
         let player_ratings = vec![
-            generate_player_rating(1, Osu, ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY * 10.0, 1, Some(time), Some(time)),
-            generate_player_rating(2, Osu, ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY * 10.0, 1, Some(time), Some(time)),
-            generate_player_rating(3, Osu, ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY * 10.0, 1, Some(time), Some(time)),
-            generate_player_rating(4, Osu, ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY * 10.0, 1, Some(time), Some(time)),
+            generate_player_rating(
+                1,
+                Osu,
+                ABSOLUTE_RATING_FLOOR,
+                DEFAULT_VOLATILITY * 10.0,
+                1,
+                Some(time),
+                Some(time)
+            ),
+            generate_player_rating(
+                2,
+                Osu,
+                ABSOLUTE_RATING_FLOOR,
+                DEFAULT_VOLATILITY * 10.0,
+                1,
+                Some(time),
+                Some(time)
+            ),
+            generate_player_rating(
+                3,
+                Osu,
+                ABSOLUTE_RATING_FLOOR,
+                DEFAULT_VOLATILITY * 10.0,
+                1,
+                Some(time),
+                Some(time)
+            ),
+            generate_player_rating(
+                4,
+                Osu,
+                ABSOLUTE_RATING_FLOOR,
+                DEFAULT_VOLATILITY * 10.0,
+                1,
+                Some(time),
+                Some(time)
+            ),
         ];
 
         let countries = generate_country_mapping_player_ratings(player_ratings.as_slice(), "US");

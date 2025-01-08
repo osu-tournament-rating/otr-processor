@@ -184,7 +184,15 @@ mod tests {
         let mut rating_tracker = RatingTracker::new();
 
         // Initialize new player
-        let player_ratings = vec![generate_player_rating(1, Osu, DEFAULT_RATING, DEFAULT_VOLATILITY, 1, None, None)];
+        let player_ratings = vec![generate_player_rating(
+            1,
+            Osu,
+            DEFAULT_RATING,
+            DEFAULT_VOLATILITY,
+            1,
+            None,
+            None
+        )];
 
         let country_mapping = generate_country_mapping_player_ratings(player_ratings.as_slice(), "US");
         rating_tracker.set_country_mapping(country_mapping);

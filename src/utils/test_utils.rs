@@ -16,7 +16,7 @@ pub fn generate_player_rating(
     volatility: f64,
     n_adjustments: i32,
     timestamp_begin: Option<DateTime<FixedOffset>>,
-    timestamp_end: Option<DateTime<FixedOffset>>,
+    timestamp_end: Option<DateTime<FixedOffset>>
 ) -> PlayerRating {
     if n_adjustments < 1 {
         panic!("Number of adjustments must be at least 1");
@@ -73,7 +73,7 @@ pub fn generate_player_rating(
             rating_after: next_rating,
             volatility_before: volatility,
             volatility_after: volatility,
-            timestamp,
+            timestamp
         });
     }
 
@@ -86,7 +86,7 @@ pub fn generate_player_rating(
         percentile: 0.0,
         global_rank: 0,
         country_rank: 0,
-        adjustments,
+        adjustments
     }
 }
 
@@ -225,15 +225,7 @@ mod tests {
         let start_time = Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap().fixed_offset();
         let end_time = Utc.with_ymd_and_hms(2024, 1, 2, 0, 0, 0).unwrap().fixed_offset();
 
-        let result = generate_player_rating(
-            1,
-            Ruleset::Osu,
-            1000.0,
-            250.0,
-            3,
-            Some(start_time),
-            Some(end_time)
-        );
+        let result = generate_player_rating(1, Ruleset::Osu, 1000.0, 250.0, 3, Some(start_time), Some(end_time));
 
         assert_eq!(result.adjustments[0].timestamp, start_time);
         assert_eq!(result.adjustments.last().unwrap().timestamp, end_time);

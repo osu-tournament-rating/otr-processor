@@ -808,6 +808,7 @@ dependencies = [
  "serde_repr",
  "strum",
  "strum_macros",
+ "thiserror",
  "tokio",
  "tokio-postgres",
 ]
