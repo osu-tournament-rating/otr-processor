@@ -800,6 +800,7 @@ dependencies = [
  "indicatif",
  "itertools 0.12.1",
  "lazy_static",
+ "log",
  "openskill",
  "postgres-types",
  "rand",
