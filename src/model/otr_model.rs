@@ -7,7 +7,7 @@ use crate::{
     },
     utils::progress_utils::progress_bar
 };
-use chrono::{DateTime, FixedOffset, Utc};
+use chrono::Utc;
 use itertools::Itertools;
 use openskill::{
     constant::*,
@@ -147,7 +147,7 @@ impl OtrModel {
     /// in all games of a match.
     fn generate_penalized_ratings(&self, match_: &Match) -> HashMap<i32, Vec<Rating>> {
         let mut cloned_match = match_.clone();
-        let participants = self.get_match_participants(&mut cloned_match);
+        let participants = self.get_match_participants(&cloned_match);
         self.apply_tie_for_last_scores(&mut cloned_match, &participants);
         self.generate_ratings(&cloned_match)
     }
@@ -457,7 +457,7 @@ impl OtrModel {
 mod tests {
     pub use crate::utils::test_utils::*;
     use crate::{
-        database::db_structs::{Game, GameScore, PlayerPlacement, PlayerRating},
+        database::db_structs::{Game, PlayerPlacement, PlayerRating},
         model::{
             constants::{ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY},
             otr_model::OtrModel,

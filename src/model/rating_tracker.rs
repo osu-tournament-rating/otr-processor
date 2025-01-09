@@ -171,7 +171,7 @@ impl RatingTracker {
 mod tests {
     use crate::{
         model::{
-            constants::{DEFAULT_RATING, DEFAULT_VOLATILITY},
+            constants::{DEFAULT_VOLATILITY, FALLBACK_DEFAULT_RATING},
             rating_tracker::RatingTracker,
             structures::ruleset::{Ruleset, Ruleset::Osu}
         },
@@ -187,7 +187,7 @@ mod tests {
         let player_ratings = vec![generate_player_rating(
             1,
             Osu,
-            DEFAULT_RATING,
+            FALLBACK_DEFAULT_RATING,
             DEFAULT_VOLATILITY,
             1,
             None,

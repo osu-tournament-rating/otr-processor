@@ -8,7 +8,7 @@
 /// - Decay Floor: A minimum rating threshold based on a player's peak rating
 /// - Weekly Decay: Rating reductions occur in weekly intervals after the decay period
 /// - Volatility Growth: Player volatility increases with each decay cycle
-use super::constants::{DECAY_DAYS, DECAY_MINIMUM, DECAY_RATE, DEFAULT_VOLATILITY, VOLATILITY_GROWTH_RATE};
+use super::constants::{DECAY_DAYS, DECAY_MINIMUM, DECAY_RATE, DECAY_VOLATILITY_GROWTH_RATE, DEFAULT_VOLATILITY};
 use crate::{
     database::db_structs::{PlayerRating, RatingAdjustment},
     model::structures::rating_adjustment_type::RatingAdjustmentType::{Decay, Initial}
@@ -95,7 +95,7 @@ impl DecaySystem {
     /// Volatility increases with each decay cycle but is capped at DEFAULT_VOLATILITY.
     /// The growth follows a square root formula to provide diminishing returns.
     pub fn calculate_decay_volatility(&self, current_volatility: f64) -> f64 {
-        let new_volatility = (current_volatility.powf(2.0) + VOLATILITY_GROWTH_RATE).sqrt();
+        let new_volatility = (current_volatility.powf(2.0) + DECAY_VOLATILITY_GROWTH_RATE).sqrt();
         new_volatility.min(DEFAULT_VOLATILITY)
     }
 
