@@ -412,11 +412,6 @@ impl OtrModel {
             // Get their current rating
             let mut player_rating = self.rating_tracker.get_rating(*k, match_.ruleset).unwrap().clone();
 
-            if player_rating.rating == v.mu && player_rating.volatility == v.sigma {
-                // Do not create adjustments unnecessarily.
-                continue;
-            }
-
             // Create the adjustment
             let adjustment = RatingAdjustment {
                 player_id: *k,
