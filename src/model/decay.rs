@@ -8,7 +8,10 @@
 /// - Decay Floor: A minimum rating threshold based on a player's peak rating
 /// - Weekly Decay: Rating reductions occur in weekly intervals after the decay period
 /// - Volatility Growth: Player volatility increases with each decay cycle
-use super::constants::{DECAY_DAYS, DECAY_MINIMUM, DECAY_RATE, DECAY_VOLATILITY_GROWTH_RATE, DEFAULT_VOLATILITY};
+use super::{
+    constants::{DECAY_DAYS, DECAY_MINIMUM, DECAY_RATE, DECAY_VOLATILITY_GROWTH_RATE, DEFAULT_VOLATILITY},
+    structures::rating_adjustment_type::RatingAdjustmentType
+};
 use crate::{
     database::db_structs::{PlayerRating, RatingAdjustment},
     model::structures::rating_adjustment_type::RatingAdjustmentType::{Decay, Initial}
@@ -22,6 +25,9 @@ pub enum DecayError {
     /// Player has no rating adjustments in their history
     #[error("Player rating has no adjustments")]
     NoAdjustments,
+    /// Player has no rating adjustments in their history of type Match
+    #[error("Player rating has no match adjustments")]
+    NoMatchAdjustments,
     /// Player has played a match within the decay period
     #[error("Player is still active")]
     PlayerActive,
@@ -118,7 +124,7 @@ impl DecaySystem {
 
         let last_play_time = self.get_last_play_time(player_rating)?;
 
-        if self.is_player_active(last_play_time) {
+        if self.is_active(last_play_time) {
             return Err(DecayError::PlayerActive);
         }
 
@@ -140,16 +146,18 @@ impl DecaySystem {
     fn get_last_play_time(&self, player_rating: &PlayerRating) -> Result<DateTime<FixedOffset>, DecayError> {
         player_rating
             .adjustments
-            .last()
+            .iter()
+            .rev()
+            .find(|adj| adj.adjustment_type == RatingAdjustmentType::Match)
             .map(|adj| adj.timestamp)
-            .ok_or(DecayError::NoAdjustments)
+            .ok_or(DecayError::NoMatchAdjustments)
     }
 
-    /// Determines if a player is still within their active period
+    /// Determines if a player's `last_play_time` is within the active period
     ///
     /// A player is considered active if their last play time was within
     /// DECAY_DAYS of the current reference time.
-    fn is_player_active(&self, last_play_time: DateTime<FixedOffset>) -> bool {
+    fn is_active(&self, last_play_time: DateTime<FixedOffset>) -> bool {
         self.current_time - last_play_time < Duration::days(DECAY_DAYS as i64)
     }
 
@@ -170,19 +178,9 @@ impl DecaySystem {
         let mut timestamps = Vec::new();
         let floor = self.calculate_decay_floor(player_rating);
 
-        let mut current_rating = player_rating.rating;
         let mut current_time = decay_start;
-
         while current_time <= self.current_time {
-            let new_rating = self.calculate_decay_rating(current_rating, floor);
-
-            // Stop if we've hit the floor (no more decay possible)
-            if current_rating == new_rating {
-                break;
-            }
-
             timestamps.push(current_time);
-            current_rating = new_rating;
             current_time += Duration::weeks(1);
         }
 
@@ -205,6 +203,11 @@ impl DecaySystem {
         for timestamp in timestamps {
             let new_rating = self.calculate_decay_rating(current_rating, floor);
             let new_volatility = self.calculate_decay_volatility(current_volatility);
+
+            // Stop if we've hit the floor (no more decay possible)
+            if new_rating == current_rating {
+                break;
+            }
 
             adjustments.push(RatingAdjustment {
                 player_id: player_rating.player_id,
@@ -271,18 +274,18 @@ mod tests {
     #[test]
     fn test_decay_error_initial_rating() {
         let last_played = Utc::now().fixed_offset();
-        let current_time = last_played + Duration::days(DECAY_DAYS as i64 + 1);
+        let current_time = last_played + Duration::days(DECAY_DAYS as i64);
         let system = DecaySystem::new(current_time);
         let mut rating =
             generate_player_rating(1, Ruleset::Osu, 2000.0, 200.0, 1, Some(last_played), Some(last_played));
 
-        assert_eq!(system.decay(&mut rating), Err(DecayError::InitialRating));
+        assert_eq!(system.decay(&mut rating), Err(DecayError::NoMatchAdjustments));
     }
 
     #[test]
     fn test_decay_error_below_floor() {
         let last_played = Utc::now().fixed_offset();
-        let current_time = last_played + Duration::days(DECAY_DAYS as i64 + 1);
+        let current_time = last_played + Duration::days(DECAY_DAYS as i64);
         let system = DecaySystem::new(current_time);
         let mut rating = generate_player_rating(
             1,

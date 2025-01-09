@@ -9,17 +9,16 @@ pub const BETA: f64 = DEFAULT_VOLATILITY / 2.0;
 pub const DECAY_DAYS: u64 = 121; // Approximately 4 months
 
 /// Minimum rating that any player can decay to, based on their peak rating
-pub const DECAY_MINIMUM: f64 = 15.0 * MULTIPLIER; // 900.0
+pub const DECAY_MINIMUM: f64 = 15.0 * MULTIPLIER;
 
-/// Amount of rating lost per decay cycle (weekly after DECAY_DAYS)
-pub const DECAY_RATE: f64 = 0.06 * MULTIPLIER; // 3.6 per week
+/// Amount of rating lost per decay cycle
+pub const DECAY_RATE: f64 = 0.06 * MULTIPLIER;
 
-/// Base volatility for new players
-/// Higher values indicate more uncertainty in the rating
-pub const DEFAULT_VOLATILITY: f64 = 5.0 * MULTIPLIER; // 300.0
+/// Initial volatility, higher values indicate more uncertainty in the rating
+pub const DEFAULT_VOLATILITY: f64 = 5.0 * MULTIPLIER;
 
 /// Fallback default rating used when rating cannot be identified from osu! rank information
-pub const FALLBACK_DEFAULT_RATING: f64 = 15.0 * MULTIPLIER; // 900.0
+pub const FALLBACK_RATING: f64 = 15.0 * MULTIPLIER;
 
 /// Arbitrary regularization parameter
 pub const KAPPA: f64 = 0.0001;

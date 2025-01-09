@@ -1,4 +1,4 @@
-use super::constants::FALLBACK_DEFAULT_RATING;
+use super::constants::FALLBACK_RATING;
 use crate::{
     database::db_structs::{Match, Player, PlayerRating, RatingAdjustment},
     model::{
@@ -100,10 +100,10 @@ fn initial_rating(player: &Player, ruleset: &Ruleset) -> f64 {
 
             match rank {
                 Some(r) => mu_from_rank(r, *ruleset),
-                None => FALLBACK_DEFAULT_RATING
+                None => FALLBACK_RATING
             }
         }
-        None => FALLBACK_DEFAULT_RATING
+        None => FALLBACK_RATING
     }
 }
 

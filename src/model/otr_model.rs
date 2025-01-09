@@ -115,11 +115,11 @@ impl OtrModel {
     fn process_match(&mut self, match_: &Match) {
         self.apply_decay(match_);
 
-        let ratings_standard = self.generate_ratings(match_);
-        let ratings_with_penalties = self.generate_penalized_ratings(match_);
+        let ratings_a = self.generate_ratings_a(match_);
+        let ratings_b = self.generate_ratings_b(match_);
 
-        let calc_standard = self.calc_a(ratings_standard, match_);
-        let calc_penalized = self.calc_b(ratings_with_penalties, match_);
+        let calc_standard = self.calc_a(ratings_a, match_);
+        let calc_penalized = self.calc_b(ratings_b, match_);
         let final_results = self.calc_weighted_rating(&calc_standard, &calc_penalized);
 
         self.apply_results(match_, &final_results)
@@ -129,7 +129,7 @@ impl OtrModel {
     ///
     /// This method only considers games that players actually participated in,
     /// providing a "pure" performance rating for each game played.
-    fn generate_ratings(&self, match_: &Match) -> HashMap<i32, Vec<Rating>> {
+    fn generate_ratings_a(&self, match_: &Match) -> HashMap<i32, Vec<Rating>> {
         let mut map: HashMap<i32, Vec<Rating>> = HashMap::new();
         for game in &match_.games {
             let game_rating_result = self.rate(game);
@@ -145,11 +145,11 @@ impl OtrModel {
     /// This method assumes players who missed games would have placed last,
     /// providing a "worst-case" rating scenario for players who don't participate
     /// in all games of a match.
-    fn generate_penalized_ratings(&self, match_: &Match) -> HashMap<i32, Vec<Rating>> {
+    fn generate_ratings_b(&self, match_: &Match) -> HashMap<i32, Vec<Rating>> {
         let mut cloned_match = match_.clone();
         let participants = self.get_match_participants(&cloned_match);
         self.apply_tie_for_last_scores(&mut cloned_match, &participants);
-        self.generate_ratings(&cloned_match)
+        self.generate_ratings_a(&cloned_match)
     }
 
     /// Gets a unique list of all players who participated in any game of the match.

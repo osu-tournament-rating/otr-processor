@@ -280,7 +280,7 @@ mod tests {
     use crate::{
         database::db_structs::PlayerRating,
         model::{
-            constants::{DEFAULT_VOLATILITY, FALLBACK_DEFAULT_RATING},
+            constants::{DEFAULT_VOLATILITY, FALLBACK_RATING},
             rating_tracker::RatingTracker,
             structures::{
                 rating_adjustment_type::RatingAdjustmentType,
@@ -408,7 +408,7 @@ mod tests {
         let player_ratings = vec![generate_player_rating(
             1,
             Osu,
-            FALLBACK_DEFAULT_RATING,
+            FALLBACK_RATING,
             DEFAULT_VOLATILITY,
             1,
             None,
