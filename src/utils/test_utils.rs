@@ -2,12 +2,11 @@ use crate::{
     database::db_structs::{
         Game, GameScore, Match, Player, PlayerPlacement, PlayerRating, RatingAdjustment, RulesetData
     },
-    model::{
-        constants::{DEFAULT_RATING, DEFAULT_VOLATILITY},
-        structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
-    }
+    model::structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
 };
-use chrono::{DateTime, FixedOffset, Utc};
+use chrono::{DateTime, Duration, FixedOffset, Utc};
+use rand::{Rng, SeedableRng};
+use rand_chacha::ChaCha8Rng;
 use std::{collections::HashMap, ops::Add};
 
 pub fn generate_player_rating(
@@ -15,39 +14,65 @@ pub fn generate_player_rating(
     ruleset: Ruleset,
     rating: f64,
     volatility: f64,
-    n_adjustments: i32
+    n_adjustments: i32,
+    timestamp_begin: Option<DateTime<FixedOffset>>,
+    timestamp_end: Option<DateTime<FixedOffset>>
 ) -> PlayerRating {
     if n_adjustments < 1 {
         panic!("Number of adjustments must be at least 1");
     }
 
-    let default_time: DateTime<FixedOffset> = Utc::now().fixed_offset();
+    let default_time = Utc::now().fixed_offset();
+    let start_time = timestamp_begin.unwrap_or(default_time);
+    let end_time = timestamp_end.unwrap_or(default_time);
 
-    let change_per_adjustment = rating / n_adjustments as f64;
-    let mut adjustments = Vec::new();
+    // Initialize seeded RNG for reproducible results
+    let mut rng = ChaCha8Rng::seed_from_u64(42);
 
-    for i in (1..=n_adjustments).rev() {
-        let adjustment_type = match i {
-            // If `i` is equal to `n_adjustments`, set to Initial
-            val if val == n_adjustments => RatingAdjustmentType::Initial,
-            _ => RatingAdjustmentType::Match
+    // Generate initial rating within ±500 of target rating
+    let initial_rating = rating + rng.gen_range(-500.0..=500.0);
+
+    let mut adjustments = Vec::with_capacity(n_adjustments as usize);
+
+    for i in 0..n_adjustments {
+        let adjustment_type = if i == 0 {
+            RatingAdjustmentType::Initial
+        } else {
+            RatingAdjustmentType::Match
         };
 
-        let rating_before = rating - change_per_adjustment * ((n_adjustments - i) - 1) as f64;
-        let rating_after = rating - change_per_adjustment * (n_adjustments - i) as f64;
-        let volatility_before = volatility;
-        let volatility_after = volatility;
-        let timestamp = default_time.add(chrono::Duration::days(i as i64));
+        // Calculate timestamps
+        let timestamp = if timestamp_begin.is_some() || timestamp_end.is_some() {
+            if n_adjustments == 1 {
+                start_time
+            } else {
+                let progress = i as f64 / (n_adjustments - 1) as f64;
+                let duration = end_time.signed_duration_since(start_time);
+                let seconds = (duration.num_seconds() as f64 * progress) as i64;
+                start_time + Duration::seconds(seconds)
+            }
+        } else {
+            default_time
+        };
+
+        // Calculate ratings
+        let progress = i as f64 / (n_adjustments - 1) as f64;
+        let current_rating = initial_rating + (rating - initial_rating) * progress;
+        let next_rating = if i == n_adjustments - 1 {
+            rating
+        } else {
+            initial_rating + (rating - initial_rating) * ((i + 1) as f64 / (n_adjustments - 1) as f64)
+        };
 
         adjustments.push(RatingAdjustment {
             player_id,
             ruleset,
             adjustment_type,
             match_id: None,
-            rating_before,
-            rating_after,
-            volatility_before,
-            volatility_after,
+            rating_before: current_rating,
+            rating_after: next_rating,
+            volatility_before: volatility,
+            volatility_after: volatility,
             timestamp
         });
     }
@@ -162,18 +187,80 @@ fn random_placements(player_ids: &[i32]) -> Vec<PlayerPlacement> {
     placements
 }
 
-/// Generates `n` player ratings with default values
-pub fn generate_default_initial_ratings(n: i32) -> Vec<PlayerRating> {
-    let mut players = Vec::new();
-    for i in 1..=n {
-        players.push(generate_player_rating(
-            i,
-            Ruleset::Osu,
-            DEFAULT_RATING,
-            DEFAULT_VOLATILITY,
-            1
-        ));
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::TimeZone;
+
+    #[test]
+    fn test_single_adjustment() {
+        let rating = 1000.0;
+        let volatility = 250.0;
+        let result = generate_player_rating(1, Ruleset::Osu, rating, volatility, 1, None, None);
+
+        assert_eq!(result.adjustments.len(), 1);
+        assert_eq!(result.rating, rating);
+        assert_eq!(result.volatility, volatility);
+        assert_eq!(result.adjustments[0].adjustment_type, RatingAdjustmentType::Initial);
+        assert_eq!(result.adjustments[0].rating_after, rating);
+        assert_eq!(result.adjustments[0].volatility_after, volatility);
     }
 
-    players
+    #[test]
+    fn test_multiple_adjustments() {
+        let rating = 1000.0;
+        let volatility = 250.0;
+        let result = generate_player_rating(1, Ruleset::Osu, rating, volatility, 3, None, None);
+
+        assert_eq!(result.adjustments.len(), 3);
+        assert_eq!(result.adjustments[0].adjustment_type, RatingAdjustmentType::Initial);
+        assert_eq!(result.adjustments[1].adjustment_type, RatingAdjustmentType::Match);
+        assert_eq!(result.adjustments[2].adjustment_type, RatingAdjustmentType::Match);
+        assert_eq!(result.adjustments.last().unwrap().rating_after, rating);
+        assert_eq!(result.adjustments.last().unwrap().volatility_after, volatility);
+    }
+
+    #[test]
+    fn test_timestamp_scaling() {
+        let start_time = Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap().fixed_offset();
+        let end_time = Utc.with_ymd_and_hms(2024, 1, 2, 0, 0, 0).unwrap().fixed_offset();
+
+        let result = generate_player_rating(1, Ruleset::Osu, 1000.0, 250.0, 3, Some(start_time), Some(end_time));
+
+        assert_eq!(result.adjustments[0].timestamp, start_time);
+        assert_eq!(result.adjustments.last().unwrap().timestamp, end_time);
+
+        // Check middle timestamp is halfway between start and end
+        let middle_time = result.adjustments[1].timestamp;
+        let duration = end_time.signed_duration_since(start_time);
+        let expected_middle = start_time + Duration::seconds(duration.num_seconds() / 2);
+        assert_eq!(middle_time, expected_middle);
+    }
+
+    #[test]
+    fn test_rating_progression() {
+        let rating = 1000.0;
+        let result = generate_player_rating(1, Ruleset::Osu, rating, 250.0, 3, None, None);
+
+        // Check that ratings progress from initial to final
+        let initial_rating = result.adjustments[0].rating_before;
+        assert!((initial_rating - rating).abs() <= 500.0);
+
+        // Check that final rating matches target
+        assert_eq!(result.adjustments.last().unwrap().rating_after, rating);
+
+        // Check that ratings monotonically approach target
+        let mut last_diff = f64::INFINITY;
+        for adj in &result.adjustments {
+            let current_diff = (adj.rating_after - rating).abs();
+            assert!(current_diff <= last_diff);
+            last_diff = current_diff;
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "Number of adjustments must be at least 1")]
+    fn test_invalid_adjustment_count() {
+        generate_player_rating(1, Ruleset::Osu, 1000.0, 250.0, 0, None, None);
+    }
 }

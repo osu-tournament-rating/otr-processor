@@ -53,7 +53,7 @@ pub struct GameScore {
     pub placement: i32
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct PlayerRating {
     /// Unknown until insertion
     pub id: i32,
@@ -71,7 +71,7 @@ pub struct PlayerRating {
     pub adjustments: Vec<RatingAdjustment>
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct RatingAdjustment {
     pub player_id: i32,
     pub ruleset: Ruleset,

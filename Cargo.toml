@@ -30,6 +30,10 @@ strum_macros = "0.26.4"
 criterion = "0.5.1"
 tokio-postgres = { version = "0.7.11", features = ["with-chrono-0_4"] }
 postgres-types = "0.2.7"
+rand_chacha = "0.3.1"
+rand = "0.8.5"
+thiserror = "1.0.56"
+log = "0.4.22"
 
 [dev-dependencies]
 criterion = {  version = "0.5.1", features = ["html_reports"] }
@@ -40,7 +44,3 @@ unused_variables = "allow"
 
 [profile.release]
 debug = true
-
-[[bench]]
-name = "match_processing"
-harness = false
