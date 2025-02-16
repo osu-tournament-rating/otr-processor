@@ -1,9 +1,10 @@
 name: Deploy to Staging and Production
 
 on:
+  workflow_dispatch:
   push:
     branches:
-      - main  # Trigger on push to the main branch
+      - master
 
 jobs:
   deploy:
@@ -17,7 +18,7 @@ jobs:
       ENVIRONMENT: ${{ matrix.environment }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Log in to Docker Hub
         run: echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
