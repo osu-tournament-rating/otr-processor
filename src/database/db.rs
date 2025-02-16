@@ -6,9 +6,9 @@ use crate::{
     utils::progress_utils::{progress_bar, progress_bar_spinner}
 };
 use itertools::Itertools;
+use log::error;
 use postgres_types::ToSql;
 use std::{collections::HashMap, sync::Arc};
-use log::error;
 use tokio_postgres::{Client, Error, NoTls, Row};
 
 #[derive(Clone)]
@@ -366,7 +366,7 @@ impl DbClient {
 
         query += &value_placeholders.join(", ");
         query += " RETURNING id";
-        
+
         if value_placeholders.is_empty() {
             error!("No player_rating data to save to database");
             panic!();

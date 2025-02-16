@@ -1,11 +1,11 @@
+use env_logger::Env;
+use log::{debug, info};
 use otr_processor::{
     database::db::DbClient,
     model::{otr_model::OtrModel, rating_utils::create_initial_ratings},
     utils::test_utils::generate_country_mapping_players
 };
 use std::{collections::HashMap, env};
-use env_logger::Env;
-use log::{debug, info};
 
 #[tokio::main]
 async fn main() {
