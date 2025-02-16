@@ -8,6 +8,7 @@ use crate::{
 use itertools::Itertools;
 use postgres_types::ToSql;
 use std::{collections::HashMap, sync::Arc};
+use log::error;
 use tokio_postgres::{Client, Error, NoTls, Row};
 
 #[derive(Clone)]
@@ -365,6 +366,11 @@ impl DbClient {
 
         query += &value_placeholders.join(", ");
         query += " RETURNING id";
+        
+        if value_placeholders.is_empty() {
+            error!("No player_rating data to save to database");
+            panic!();
+        }
 
         // Execute the batch insert
         let rows = self.client.query(query.as_str(), &[]).await.unwrap();
