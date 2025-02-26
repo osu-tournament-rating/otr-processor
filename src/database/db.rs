@@ -120,11 +120,11 @@ impl DbClient {
     }
 
     pub async fn rollback_processing_statuses(&self) {
-        let tournament_id_sql = "SELECT tournament_id FROM matches WHERE processing_status = 5;";
-        let match_update_sql = "UPDATE matches SET processing_status = 4 \
-        WHERE processing_status = 5;";
+        let tournament_id_sql =
+            "SELECT tournament_id FROM matches WHERE processing_status = 5 AND verification_status = 4;";
 
         let mut tournament_update_sql = Vec::new();
+        let mut match_update_sql = Vec::new();
         let id_result = self.client.query(tournament_id_sql, &[]).await;
 
         if id_result.is_ok() {
@@ -134,6 +134,11 @@ impl DbClient {
                 WHERE id = {};\n",
                     row.get::<_, i32>(0)
                 ));
+                match_update_sql.push(format!(
+                    "UPDATE matches SET processing_status = 4 WHERE \
+                    processing_status = 5 AND tournament_id = {};\n",
+                    row.get::<_, i32>(0)
+                ))
             }
         } else {
             panic!("Failed to fetch tournament ids");
@@ -152,7 +157,7 @@ impl DbClient {
 
         // Update matches
         self.client
-            .execute(match_update_sql, &[])
+            .batch_execute(match_update_sql.join("\n").as_str())
             .await
             .expect("Failed to execute match processing status rollback");
 
@@ -471,22 +476,6 @@ impl DbClient {
         let data = matches.iter().map(|f| f.id).collect_vec();
         let match_id_str = data.into_iter().join(",");
 
-        // Fetch the tournament ids
-        let tournament_fetch_sql = format!(
-            "SELECT tournament_id FROM matches \
-        WHERE id = ANY(ARRAY[{}])",
-            match_id_str
-        );
-
-        let tournament_ids: Vec<i32> = self
-            .client
-            .query(tournament_fetch_sql.as_str(), &[])
-            .await
-            .unwrap()
-            .iter()
-            .map(|f| f.get::<_, i32>("tournament_id"))
-            .collect_vec();
-
         let match_update_sql = format!(
             "UPDATE matches SET processing_status \
         = 5 WHERE id = ANY(ARRAY[{}])",
@@ -494,15 +483,6 @@ impl DbClient {
         );
 
         self.client.execute(match_update_sql.as_str(), &[]).await.unwrap();
-
-        let tournament_id_str = tournament_ids.into_iter().join(",");
-        let tournament_update_sql = format!(
-            "UPDATE tournaments SET processing_status \
-        = 5 WHERE id = ANY(ARRAY[{}])",
-            tournament_id_str
-        );
-
-        self.client.execute(tournament_update_sql.as_str(), &[]).await.unwrap();
     }
 
     async fn truncate_table(&self, table: &str) {
