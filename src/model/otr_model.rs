@@ -572,8 +572,16 @@ mod tests {
                 player_id
             );
 
-            assert_ne!(adjustments[1].rating_before, adjustments[1].rating_after, "Player {}: Match adjustment should change the rating", player_id);
-            assert_ne!(adjustments[1].volatility_before, adjustments[1].volatility_after, "Player {}: Match adjustment should change the volatility", player_id);
+            assert_ne!(
+                adjustments[1].rating_before, adjustments[1].rating_after,
+                "Player {}: Match adjustment should change the rating",
+                player_id
+            );
+            assert_ne!(
+                adjustments[1].volatility_before, adjustments[1].volatility_after,
+                "Player {}: Match adjustment should change the volatility",
+                player_id
+            );
         }
 
         // Verify rating order
