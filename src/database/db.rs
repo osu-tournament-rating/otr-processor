@@ -61,12 +61,12 @@ impl DbClient {
                 g.id AS game_id, g.ruleset AS game_ruleset, g.start_time AS game_start_time, g.end_time AS game_end_time, g.match_id AS game_match_id,
                 gs.id AS game_score_id, gs.player_id AS game_score_player_id, gs.game_id AS game_score_game_id, gs.score AS game_score_score, gs.placement AS game_score_placement
             FROM tournaments t
-            JOIN matches m ON t.id = m.tournament_id
-            JOIN games g ON m.id = g.match_id
-            JOIN game_scores gs ON g.id = gs.game_id
-            WHERE m.processing_status = 4 AND g.verification_status = 4
-                AND gs.verification_status = 4
-            ORDER BY gs.id", &[]).await.unwrap();
+                     JOIN matches m ON t.id = m.tournament_id
+                     JOIN games g ON m.id = g.match_id
+                     JOIN game_scores gs ON g.id = gs.game_id
+            WHERE t.verification_status = 4 AND m.verification_status = 4 AND g.verification_status = 4
+              AND gs.verification_status = 4 AND m.processing_status = 4
+            ORDER BY gs.id;", &[]).await.unwrap();
 
         println!("Matches fetched, iterating...");
 

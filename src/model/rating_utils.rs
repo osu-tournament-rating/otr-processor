@@ -28,7 +28,7 @@ pub fn create_initial_ratings(players: &[Player], matches: &[Match]) -> Vec<Play
                 // and avoid creating initial adjustments for players who are inactive in
                 // any ruleset.
                 ruleset_activity
-                    .entry(game.ruleset)
+                    .entry(match_.ruleset)
                     .or_default()
                     .entry(score.player_id)
                     .or_insert(match_.start_time);
