@@ -136,7 +136,7 @@ impl DbClient {
                 ));
                 match_update_sql.push(format!(
                     "UPDATE matches SET processing_status = 4 WHERE \
-                    processing_status = 5 AND tournament_id = {};\n",
+                    processing_status = 5 AND tournament_id = {} AND verification_status = 4;\n",
                     row.get::<_, i32>(0)
                 ))
             }
@@ -267,10 +267,8 @@ impl DbClient {
     pub async fn save_results(&self, player_ratings: &[PlayerRating]) {
         self.truncate_table("rating_adjustments").await;
         self.truncate_table("player_ratings").await;
-        self.truncate_table("player_tournament_stats").await;
 
         self.save_ratings_and_adjustments_with_mapping(&player_ratings).await;
-
         self.insert_or_update_highest_ranks(player_ratings).await;
     }
 
