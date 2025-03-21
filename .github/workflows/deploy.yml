@@ -42,10 +42,10 @@ jobs:
             echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
           elif [[ ${{ github.ref }} == 'refs/heads/master' ]]; then
             echo "Deploying to Staging due to push to master"
-            echo "environment=Staging" >> $GITHUB_OUTPUT
+            echo "environment=staging" >> $GITHUB_OUTPUT
           elif [[ ${{ github.ref }} == refs/tags/v* ]]; then
             echo "Deploying to Production due to tag creation"
-            echo "environment=Production" >> $GITHUB_OUTPUT
+            echo "environment=production" >> $GITHUB_OUTPUT
           fi
 
       - name: Build Docker image

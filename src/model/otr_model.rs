@@ -134,7 +134,7 @@ impl OtrModel {
     fn generate_ratings_a(&self, match_: &Match) -> HashMap<i32, Vec<Rating>> {
         let mut map: HashMap<i32, Vec<Rating>> = HashMap::new();
         for game in &match_.games {
-            let game_rating_result = self.rate(game);
+            let game_rating_result = self.rate(game, &match_.ruleset);
             for (k, v) in game_rating_result {
                 map.entry(k).or_default().push(v);
             }
@@ -193,13 +193,15 @@ impl OtrModel {
     }
 
     /// Calculates ratings for a single game using the PlackettLuce model.
+    /// We pass in the Ruleset to avoid situations where the Game's ruleset
+    /// is different from the tournament's Ruleset.
     ///
     /// # Returns
     /// Returns a mapping of player IDs to their calculated ratings for this game.
     ///
     /// # Panics
     /// Panics if a player doesn't have an existing rating for the game's ruleset.
-    fn rate(&self, game: &Game) -> HashMap<i32, Rating> {
+    fn rate(&self, game: &Game, ruleset: &Ruleset) -> HashMap<i32, Rating> {
         let mut player_ratings = Vec::new();
         let mut placements = Vec::new();
 
@@ -207,11 +209,11 @@ impl OtrModel {
         for score in &game.scores {
             let rating = self
                 .rating_tracker
-                .get_rating(score.player_id, game.ruleset)
+                .get_rating(score.player_id, *ruleset)
                 .unwrap_or_else(|| {
                     panic!(
-                        "Player {}: No rating found for ruleset {:?}",
-                        score.player_id, game.ruleset
+                        "Player {}: No rating found when rating game [game: {:?} | ruleset: {:?}]",
+                        score.player_id, game, ruleset
                     )
                 });
 
@@ -260,7 +262,6 @@ impl OtrModel {
                     .rating_tracker
                     .get_rating(player_id, match_.ruleset)
                     .expect("Player rating should exist");
-
                 (
                     player_id,
                     Self::calc_rating_a(&ratings, current.rating, current.volatility, total_games)
@@ -490,7 +491,7 @@ mod tests {
 
         let game = generate_game(1, &placements);
 
-        let rating_result = model.rate(&game);
+        let rating_result = model.rate(&game, &Osu);
 
         // Compare the 3 rating values, ensure order is 2, 1, 3
         let result_1 = rating_result.get(&1).unwrap();
@@ -573,14 +574,13 @@ mod tests {
                 player_id
             );
 
-            assert!(
-                adjustments[1].rating_before != adjustments[1].rating_after,
+            assert_ne!(
+                adjustments[1].rating_before, adjustments[1].rating_after,
                 "Player {}: Match adjustment should change the rating",
                 player_id
             );
-
-            assert!(
-                adjustments[1].volatility_before != adjustments[1].volatility_after,
+            assert_ne!(
+                adjustments[1].volatility_before, adjustments[1].volatility_after,
                 "Player {}: Match adjustment should change the volatility",
                 player_id
             );
