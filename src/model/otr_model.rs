@@ -10,14 +10,16 @@ use crate::{
 use chrono::Utc;
 use itertools::Itertools;
 use openskill::{
-    constant::*,
     model::{model::Model, plackett_luce::PlackettLuce},
     rating::{Rating, TeamRating}
 };
 use std::collections::HashMap;
 use strum::IntoEnumIterator;
 
-use super::decay::DecaySystem;
+use super::{
+    constants::{BETA, KAPPA},
+    decay::DecaySystem
+};
 
 /// o!TR Model Implementation
 ///
@@ -61,7 +63,7 @@ impl OtrModel {
 
         OtrModel {
             rating_tracker: tracker,
-            model: PlackettLuce::new(DEFAULT_BETA, KAPPA, Self::gamma_override)
+            model: PlackettLuce::new(BETA, KAPPA, Self::gamma_override)
         }
     }
 
