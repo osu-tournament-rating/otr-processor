@@ -6,7 +6,7 @@ use crate::{
     utils::progress_utils::{progress_bar, progress_bar_spinner}
 };
 use itertools::Itertools;
-use log::error;
+use log::{error, info};
 use postgres_types::ToSql;
 use std::{collections::HashMap, sync::Arc};
 use tokio_postgres::{Client, Error, NoTls, Row};
@@ -24,7 +24,7 @@ impl DbClient {
         // Spawn the connection object to run in the background
         tokio::spawn(async move {
             if let Err(e) = connection.await {
-                eprintln!("connection error: {}", e);
+                error!("connection error: {}", e);
             }
         });
 
@@ -53,7 +53,7 @@ impl DbClient {
         //
         //  We can safely assume that for all matches awaiting processor data every
         //     game and game score is completely done with processing
-        println!("Fetching matches...");
+        info!("Fetching matches...");
         let rows = self.client.query("
             SELECT
                 t.id AS tournament_id, t.name AS tournament_name, t.ruleset AS tournament_ruleset,
@@ -68,7 +68,7 @@ impl DbClient {
               AND gs.verification_status = 4 AND m.processing_status = 4
             ORDER BY gs.id;", &[]).await.unwrap();
 
-        println!("Matches fetched, iterating...");
+        info!("Matches fetched, iterating...");
 
         for row in rows {
             let match_id = row.get::<_, i32>("match_id");
@@ -87,7 +87,7 @@ impl DbClient {
             game_scores_link_map.entry(game_id).or_default().push(score_id);
         }
 
-        println!("Linking ids...");
+        info!("Linking ids...");
         for (game_id, mut score_ids) in game_scores_link_map {
             score_ids.dedup();
 
@@ -115,7 +115,7 @@ impl DbClient {
         let mut matches = matches_map.values().cloned().collect_vec();
         matches.sort_by(|a, b| a.start_time.cmp(&b.start_time));
 
-        println!("Match fetching complete");
+        info!("Match fetching complete");
         matches
     }
 
@@ -197,7 +197,7 @@ impl DbClient {
     }
 
     pub async fn get_players(&self) -> Vec<Player> {
-        println!("Fetching players...");
+        info!("Fetching players...");
         let mut players: Vec<Player> = Vec::new();
         let rows = self
             .client
@@ -238,7 +238,7 @@ impl DbClient {
             }
         }
 
-        println!("Players fetched");
+        info!("Players fetched");
         players
     }
 
@@ -286,11 +286,11 @@ impl DbClient {
             mapping.insert(*parent_id, rating.adjustments.clone());
         }
 
-        println!("Adjustment parent_id mapping created");
+        info!("Adjustment parent_id mapping created");
 
         self.save_rating_adjustments(&mapping).await;
 
-        println!("Rating adjustments saved");
+        info!("Rating adjustments saved");
     }
 
     /// Save all rating adjustments in a single batch query
@@ -383,10 +383,10 @@ impl DbClient {
     }
 
     async fn insert_or_update_highest_ranks(&self, player_ratings: &[PlayerRating]) {
-        println!("Fetching all highest ranks");
+        info!("Fetching all highest ranks");
         let current_highest_ranks = self.get_highest_ranks().await;
 
-        println!("Found {} highest ranks", current_highest_ranks.len());
+        info!("Found {} highest ranks", current_highest_ranks.len());
         // If the current rank is None, create it. If the current rank is Some and
         // either the PlayerRating's global rank or country rank is higher than the current highest
         // rank, update it.
@@ -469,7 +469,7 @@ impl DbClient {
     }
 
     pub async fn roll_forward_processing_statuses(&self, matches: &[Match]) {
-        println!("Updating processing status for all matches");
+        info!("Updating processing status for all matches");
 
         let data = matches.iter().map(|f| f.id).collect_vec();
         let match_id_str = data.into_iter().join(",");
@@ -492,7 +492,7 @@ impl DbClient {
             .await
             .unwrap();
 
-        println!("Truncated the {} table!", table);
+        info!("Truncated the {} table!", table);
     }
 
     // Access the underlying Client
