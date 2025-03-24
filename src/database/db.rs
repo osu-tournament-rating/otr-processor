@@ -205,7 +205,8 @@ impl DbClient {
                 "SELECT p.id AS player_id, p.username AS username, \
         p.country AS country, prd.ruleset AS ruleset, prd.earliest_global_rank AS earliest_global_rank,\
           prd.global_rank AS global_rank FROM players p \
-        LEFT JOIN player_osu_ruleset_data prd ON prd.player_id = p.id",
+        LEFT JOIN player_osu_ruleset_data prd ON prd.player_id = p.id \
+        ORDER BY p.id",
                 &[]
             )
             .await
