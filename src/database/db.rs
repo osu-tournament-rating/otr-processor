@@ -46,10 +46,8 @@ impl DbClient {
 
         // The WHERE query here does the following:
         //
-        // 1. Only consider matches with a processing_status of 'NeedsProcessorData'.
-        //     This is fine because tournaments which are rejected have matches with a
-        //     processing_status of 'Done'.
-        // 2. From these matches, we only want the games and scores which are verified.
+        // 1. Only consider verified tournaments with verified matches that have a processing_status of 'NeedsProcessorData'.
+        // 2. From these matches, we only include the games and scores which are verified.
         //
         //  We can safely assume that for all matches awaiting processor data every
         //     game and game score is completely done with processing

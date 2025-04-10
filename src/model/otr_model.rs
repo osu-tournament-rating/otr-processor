@@ -3,22 +3,22 @@ use crate::{
     model::{
         constants::{ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY, WEIGHT_A, WEIGHT_B},
         rating_tracker::RatingTracker,
-        structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset},
+        structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
     },
-    utils::progress_utils::progress_bar,
+    utils::progress_utils::progress_bar
 };
 use chrono::Utc;
 use itertools::Itertools;
 use openskill::{
     model::{model::Model, plackett_luce::PlackettLuce},
-    rating::{Rating, TeamRating},
+    rating::{Rating, TeamRating}
 };
 use std::collections::HashMap;
 use strum::IntoEnumIterator;
 
 use super::{
     constants::{BETA, KAPPA},
-    decay::DecaySystem,
+    decay::DecaySystem
 };
 
 /// o!TR Model Implementation
@@ -46,7 +46,7 @@ pub struct OtrModel {
     /// The underlying PlackettLuce rating model
     pub model: PlackettLuce,
     /// Tracks and maintains all player ratings
-    pub rating_tracker: RatingTracker,
+    pub rating_tracker: RatingTracker
 }
 
 impl OtrModel {
@@ -63,7 +63,7 @@ impl OtrModel {
 
         OtrModel {
             rating_tracker: tracker,
-            model: PlackettLuce::new(BETA, KAPPA, Self::gamma_override),
+            model: PlackettLuce::new(BETA, KAPPA, Self::gamma_override)
         }
     }
 
@@ -186,7 +186,7 @@ impl OtrModel {
                     player_id,
                     game_id: game.id,
                     score: 0,
-                    placement: tie_for_last_placement,
+                    placement: tie_for_last_placement
                 });
             }
         }
@@ -227,7 +227,7 @@ impl OtrModel {
             .map(|r| {
                 vec![Rating {
                     mu: r.rating,
-                    sigma: r.volatility,
+                    sigma: r.volatility
                 }]
             })
             .collect_vec();
@@ -264,7 +264,7 @@ impl OtrModel {
                     .expect("Player rating should exist");
                 (
                     player_id,
-                    Self::calc_rating_a(&ratings, current.rating, current.volatility, total_games),
+                    Self::calc_rating_a(&ratings, current.rating, current.volatility, total_games)
                 )
             })
             .collect()
@@ -305,8 +305,8 @@ impl OtrModel {
                     player_id,
                     Rating {
                         mu: rating.max(ABSOLUTE_RATING_FLOOR),
-                        sigma: volatility.min(DEFAULT_VOLATILITY),
-                    },
+                        sigma: volatility.min(DEFAULT_VOLATILITY)
+                    }
                 )
             })
             .collect()
@@ -326,7 +326,7 @@ impl OtrModel {
 
         Rating {
             mu: rating,
-            sigma: volatility,
+            sigma: volatility
         }
     }
 
@@ -339,7 +339,7 @@ impl OtrModel {
 
         Rating {
             mu: rating,
-            sigma: volatility,
+            sigma: volatility
         }
     }
 
@@ -425,7 +425,7 @@ impl OtrModel {
                 volatility_before: player_rating.volatility,
                 volatility_after: v.sigma,
                 timestamp: match_.start_time,
-                adjustment_type: RatingAdjustmentType::Match,
+                adjustment_type: RatingAdjustmentType::Match
             };
 
             player_rating.adjustments.push(adjustment);
@@ -444,7 +444,7 @@ impl OtrModel {
         current_rating: f64,
         rating_diff: f64,
         performance_frequency: f64,
-        scaling: f64,
+        scaling: f64
     ) -> f64 {
         if rating_diff >= 0.0 {
             return current_rating;
@@ -464,8 +464,8 @@ mod tests {
         model::{
             constants::{ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY},
             otr_model::OtrModel,
-            structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset::Osu},
-        },
+            structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset::Osu}
+        }
     };
     use approx::assert_abs_diff_eq;
     use chrono::Utc;
@@ -658,7 +658,7 @@ mod tests {
                     DEFAULT_VOLATILITY * 10.0,
                     1,
                     Some(time),
-                    Some(time),
+                    Some(time)
                 )
             })
             .collect();
@@ -717,47 +717,65 @@ mod tests {
         // Create games with placements matching the sample data
         let games = vec![
             // Game 1: Railgun_, parr0t, Isita, Skyy
-            generate_game(1, &[
-                generate_placement(6984, 1),  // Railgun_ - 1st
-                generate_placement(17703, 2), // parr0t - 2nd
-                generate_placement(6941, 3),  // Isita - 3rd
-                generate_placement(7774, 4),  // Skyy - 4th
-            ]),
+            generate_game(
+                1,
+                &[
+                    generate_placement(6984, 1),  // Railgun_ - 1st
+                    generate_placement(17703, 2), // parr0t - 2nd
+                    generate_placement(6941, 3),  // Isita - 3rd
+                    generate_placement(7774, 4)   // Skyy - 4th
+                ]
+            ),
             // Game 2: Isita, parr0t, Railgun_, Zeer0
-            generate_game(2, &[
-                generate_placement(6941, 1),  // Isita - 1st
-                generate_placement(17703, 2), // parr0t - 2nd
-                generate_placement(6984, 3),  // Railgun_ - 3rd
-                generate_placement(24914, 4), // Zeer0 - 4th
-            ]),
+            generate_game(
+                2,
+                &[
+                    generate_placement(6941, 1),  // Isita - 1st
+                    generate_placement(17703, 2), // parr0t - 2nd
+                    generate_placement(6984, 3),  // Railgun_ - 3rd
+                    generate_placement(24914, 4)  // Zeer0 - 4th
+                ]
+            ),
             // Game 3: Railgun_, Isita, poisonvx, Skyy
-            generate_game(3, &[
-                generate_placement(6984, 1),  // Railgun_ - 1st
-                generate_placement(6941, 2),  // Isita - 2nd
-                generate_placement(4150, 3),  // poisonvx - 3rd
-                generate_placement(7774, 4),  // Skyy - 4th
-            ]),
+            generate_game(
+                3,
+                &[
+                    generate_placement(6984, 1), // Railgun_ - 1st
+                    generate_placement(6941, 2), // Isita - 2nd
+                    generate_placement(4150, 3), // poisonvx - 3rd
+                    generate_placement(7774, 4)  // Skyy - 4th
+                ]
+            ),
             // Game 4: Isita, Railgun_, parr0t, Skyy
-            generate_game(4, &[
-                generate_placement(6941, 1),  // Isita - 1st
-                generate_placement(6984, 2),  // Railgun_ - 2nd
-                generate_placement(17703, 3), // parr0t - 3rd
-                generate_placement(7774, 4),  // Skyy - 4th
-            ]),
+            generate_game(
+                4,
+                &[
+                    generate_placement(6941, 1),  // Isita - 1st
+                    generate_placement(6984, 2),  // Railgun_ - 2nd
+                    generate_placement(17703, 3), // parr0t - 3rd
+                    generate_placement(7774, 4)   // Skyy - 4th
+                ]
+            ),
             // Game 5: parr0t, Railgun_, Isita, Zeer0
-            generate_game(5, &[
-                generate_placement(17703, 1), // parr0t - 1st
-                generate_placement(6984, 2),  // Railgun_ - 2nd
-                generate_placement(6941, 3),  // Isita - 3rd
-                generate_placement(24914, 4), // Zeer0 - 4th
-            ]),
+            generate_game(
+                5,
+                &[
+                    generate_placement(17703, 1), // parr0t - 1st
+                    generate_placement(6984, 2),  // Railgun_ - 2nd
+                    generate_placement(6941, 3),  // Isita - 3rd
+                    generate_placement(24914, 4)  // Zeer0 - 4th
+                ]
+            ),
             // Game 6: Isita, parr0t, Railgun_, Zeer0
-            generate_game(6, &[
-                generate_placement(6941, 1),  // Isita - 1st
-                generate_placement(17703, 2), // parr0t - 2nd
-                generate_placement(6984, 3),  // Railgun_ - 3rd
-                generate_placement(24914, 4), // Zeer0 - 4th
-            ]),
+            generate_game(
+                6,
+                &[
+                    generate_placement(6941, 1),  // Isita - 1st
+                    generate_placement(17703, 2), // parr0t - 2nd
+                    generate_placement(6984, 3),  // Railgun_ - 3rd
+                    generate_placement(24914, 4)  // Zeer0 - 4th
+                ]
+            ),
         ];
         let matches = vec![generate_match(1, Osu, &games, time)];
         model.process(&matches);
@@ -765,8 +783,10 @@ mod tests {
         // Verify rating changes match expected values
         let check_rating = |player_id, expected_rating, expected_volatility| {
             let rating = model.rating_tracker.get_rating(player_id, Osu).unwrap();
-            assert_abs_diff_eq!(rating.rating, expected_rating, epsilon = 0.1);
-            assert_abs_diff_eq!(rating.volatility, expected_volatility, epsilon = 0.1);
+            // Paper rounds to nearest tenth, thus we use a 0.05 precision epsilon.
+            // This guarantees actual results are within 0.05 of the expected value.
+            assert_abs_diff_eq!(rating.rating, expected_rating, epsilon = 0.05);
+            assert_abs_diff_eq!(rating.volatility, expected_volatility, epsilon = 0.05);
         };
 
         check_rating(6941, 1455.9, 238.2); // Isita
