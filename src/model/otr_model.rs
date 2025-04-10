@@ -714,17 +714,51 @@ mod tests {
         let countries = generate_country_mapping_player_ratings(&ratings, "XX");
         let mut model = OtrModel::new(&ratings, &countries);
 
-        // Create a match with placements matching the sample data
-        let placements = vec![
-            generate_placement(6941, 1),  // Isita - 1st
-            generate_placement(6984, 2),  // Railgun_ - 2nd
-            generate_placement(17703, 3), // parr0t - 3rd
-            generate_placement(24914, 4), // Zeer0 - 4th
-            generate_placement(4150, 5),  // poisonvx - 5th
-            generate_placement(7774, 6),  // Skyy - 6th
+        // Create games with placements matching the sample data
+        let games = vec![
+            // Game 1: Railgun_, parr0t, Isita, Skyy
+            generate_game(1, &[
+                generate_placement(6984, 1),  // Railgun_ - 1st
+                generate_placement(17703, 2), // parr0t - 2nd
+                generate_placement(6941, 3),  // Isita - 3rd
+                generate_placement(7774, 4),  // Skyy - 4th
+            ]),
+            // Game 2: Isita, parr0t, Railgun_, Zeer0
+            generate_game(2, &[
+                generate_placement(6941, 1),  // Isita - 1st
+                generate_placement(17703, 2), // parr0t - 2nd
+                generate_placement(6984, 3),  // Railgun_ - 3rd
+                generate_placement(24914, 4), // Zeer0 - 4th
+            ]),
+            // Game 3: Railgun_, Isita, poisonvx, Skyy
+            generate_game(3, &[
+                generate_placement(6984, 1),  // Railgun_ - 1st
+                generate_placement(6941, 2),  // Isita - 2nd
+                generate_placement(4150, 3),  // poisonvx - 3rd
+                generate_placement(7774, 4),  // Skyy - 4th
+            ]),
+            // Game 4: Isita, Railgun_, parr0t, Skyy
+            generate_game(4, &[
+                generate_placement(6941, 1),  // Isita - 1st
+                generate_placement(6984, 2),  // Railgun_ - 2nd
+                generate_placement(17703, 3), // parr0t - 3rd
+                generate_placement(7774, 4),  // Skyy - 4th
+            ]),
+            // Game 5: parr0t, Railgun_, Isita, Zeer0
+            generate_game(5, &[
+                generate_placement(17703, 1), // parr0t - 1st
+                generate_placement(6984, 2),  // Railgun_ - 2nd
+                generate_placement(6941, 3),  // Isita - 3rd
+                generate_placement(24914, 4), // Zeer0 - 4th
+            ]),
+            // Game 6: Isita, parr0t, Railgun_, Zeer0
+            generate_game(6, &[
+                generate_placement(6941, 1),  // Isita - 1st
+                generate_placement(17703, 2), // parr0t - 2nd
+                generate_placement(6984, 3),  // Railgun_ - 3rd
+                generate_placement(24914, 4), // Zeer0 - 4th
+            ]),
         ];
-
-        let games = vec![generate_game(1, &placements)];
         let matches = vec![generate_match(1, Osu, &games, time)];
         model.process(&matches);
 
