@@ -698,22 +698,48 @@ mod tests {
         }
     }
 
-    /// This test ensures the rating changes are exactly as described in our sample
-    /// match document. (Link TBD after obsidian migration)
+    /// This test ensures the rating changes are exactly as described in our sample match.
     #[test]
     fn test_sample_match() {
-        let ratings = [
-            PlayerRating {
-                id: 1,
-                player_id: 6941,
-                ruleset: Osu,
-                rating: 1450.0,
-                volatility: 240.0,
-                percentile: 0.0,
-                global_rank: 0,
-                country_rank: 0,
-                adjustments: Vec::new(),
-            }
+        let time = Utc::now().fixed_offset();
+        let ratings = vec![
+            generate_player_rating(6941, Osu, 1450.0, 240.0, 1, Some(time), Some(time)), // Isita
+            generate_player_rating(17703, Osu, 1050.0, 280.0, 1, Some(time), Some(time)), // parr0t
+            generate_player_rating(24914, Osu, 1000.0, 290.0, 1, Some(time), Some(time)), // Zeer0
+            generate_player_rating(6984, Osu, 1000.0, 280.0, 1, Some(time), Some(time)), // Railgun_
+            generate_player_rating(4150, Osu, 700.0, 270.0, 1, Some(time), Some(time)), // poisonvx
+            generate_player_rating(7774, Osu, 600.0, 270.0, 1, Some(time), Some(time)), // Skyy
         ];
+
+        let countries = generate_country_mapping_player_ratings(&ratings, "US");
+        let mut model = OtrModel::new(&ratings, &countries);
+
+        // Create a match with placements matching the sample data
+        let placements = vec![
+            generate_placement(6941, 1),  // Isita - 1st
+            generate_placement(6984, 2),  // Railgun_ - 2nd
+            generate_placement(17703, 3), // parr0t - 3rd
+            generate_placement(24914, 4), // Zeer0 - 4th
+            generate_placement(4150, 5),  // poisonvx - 5th
+            generate_placement(7774, 6),  // Skyy - 6th
+        ];
+
+        let games = vec![generate_game(1, &placements)];
+        let matches = vec![generate_match(1, Osu, &games, time)];
+        model.process(&matches);
+
+        // Verify rating changes match expected values
+        let check_rating = |player_id, expected_rating, expected_volatility| {
+            let rating = model.rating_tracker.get_rating(player_id, Osu).unwrap();
+            assert_abs_diff_eq!(rating.rating, expected_rating, epsilon = 0.1);
+            assert_abs_diff_eq!(rating.volatility, expected_volatility, epsilon = 0.1);
+        };
+
+        check_rating(6941, 1455.9, 238.2);   // Isita
+        check_rating(17703, 1087.3, 277.7);  // parr0t
+        check_rating(24914, 936.4, 287.5);   // Zeer0
+        check_rating(6984, 1053.4, 277.4);   // Railgun_
+        check_rating(4150, 697.3, 269.3);    // poisonvx
+        check_rating(7774, 566.1, 268.5);    // Skyy
     }
 }
