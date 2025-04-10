@@ -3,22 +3,22 @@ use crate::{
     model::{
         constants::{ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY, WEIGHT_A, WEIGHT_B},
         rating_tracker::RatingTracker,
-        structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
+        structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset},
     },
-    utils::progress_utils::progress_bar
+    utils::progress_utils::progress_bar,
 };
 use chrono::Utc;
 use itertools::Itertools;
 use openskill::{
     model::{model::Model, plackett_luce::PlackettLuce},
-    rating::{Rating, TeamRating}
+    rating::{Rating, TeamRating},
 };
 use std::collections::HashMap;
 use strum::IntoEnumIterator;
 
 use super::{
     constants::{BETA, KAPPA},
-    decay::DecaySystem
+    decay::DecaySystem,
 };
 
 /// o!TR Model Implementation
@@ -46,7 +46,7 @@ pub struct OtrModel {
     /// The underlying PlackettLuce rating model
     pub model: PlackettLuce,
     /// Tracks and maintains all player ratings
-    pub rating_tracker: RatingTracker
+    pub rating_tracker: RatingTracker,
 }
 
 impl OtrModel {
@@ -63,7 +63,7 @@ impl OtrModel {
 
         OtrModel {
             rating_tracker: tracker,
-            model: PlackettLuce::new(BETA, KAPPA, Self::gamma_override)
+            model: PlackettLuce::new(BETA, KAPPA, Self::gamma_override),
         }
     }
 
@@ -186,7 +186,7 @@ impl OtrModel {
                     player_id,
                     game_id: game.id,
                     score: 0,
-                    placement: tie_for_last_placement
+                    placement: tie_for_last_placement,
                 });
             }
         }
@@ -227,7 +227,7 @@ impl OtrModel {
             .map(|r| {
                 vec![Rating {
                     mu: r.rating,
-                    sigma: r.volatility
+                    sigma: r.volatility,
                 }]
             })
             .collect_vec();
@@ -264,7 +264,7 @@ impl OtrModel {
                     .expect("Player rating should exist");
                 (
                     player_id,
-                    Self::calc_rating_a(&ratings, current.rating, current.volatility, total_games)
+                    Self::calc_rating_a(&ratings, current.rating, current.volatility, total_games),
                 )
             })
             .collect()
@@ -305,8 +305,8 @@ impl OtrModel {
                     player_id,
                     Rating {
                         mu: rating.max(ABSOLUTE_RATING_FLOOR),
-                        sigma: volatility.min(DEFAULT_VOLATILITY)
-                    }
+                        sigma: volatility.min(DEFAULT_VOLATILITY),
+                    },
                 )
             })
             .collect()
@@ -326,7 +326,7 @@ impl OtrModel {
 
         Rating {
             mu: rating,
-            sigma: volatility
+            sigma: volatility,
         }
     }
 
@@ -339,7 +339,7 @@ impl OtrModel {
 
         Rating {
             mu: rating,
-            sigma: volatility
+            sigma: volatility,
         }
     }
 
@@ -425,7 +425,7 @@ impl OtrModel {
                 volatility_before: player_rating.volatility,
                 volatility_after: v.sigma,
                 timestamp: match_.start_time,
-                adjustment_type: RatingAdjustmentType::Match
+                adjustment_type: RatingAdjustmentType::Match,
             };
 
             player_rating.adjustments.push(adjustment);
@@ -444,7 +444,7 @@ impl OtrModel {
         current_rating: f64,
         rating_diff: f64,
         performance_frequency: f64,
-        scaling: f64
+        scaling: f64,
     ) -> f64 {
         if rating_diff >= 0.0 {
             return current_rating;
@@ -464,8 +464,8 @@ mod tests {
         model::{
             constants::{ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY},
             otr_model::OtrModel,
-            structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset::Osu}
-        }
+            structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset::Osu},
+        },
     };
     use approx::assert_abs_diff_eq;
     use chrono::Utc;
@@ -658,7 +658,7 @@ mod tests {
                     DEFAULT_VOLATILITY * 10.0,
                     1,
                     Some(time),
-                    Some(time)
+                    Some(time),
                 )
             })
             .collect();
@@ -696,5 +696,24 @@ mod tests {
                 DEFAULT_VOLATILITY
             );
         }
+    }
+
+    /// This test ensures the rating changes are exactly as described in our sample
+    /// match document. (Link TBD after obsidian migration)
+    #[test]
+    fn test_sample_match() {
+        let ratings = [
+            PlayerRating {
+                id: 1,
+                player_id: 6941,
+                ruleset: Osu,
+                rating: 1450.0,
+                volatility: 240.0,
+                percentile: 0.0,
+                global_rank: 0,
+                country_rank: 0,
+                adjustments: Vec::new(),
+            }
+        ];
     }
 }
