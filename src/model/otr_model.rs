@@ -707,11 +707,11 @@ mod tests {
             generate_player_rating(17703, Osu, 1050.0, 280.0, 1, Some(time), Some(time)), // parr0t
             generate_player_rating(24914, Osu, 1000.0, 290.0, 1, Some(time), Some(time)), // Zeer0
             generate_player_rating(6984, Osu, 1000.0, 280.0, 1, Some(time), Some(time)), // Railgun_
-            generate_player_rating(4150, Osu, 700.0, 270.0, 1, Some(time), Some(time)), // poisonvx
-            generate_player_rating(7774, Osu, 600.0, 270.0, 1, Some(time), Some(time)), // Skyy
+            generate_player_rating(4150, Osu, 700.0, 270.0, 1, Some(time), Some(time)),  // poisonvx
+            generate_player_rating(7774, Osu, 600.0, 270.0, 1, Some(time), Some(time)),  // Skyy
         ];
 
-        let countries = generate_country_mapping_player_ratings(&ratings, "US");
+        let countries = generate_country_mapping_player_ratings(&ratings, "XX");
         let mut model = OtrModel::new(&ratings, &countries);
 
         // Create a match with placements matching the sample data
@@ -735,11 +735,11 @@ mod tests {
             assert_abs_diff_eq!(rating.volatility, expected_volatility, epsilon = 0.1);
         };
 
-        check_rating(6941, 1455.9, 238.2);   // Isita
-        check_rating(17703, 1087.3, 277.7);  // parr0t
-        check_rating(24914, 936.4, 287.5);   // Zeer0
-        check_rating(6984, 1053.4, 277.4);   // Railgun_
-        check_rating(4150, 697.3, 269.3);    // poisonvx
-        check_rating(7774, 566.1, 268.5);    // Skyy
+        check_rating(6941, 1455.9, 238.2); // Isita
+        check_rating(17703, 1087.3, 277.7); // parr0t
+        check_rating(24914, 936.4, 287.5); // Zeer0
+        check_rating(6984, 1053.4, 277.4); // Railgun_
+        check_rating(4150, 697.3, 269.3); // poisonvx
+        check_rating(7774, 566.1, 268.5); // Skyy
     }
 }
