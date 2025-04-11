@@ -2,3 +2,4 @@
 .env
 **/*.idea
 /.vscode/launch.json
+.aider*
