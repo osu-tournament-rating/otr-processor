@@ -1,10 +1,7 @@
 use super::db_structs::{
-    Game, GameScore, Match, Player, PlayerHighestRank, PlayerRating, RatingAdjustment, RulesetData
+    Game, GameScore, Match, Player, PlayerHighestRank, PlayerRating, RatingAdjustment, ReplicationRole, RulesetData
 };
-use crate::{
-    model::structures::ruleset::Ruleset,
-    utils::progress_utils::{progress_bar, progress_bar_spinner}
-};
+use crate::{model::structures::ruleset::Ruleset, utils::progress_utils::progress_bar};
 use itertools::Itertools;
 use log::{error, info};
 use postgres_types::ToSql;
@@ -13,12 +10,13 @@ use tokio_postgres::{Client, Error, NoTls, Row};
 
 #[derive(Clone)]
 pub struct DbClient {
-    client: Arc<Client>
+    client: Arc<Client>,
+    ignore_constraints: bool
 }
 
 impl DbClient {
     // Connect to the database and return a DbClient instance
-    pub async fn connect(connection_str: &str) -> Result<Self, Error> {
+    pub async fn connect(connection_str: &str, ignore_constraints: bool) -> Result<Self, Error> {
         let (client, connection) = tokio_postgres::connect(connection_str, NoTls).await?;
 
         // Spawn the connection object to run in the background
@@ -29,7 +27,8 @@ impl DbClient {
         });
 
         Ok(DbClient {
-            client: Arc::new(client)
+            client: Arc::new(client),
+            ignore_constraints
         })
     }
 
@@ -118,6 +117,10 @@ impl DbClient {
     }
 
     pub async fn rollback_processing_statuses(&self) {
+        if self.ignore_constraints {
+            self.set_replication(ReplicationRole::Replica).await;
+        }
+
         let tournament_id_sql =
             "SELECT tournament_id FROM matches WHERE processing_status = 5 AND verification_status = 4;";
 
@@ -139,10 +142,13 @@ impl DbClient {
                 ))
             }
         } else {
+            if self.ignore_constraints {
+                self.set_replication(ReplicationRole::Origin).await;
+            }
             panic!("Failed to fetch tournament ids");
         }
 
-        let p_bar = progress_bar_spinner(2, "Rolling back tournament processing statuses".to_string()).unwrap();
+        let p_bar = progress_bar(2, "Rolling back tournament processing statuses".to_string()).unwrap();
 
         // Update tournaments
         self.client
@@ -160,6 +166,11 @@ impl DbClient {
             .expect("Failed to execute match processing status rollback");
 
         p_bar.inc(1);
+
+        if self.ignore_constraints {
+            self.set_replication(ReplicationRole::Origin).await;
+        }
+
         p_bar.finish_with_message("Completed processing status rollback for tournaments and matches")
     }
 
@@ -492,6 +503,20 @@ impl DbClient {
             .unwrap();
 
         info!("Truncated the {} table!", table);
+    }
+
+    async fn set_replication(&self, replication_role: ReplicationRole) {
+        let role_str = match replication_role {
+            ReplicationRole::Replica => "replica",
+            ReplicationRole::Origin => "origin"
+        };
+
+        self.client
+            .execute(&format!("SET session_replication_role = '{}';", role_str), &[])
+            .await
+            .unwrap();
+
+        info!("Executed SET session_replication_role = '{}';", role_str)
     }
 
     // Access the underlying Client

@@ -1,21 +1,35 @@
+use clap::Parser;
 use env_logger::Env;
 use log::{debug, info};
 use otr_processor::{
+    args::Args,
     database::db::DbClient,
     model::{otr_model::OtrModel, rating_utils::create_initial_ratings},
     utils::test_utils::generate_country_mapping_players
 };
-use std::{collections::HashMap, env};
+use std::{collections::HashMap, env, time::Instant};
 
 #[tokio::main]
 async fn main() {
-    // Initialize the logger
+    // Used for time tracking
+    let start = Instant::now();
+
+    // Initialize env vars
     let _ = dotenv::dotenv();
-    env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
+
+    // Parse args
+    let args = Args::parse();
+
+    // Initialize logger
+    env_logger::Builder::from_env(Env::default().default_filter_or(&args.log_level)).init();
+
+    if args.ignore_constraints {
+        info!("Ignoring database constraints");
+    }
 
     info!("Begin processing...");
 
-    let client: DbClient = client().await;
+    let client: DbClient = client(&args).await;
 
     // 1. Rollback processing statuses of matches & tournaments
     client.rollback_processing_statuses().await;
@@ -50,14 +64,16 @@ async fn main() {
     client.roll_forward_processing_statuses(&matches).await;
     info!("Processing statuses updated.");
 
-    info!("Processing complete");
+    let end = Instant::now();
+
+    info!("Processing complete in {:.2?}", (end - start));
 }
 
-async fn client() -> DbClient {
+async fn client(args: &Args) -> DbClient {
     let connection_string = env::var("CONNECTION_STRING")
         .expect("Expected CONNECTION_STRING environment variable for otr-db PostgreSQL connection.");
 
-    DbClient::connect(connection_string.as_str())
+    DbClient::connect(connection_string.as_str(), args.ignore_constraints)
         .await
         .expect("Expected valid database connection")
 }

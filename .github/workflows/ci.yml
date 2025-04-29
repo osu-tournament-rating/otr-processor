@@ -9,11 +9,11 @@ env:
 jobs:
   clippy:
     name: Clippy
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -23,7 +23,7 @@ jobs:
 
   rustfmt:
     name: Format
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
@@ -40,7 +40,7 @@ jobs:
 
   test:
     name: Test
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
