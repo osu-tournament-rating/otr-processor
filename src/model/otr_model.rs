@@ -1,3 +1,7 @@
+use super::{
+    constants::{BETA, KAPPA},
+    decay::DecaySystem
+};
 use crate::{
     database::db_structs::{Game, GameScore, Match, PlayerRating, RatingAdjustment},
     model::{
@@ -15,11 +19,6 @@ use openskill::{
 };
 use std::collections::HashMap;
 use strum::IntoEnumIterator;
-
-use super::{
-    constants::{BETA, KAPPA},
-    decay::DecaySystem
-};
 
 /// o!TR Model Implementation
 ///

@@ -94,3 +94,8 @@ pub struct PlayerHighestRank {
     pub country_rank_date: DateTime<FixedOffset>,
     pub player_id: i32
 }
+
+pub enum ReplicationRole {
+    Replica,
+    Origin
+}

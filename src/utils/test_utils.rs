@@ -30,7 +30,7 @@ pub fn generate_player_rating(
     let mut rng = ChaCha8Rng::seed_from_u64(42);
 
     // Generate initial rating within ±500 of target rating
-    let initial_rating = rating + rng.gen_range(-500.0..=500.0);
+    let initial_rating = rating + rng.random_range(-500.0..=500.0);
 
     let mut adjustments = Vec::with_capacity(n_adjustments as usize);
 
