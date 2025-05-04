@@ -68,7 +68,7 @@ impl DecaySystem {
         self.validate_decay(player_rating)?;
 
         let last_play_time = self.get_last_play_time(player_rating)?;
-        let decay_timestamps = self.calculate_decay_timestamps(player_rating, last_play_time);
+        let decay_timestamps = self.calculate_decay_timestamps(last_play_time);
 
         if decay_timestamps.is_empty() {
             return Ok(None);
@@ -161,22 +161,13 @@ impl DecaySystem {
         self.current_time - last_play_time < Duration::days(DECAY_DAYS as i64)
     }
 
-    /// Calculates timestamps for each decay cycle that should be applied
+    /// Calculates timestamps for each decay adjustment that can be applied.
     ///
-    /// Decay cycles:
-    /// 1. Start after DECAY_DAYS of inactivity
-    /// 2. Occur weekly thereafter
-    /// 3. Stop when either:
-    ///    - Current time is reached
-    ///    - Rating hits decay floor
-    fn calculate_decay_timestamps(
-        &self,
-        player_rating: &PlayerRating,
-        last_play_time: DateTime<FixedOffset>
-    ) -> Vec<DateTime<FixedOffset>> {
+    /// Notably, these timestamps ignore the rating floor and other
+    /// logic which would terminate decay application early.
+    fn calculate_decay_timestamps(&self, last_play_time: DateTime<FixedOffset>) -> Vec<DateTime<FixedOffset>> {
         let decay_start = last_play_time + Duration::days(DECAY_DAYS as i64);
         let mut timestamps = Vec::new();
-        let floor = self.calculate_decay_floor(player_rating);
 
         let mut current_time = decay_start;
         while current_time <= self.current_time {
@@ -188,11 +179,17 @@ impl DecaySystem {
     }
 
     /// Applies decay adjustments to a player's rating
+    /// while respecting limits such as decay floor.
     ///
-    /// For each decay cycle:
+    /// For each timestamp:
     /// 1. Calculates new rating and volatility
     /// 2. Creates a decay adjustment record
     /// 3. Updates the player's current rating and volatility
+    ///
+    /// Decay adjustments:
+    /// 1. Start after DECAY_DAYS of inactivity
+    /// 2. Occur weekly thereafter
+    /// 3. Stop when current time is reached or when the decay floor is met
     fn apply_decay_adjustments(&self, player_rating: &mut PlayerRating, timestamps: Vec<DateTime<FixedOffset>>) {
         let mut current_rating = player_rating.rating;
         let mut current_volatility = player_rating.volatility;
