@@ -697,7 +697,15 @@ mod tests {
         }
     }
 
-    /// This test ensures the rating changes are exactly as described in our sample match.
+    /// This test ensures the rating changes are exactly as described in our 
+    /// sample match. The following values for parameters are assumed (and 
+    /// this test should be updated if any of them are changed):
+    /// 
+    /// A gamma_override function of 1/k
+    /// BETA = 150
+    /// WEIGHT_A = 0.9 (and therefore WEIGHT_B = 0.1)
+    /// GAME_CORRECTION_EXPONENT = 0.5
+    /// GAME_CORRECTION_BASE = 8
     #[test]
     fn test_sample_match() {
         let time = Utc::now().fixed_offset();
@@ -782,17 +790,17 @@ mod tests {
         // Verify rating changes match expected values
         let check_rating = |player_id, expected_rating, expected_volatility| {
             let rating = model.rating_tracker.get_rating(player_id, Osu).unwrap();
-            // Paper rounds to nearest tenth, thus we use a 0.05 precision epsilon.
-            // This guarantees actual results are within 0.05 of the expected value.
+            // Sample match docs round to nearest tenth, thus we use a 0.05 precision epsilon.
+            // This guarantees actual results are within 0.1 of the expected value.
             assert_abs_diff_eq!(rating.rating, expected_rating, epsilon = 0.05);
             assert_abs_diff_eq!(rating.volatility, expected_volatility, epsilon = 0.05);
         };
 
-        check_rating(6941, 1455.9, 238.2); // Isita
-        check_rating(17703, 1087.3, 277.7); // parr0t
-        check_rating(24914, 936.4, 287.5); // Zeer0
-        check_rating(6984, 1053.4, 277.4); // Railgun_
-        check_rating(4150, 697.3, 269.3); // poisonvx
-        check_rating(7774, 566.1, 268.5); // Skyy
+        check_rating(6941, 1455.1, 238.4); // Isita
+        check_rating(17703, 1082.3, 278.0); // parr0t
+        check_rating(24914, 944.9, 287.9); // Zeer0
+        check_rating(6984, 1046.2, 277.7); // Railgun_
+        check_rating(4150, 697.7, 269.4); // poisonvx
+        check_rating(7774, 570.6, 268.7); // Skyy
     }
 }
