@@ -53,3 +53,11 @@ pub const WEIGHT_A: f64 = 0.9;
 /// Method B: Assumes last place for unplayed games
 /// Always equals 1 - WEIGHT_A to ensure weights sum to 1
 pub const WEIGHT_B: f64 = 1.0 - WEIGHT_A;
+
+/// Constant used for applying weights to matches based on length,
+/// giving longer matches larger rating differentials.
+pub const GAME_CORRECTION_CONSTANT: f64 = 0.5;
+
+/// Constant representing an "average" match length, used for
+/// game correction weighting
+pub const STANDARD_MATCH_LENGTH: f64 = 8.0;

@@ -5,7 +5,7 @@ use super::{
 use crate::{
     database::db_structs::{Game, GameScore, Match, PlayerRating, RatingAdjustment},
     model::{
-        constants::{ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY, WEIGHT_A, WEIGHT_B},
+        constants::{ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY, GAME_CORRECTION_CONSTANT, WEIGHT_A, WEIGHT_B},
         rating_tracker::RatingTracker,
         structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
     },
@@ -119,9 +119,7 @@ impl OtrModel {
         let ratings_a = self.generate_ratings_a(match_);
         let ratings_b = self.generate_ratings_b(match_);
 
-        let calc_standard = self.calc_a(ratings_a, match_);
-        let calc_penalized = self.calc_b(ratings_b, match_);
-        let final_results = self.calc_weighted_rating(&calc_standard, &calc_penalized);
+        let final_results = self.calc_new_ratings(ratings_a, ratings_b, match_);
 
         self.apply_results(match_, &final_results)
     }
@@ -244,17 +242,16 @@ impl OtrModel {
 
     // Rating Calculation Methods
 
-    /// Calculates the standard rating (Method A) for all players in a match.
-    ///
-    /// Method A handles missing games by using the player's current rating,
-    /// providing a more conservative rating change for partially played matches.
-    ///
-    /// # Arguments
-    /// * `rating_map` - Map of player IDs to their per-game ratings
-    /// * `match_` - The match being processed
-    fn calc_a(&self, rating_map: HashMap<i32, Vec<Rating>>, match_: &Match) -> HashMap<i32, Rating> {
+    /// Calculate new ratings for all players in a given match, returning a map of each player to
+    /// their new rating.
+    fn calc_new_ratings(
+        &self,
+        rating_map_a: HashMap<i32, Vec<Rating>>,
+        rating_map_b: HashMap<i32, Vec<Rating>>,
+        match_: &Match
+    ) -> HashMap<i32, Rating> {
         let total_games = match_.games.len();
-        rating_map
+        rating_map_a
             .into_iter()
             .map(|(player_id, ratings)| {
                 let current = self
@@ -263,82 +260,56 @@ impl OtrModel {
                     .expect("Player rating should exist");
                 (
                     player_id,
-                    Self::calc_rating_a(&ratings, current.rating, current.volatility, total_games)
+                    Self::calc_weighted_rating(
+                        &ratings,
+                        &rating_map_b[&player_id],
+                        current.rating,
+                        current.volatility,
+                        total_games
+                    )
                 )
             })
             .collect()
     }
 
-    /// Calculates the penalized rating (Method B) for all players in a match.
-    ///
-    /// Method B uses the actual ratings calculated with missed games counted as losses,
-    /// providing a more punitive rating change for partially played matches.
-    fn calc_b(&self, rating_map: HashMap<i32, Vec<Rating>>, match_: &Match) -> HashMap<i32, Rating> {
-        let total_games = match_.games.len();
-        rating_map
-            .into_iter()
-            .map(|(player_id, ratings)| (player_id, Self::calc_rating_b(&ratings, total_games)))
-            .collect()
-    }
+    /// Calculate a new weighted, game-corrected rating for a player given tentative "A" and "B"
+    /// ratings for a specific match.
+    fn calc_weighted_rating(
+        ratings_a: &[Rating],
+        ratings_b: &[Rating],
+        current_rating: f64,
+        current_volatility: f64,
+        total_games: usize
+    ) -> Rating {
+        // calculate the total rating and volatility changes
+        let rating_change_a: f64 = ratings_a.iter().map(|r| r.mu - current_rating).sum();
+        let rating_change_b: f64 = ratings_b.iter().map(|r| r.mu - current_rating).sum();
+        let volatility_change_a: f64 = ratings_a
+            .iter()
+            .map(|r| 1.0 - (r.sigma / current_volatility).powi(2))
+            .sum();
+        let volatility_change_b: f64 = ratings_b
+            .iter()
+            .map(|r| 1.0 - (r.sigma / current_volatility).powi(2))
+            .sum();
 
-    /// Combines Method A and B ratings using weighted average.
-    ///
-    /// The final rating is calculated as:
-    /// - Rating = (WEIGHT_A × Method A) + (WEIGHT_B × Method B)
-    /// - Volatility = √(WEIGHT_A × σ²_A + WEIGHT_B × σ²_B)
-    ///
-    /// Ensures the final rating stays within system bounds:
-    /// - Rating ≥ ABSOLUTE_RATING_FLOOR
-    /// - Volatility ≤ DEFAULT_VOLATILITY
-    fn calc_weighted_rating(&self, map_a: &HashMap<i32, Rating>, map_b: &HashMap<i32, Rating>) -> HashMap<i32, Rating> {
-        map_a
-            .keys()
-            .map(|&player_id| {
-                let result_a = map_a.get(&player_id).expect("Player should have Method A rating");
-                let result_b = map_b.get(&player_id).expect("Player should have Method B rating");
+        // calculate weighted rating changes based on A and B weights
+        let weighted_rating_change: f64 =
+            (WEIGHT_A * rating_change_a + WEIGHT_B * rating_change_b) / (total_games as f64);
+        let weighted_volatility_change: f64 =
+            (WEIGHT_A * volatility_change_a + WEIGHT_B * volatility_change_b) / (total_games as f64);
 
-                let rating = WEIGHT_A * result_a.mu + WEIGHT_B * result_b.mu;
-                let volatility = (WEIGHT_A * result_a.sigma.powf(2.0) + WEIGHT_B * result_b.sigma.powf(2.0)).sqrt();
+        // apply game-correction factor
+        let game_correction_multiplier = (total_games as f64 / 8.0).powf(GAME_CORRECTION_CONSTANT);
+        let corrected_rating_change: f64 = weighted_rating_change * game_correction_multiplier;
+        let corrected_volatility_change: f64 = weighted_volatility_change * game_correction_multiplier;
 
-                (
-                    player_id,
-                    Rating {
-                        mu: rating.max(ABSOLUTE_RATING_FLOOR),
-                        sigma: volatility.min(DEFAULT_VOLATILITY)
-                    }
-                )
-            })
-            .collect()
-    }
-
-    /// Calculates Method A rating for a player.
-    fn calc_rating_a(ratings: &[Rating], current_rating: f64, current_volatility: f64, total_games: usize) -> Rating {
-        let played_games = ratings.len();
-        let unplayed_games = total_games - played_games;
-
-        let rating_sum: f64 = ratings.iter().map(|r| r.mu).sum();
-        let rating = (rating_sum + current_rating * unplayed_games as f64) / total_games as f64;
-
-        let volatility_sum: f64 = ratings.iter().map(|r| r.sigma.powf(2.0)).sum();
-        let volatility =
-            ((volatility_sum + current_volatility.powf(2.0) * unplayed_games as f64) / total_games as f64).sqrt();
+        let new_rating: f64 = current_rating + corrected_rating_change;
+        let new_volatility: f64 = current_volatility * (1.0 - corrected_volatility_change).sqrt();
 
         Rating {
-            mu: rating,
-            sigma: volatility
-        }
-    }
-
-    /// Calculates Method B rating for a player.
-    ///
-    /// Note: Missing games are pre-calculated as losses in `generate_penalized_ratings`
-    fn calc_rating_b(ratings: &[Rating], total_games: usize) -> Rating {
-        let rating = ratings.iter().map(|r| r.mu).sum::<f64>() / total_games as f64;
-        let volatility = (ratings.iter().map(|r| r.sigma.powf(2.0)).sum::<f64>() / total_games as f64).sqrt();
-
-        Rating {
-            mu: rating,
-            sigma: volatility
+            mu: new_rating.max(ABSOLUTE_RATING_FLOOR),
+            sigma: new_volatility.min(DEFAULT_VOLATILITY)
         }
     }
 
@@ -697,10 +668,10 @@ mod tests {
         }
     }
 
-    /// This test ensures the rating changes are exactly as described in our 
-    /// sample match. The following values for parameters are assumed (and 
+    /// This test ensures the rating changes are exactly as described in our
+    /// sample match. The following values for parameters are assumed (and
     /// this test should be updated if any of them are changed):
-    /// 
+    ///
     /// A gamma_override function of 1/k
     /// BETA = 150
     /// WEIGHT_A = 0.9 (and therefore WEIGHT_B = 0.1)
