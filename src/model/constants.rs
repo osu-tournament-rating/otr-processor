@@ -33,10 +33,6 @@ pub const OSU_INITIAL_RATING_CEILING: f64 = MULTIPLIER * 30.0; // 1800.0
 /// Minimum possible initial rating in the osu! ruleset before decay
 pub const OSU_INITIAL_RATING_FLOOR: f64 = MULTIPLIER * 5.0; // 300.0
 
-/// Scaling factor applied to rating changes based on performance frequency
-/// Lower values reduce the impact of infrequent participation
-pub const PERFORMANCE_SCALING_FACTOR: f64 = 0.3;
-
 /// Tau parameter for the PlackettLuce rating model
 /// Controls the system's confidence in new ratings
 pub const TAU: f64 = DEFAULT_VOLATILITY / 100.0;

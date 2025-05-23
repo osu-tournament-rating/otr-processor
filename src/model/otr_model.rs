@@ -414,22 +414,6 @@ impl OtrModel {
             self.rating_tracker.insert_or_update(&[player_rating])
         }
     }
-
-    /// Applies a scaled performance penalty to negative changes in rating.
-    fn performance_scaled_rating(
-        current_rating: f64,
-        rating_diff: f64,
-        performance_frequency: f64,
-        scaling: f64
-    ) -> f64 {
-        if rating_diff >= 0.0 {
-            return current_rating;
-        }
-
-        // Rating differential is used with a scaling factor
-        // to determine final rating change
-        current_rating - (scaling * (rating_diff.abs() * performance_frequency))
-    }
 }
 
 #[cfg(test)]
@@ -578,39 +562,6 @@ mod tests {
         assert_eq!(rating_3.country_rank, 2);
         assert_eq!(rating_2.country_rank, 3);
         assert_eq!(rating_1.country_rank, 4);
-    }
-
-    /// Tests that the performance scaling system correctly reduces rating changes
-    /// based on participation frequency.
-    #[test]
-    fn test_performance_scaling_partial_participation() {
-        // Setup test scenario: player participates in 1/10 maps
-        let initial_rating = 1000.0;
-        let rating_change = -100.0;
-        let participation_frequency = 0.1; // 1 out of 10 maps
-        let scaling_factor = 1.0;
-
-        let scaled_rating =
-            OtrModel::performance_scaled_rating(initial_rating, rating_change, participation_frequency, scaling_factor);
-
-        // Player should lose 10% of the normal rating change
-        // 1000 - (100 * 0.1) = 990
-        assert_abs_diff_eq!(scaled_rating, 990.0, epsilon = 0.001);
-    }
-
-    /// Tests that positive rating changes are not affected by performance scaling.
-    #[test]
-    fn test_performance_scaling_positive_change() {
-        let initial_rating = 1000.0;
-        let rating_change = 100.0;
-        let participation_frequency = 0.1;
-        let scaling_factor = 1.0;
-
-        let scaled_rating =
-            OtrModel::performance_scaled_rating(initial_rating, rating_change, participation_frequency, scaling_factor);
-
-        // Positive changes should not be scaled
-        assert_abs_diff_eq!(scaled_rating, initial_rating, epsilon = 0.001);
     }
 
     #[test]
