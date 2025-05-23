@@ -33,10 +33,6 @@ pub const OSU_INITIAL_RATING_CEILING: f64 = MULTIPLIER * 30.0; // 1800.0
 /// Minimum possible initial rating in the osu! ruleset before decay
 pub const OSU_INITIAL_RATING_FLOOR: f64 = MULTIPLIER * 5.0; // 300.0
 
-/// Scaling factor applied to rating changes based on performance frequency
-/// Lower values reduce the impact of infrequent participation
-pub const PERFORMANCE_SCALING_FACTOR: f64 = 0.3;
-
 /// Tau parameter for the PlackettLuce rating model
 /// Controls the system's confidence in new ratings
 pub const TAU: f64 = DEFAULT_VOLATILITY / 100.0;
@@ -53,3 +49,12 @@ pub const WEIGHT_A: f64 = 0.9;
 /// Method B: Assumes last place for unplayed games
 /// Always equals 1 - WEIGHT_A to ensure weights sum to 1
 pub const WEIGHT_B: f64 = 1.0 - WEIGHT_A;
+
+/// Constant used for applying weights to matches based on match length.
+/// Increasing this value will increase the magnitude of rating changes
+/// for longer matches.
+pub const GAME_CORRECTION_CONSTANT: f64 = 0.5;
+
+/// Constant representing an approximate match length (in games), used for
+/// game correction weighting
+pub const STANDARD_MATCH_LENGTH: f64 = 8.0;
