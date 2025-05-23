@@ -721,17 +721,15 @@ mod tests {
         // Verify rating changes match expected values
         let check_rating = |player_id, expected_rating, expected_volatility| {
             let rating = model.rating_tracker.get_rating(player_id, Osu).unwrap();
-            // Sample match docs round to nearest tenth, thus we use a 0.05 precision epsilon.
-            // This guarantees actual results are within 0.1 of the expected value.
-            assert_abs_diff_eq!(rating.rating, expected_rating, epsilon = 0.05);
-            assert_abs_diff_eq!(rating.volatility, expected_volatility, epsilon = 0.05);
+            assert_abs_diff_eq!(rating.rating, expected_rating, epsilon = 0.001);
+            assert_abs_diff_eq!(rating.volatility, expected_volatility, epsilon = 0.001);
         };
 
-        check_rating(6941, 1455.1, 238.4); // Isita
-        check_rating(17703, 1082.3, 278.0); // parr0t
-        check_rating(24914, 944.9, 287.9); // Zeer0
-        check_rating(6984, 1046.2, 277.7); // Railgun_
-        check_rating(4150, 697.7, 269.4); // poisonvx
-        check_rating(7774, 570.6, 268.7); // Skyy
+        check_rating(6941, 1455.08671, 238.41371); // Isita
+        check_rating(17703, 1082.30468, 278.02613); // parr0t
+        check_rating(24914, 944.89401, 287.87796); // Zeer0
+        check_rating(6984, 1046.22677, 277.72634); // Railgun_
+        check_rating(4150, 697.70141, 269.36228); // poisonvx
+        check_rating(7774, 570.60576, 268.68761); // Skyy
     }
 }
