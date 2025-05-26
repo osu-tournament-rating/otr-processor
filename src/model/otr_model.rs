@@ -741,4 +741,45 @@ mod tests {
         check_rating(4150, 697.70141, 269.36228); // poisonvx
         check_rating(7774, 570.60576, 268.68761); // Skyy
     }
+
+    /// Ensures that players not present in the rating tracker are skipped.
+    /// This is important because this can happen when a player is restricted
+    /// or otherwise can't be fetched from the osu! API, or when a player was 
+    /// recently added to the system and has not yet been processed by the DataWorkerService.
+    #[test]
+    fn test_player_not_in_rating_tracker_skipped() {
+        // Create a model with only 2 players in the rating tracker
+        let player_ratings = vec![
+            generate_player_rating(1, Osu, 1000.0, 100.0, 1, None, None),
+            generate_player_rating(2, Osu, 1000.0, 100.0, 1, None, None),
+        ];
+
+        let countries = generate_country_mapping_player_ratings(&player_ratings, "US");
+        let model = OtrModel::new(&player_ratings, &countries);
+
+        // Create a game with 3 players, where player 3 is NOT in the rating tracker
+        let placements = vec![
+            generate_placement(1, 1), // Player 1 - 1st place
+            generate_placement(2, 2), // Player 2 - 2nd place  
+            generate_placement(3, 3), // Player 3 - 3rd place (NOT in rating tracker)
+        ];
+
+        let game = generate_game(1, &placements);
+
+        // Rate the game - should only process players 1 and 2
+        let rating_result = model.rate(&game, &Osu);
+
+        // Verify only players 1 and 2 are in the results
+        assert_eq!(rating_result.len(), 2, "Should only process players present in rating tracker");
+        assert!(rating_result.contains_key(&1), "Player 1 should be processed");
+        assert!(rating_result.contains_key(&2), "Player 2 should be processed");
+        assert!(!rating_result.contains_key(&3), "Player 3 should NOT be processed");
+
+        // Verify the ratings for processed players are reasonable
+        let result_1 = rating_result.get(&1).unwrap();
+        let result_2 = rating_result.get(&2).unwrap();
+        
+        // Player 1 (1st place) should have higher rating than Player 2 (2nd place)
+        assert!(result_1.mu > result_2.mu, "Player 1 should have higher rating than Player 2");
+    }
 }
