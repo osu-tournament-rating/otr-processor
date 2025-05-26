@@ -433,7 +433,7 @@ mod tests {
         model::{
             constants::{ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY},
             otr_model::OtrModel,
-            structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset::Osu}
+            structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset::*}
         }
     };
     use approx::assert_abs_diff_eq;
@@ -744,7 +744,7 @@ mod tests {
 
     /// Ensures that players not present in the rating tracker are skipped.
     /// This is important because this can happen when a player is restricted
-    /// or otherwise can't be fetched from the osu! API, or when a player was 
+    /// or otherwise can't be fetched from the osu! API, or when a player was
     /// recently added to the system and has not yet been processed by the DataWorkerService.
     #[test]
     fn test_player_not_in_rating_tracker_skipped() {
@@ -760,7 +760,7 @@ mod tests {
         // Create a game with 3 players, where player 3 is NOT in the rating tracker
         let placements = vec![
             generate_placement(1, 1), // Player 1 - 1st place
-            generate_placement(2, 2), // Player 2 - 2nd place  
+            generate_placement(2, 2), // Player 2 - 2nd place
             generate_placement(3, 3), // Player 3 - 3rd place (NOT in rating tracker)
         ];
 
@@ -770,7 +770,11 @@ mod tests {
         let rating_result = model.rate(&game, &Osu);
 
         // Verify only players 1 and 2 are in the results
-        assert_eq!(rating_result.len(), 2, "Should only process players present in rating tracker");
+        assert_eq!(
+            rating_result.len(),
+            2,
+            "Should only process players present in rating tracker"
+        );
         assert!(rating_result.contains_key(&1), "Player 1 should be processed");
         assert!(rating_result.contains_key(&2), "Player 2 should be processed");
         assert!(!rating_result.contains_key(&3), "Player 3 should NOT be processed");
@@ -778,8 +782,184 @@ mod tests {
         // Verify the ratings for processed players are reasonable
         let result_1 = rating_result.get(&1).unwrap();
         let result_2 = rating_result.get(&2).unwrap();
-        
+
         // Player 1 (1st place) should have higher rating than Player 2 (2nd place)
-        assert!(result_1.mu > result_2.mu, "Player 1 should have higher rating than Player 2");
+        assert!(
+            result_1.mu > result_2.mu,
+            "Player 1 should have higher rating than Player 2"
+        );
+    }
+
+    /// Tests that players with ratings in different rulesets than the match ruleset
+    /// are handled correctly (they should be skipped since they don't have a rating
+    /// for the specific ruleset being played).
+    #[test]
+    fn test_player_with_different_ruleset_rating_skipped() {
+        // Create players with ratings in different rulesets
+        let player_ratings = vec![
+            generate_player_rating(1, Osu, 1200.0, 100.0, 1, None, None), // Has Osu rating
+            generate_player_rating(2, Osu, 1000.0, 100.0, 1, None, None), // Has Osu rating
+            generate_player_rating(3, Taiko, 1200.0, 100.0, 1, None, None), // Has Taiko rating only
+            generate_player_rating(4, Catch, 1300.0, 100.0, 1, None, None), // Has Catch rating only
+        ];
+
+        let countries = generate_country_mapping_player_ratings(&player_ratings, "US");
+        let model = OtrModel::new(&player_ratings, &countries);
+
+        // Create an Osu game with all 4 players
+        let placements = vec![
+            generate_placement(1, 1), // Player 1 - 1st place (has Osu rating)
+            generate_placement(2, 2), // Player 2 - 2nd place (has Osu rating)
+            generate_placement(3, 3), // Player 3 - 3rd place (has Taiko rating only)
+            generate_placement(4, 4), // Player 4 - 4th place (has Catch rating only)
+        ];
+
+        let game = generate_game(1, &placements);
+
+        // Rate the game for Osu ruleset - should only process players 1 and 2
+        let rating_result = model.rate(&game, &Osu);
+
+        // Verify only players with Osu ratings are processed
+        assert_eq!(
+            rating_result.len(),
+            2,
+            "Should only process players with ratings for the match ruleset"
+        );
+        assert!(
+            rating_result.contains_key(&1),
+            "Player 1 (Osu rating) should be processed"
+        );
+        assert!(
+            rating_result.contains_key(&2),
+            "Player 2 (Osu rating) should be processed"
+        );
+        assert!(
+            !rating_result.contains_key(&3),
+            "Player 3 (Taiko rating only) should NOT be processed"
+        );
+        assert!(
+            !rating_result.contains_key(&4),
+            "Player 4 (Catch rating only) should NOT be processed"
+        );
+
+        // Verify that players with different ruleset ratings still exist in the tracker for their respective rulesets
+        assert!(
+            model.rating_tracker.get_rating(3, Taiko).is_some(),
+            "Player 3 should have Taiko rating"
+        );
+        assert!(
+            model.rating_tracker.get_rating(4, Catch).is_some(),
+            "Player 4 should have Catch rating"
+        );
+        assert!(
+            model.rating_tracker.get_rating(3, Osu).is_none(),
+            "Player 3 should NOT have Osu rating"
+        );
+        assert!(
+            model.rating_tracker.get_rating(4, Osu).is_none(),
+            "Player 4 should NOT have Osu rating"
+        );
+    }
+
+    /// Tests that match processing works correctly when some players have ratings
+    /// for different rulesets than the match ruleset.
+    #[test]
+    fn test_match_processing_with_mixed_ruleset_players() {
+        // Create players with ratings in different rulesets
+        let player_ratings = vec![
+            generate_player_rating(1, Osu, 1000.0, 100.0, 1, None, None), // Has Osu rating
+            generate_player_rating(2, Osu, 1100.0, 100.0, 1, None, None), // Has Osu rating
+            generate_player_rating(3, Taiko, 1200.0, 100.0, 1, None, None), // Has Taiko rating only
+        ];
+
+        let countries = generate_country_mapping_player_ratings(&player_ratings, "US");
+        let mut model = OtrModel::new(&player_ratings, &countries);
+
+        // Create an Osu match with games that include the Taiko-only player
+        let placements_game1 = vec![
+            generate_placement(1, 1), // Player 1 - 1st place (has Osu rating)
+            generate_placement(2, 2), // Player 2 - 2nd place (has Osu rating)
+            generate_placement(3, 3), // Player 3 - 3rd place (has Taiko rating only)
+        ];
+
+        let placements_game2 = vec![
+            generate_placement(2, 1), // Player 2 - 1st place (has Osu rating)
+            generate_placement(1, 2), // Player 1 - 2nd place (has Osu rating)
+            generate_placement(3, 3), // Player 3 - 3rd place (has Taiko rating only)
+        ];
+
+        let games = vec![generate_game(1, &placements_game1), generate_game(2, &placements_game2)];
+
+        let matches = vec![generate_match(1, Osu, &games, Utc::now().fixed_offset())];
+
+        // Store initial ratings for comparison
+        let initial_rating_1 = model.rating_tracker.get_rating(1, Osu).unwrap().rating;
+        let initial_rating_2 = model.rating_tracker.get_rating(2, Osu).unwrap().rating;
+        let initial_rating_3_taiko = model.rating_tracker.get_rating(3, Taiko).unwrap().rating;
+
+        // Process the match
+        model.process(&matches);
+
+        // Verify that only Osu players have updated ratings
+        let final_rating_1 = model.rating_tracker.get_rating(1, Osu).unwrap();
+        let final_rating_2 = model.rating_tracker.get_rating(2, Osu).unwrap();
+        let final_rating_3_taiko = model.rating_tracker.get_rating(3, Taiko).unwrap();
+
+        // Osu players should have changed ratings
+        assert_ne!(
+            final_rating_1.rating, initial_rating_1,
+            "Player 1 Osu rating should have changed"
+        );
+        assert_ne!(
+            final_rating_2.rating, initial_rating_2,
+            "Player 2 Osu rating should have changed"
+        );
+
+        // Taiko player's rating should remain unchanged since they weren't processed in the Osu match
+        assert_eq!(
+            final_rating_3_taiko.rating, initial_rating_3_taiko,
+            "Player 3 Taiko rating should remain unchanged"
+        );
+
+        // Player 3 should not have an Osu rating
+        assert!(
+            model.rating_tracker.get_rating(3, Osu).is_none(),
+            "Player 3 should not have Osu rating"
+        );
+
+        // Verify that Osu players have match adjustments
+        let adjustments_1 = model.rating_tracker.get_rating_adjustments(1, Osu).unwrap();
+        let adjustments_2 = model.rating_tracker.get_rating_adjustments(2, Osu).unwrap();
+        let adjustments_3_taiko = model.rating_tracker.get_rating_adjustments(3, Taiko).unwrap();
+
+        assert_eq!(
+            adjustments_1.len(),
+            2,
+            "Player 1 should have Initial + Match adjustments for Osu"
+        );
+        assert_eq!(
+            adjustments_2.len(),
+            2,
+            "Player 2 should have Initial + Match adjustments for Osu"
+        );
+        assert_eq!(
+            adjustments_3_taiko.len(),
+            1,
+            "Player 3 should only have Initial adjustment for Taiko"
+        );
+
+        // Verify the last adjustment types
+        assert_eq!(
+            adjustments_1.last().unwrap().adjustment_type,
+            RatingAdjustmentType::Match
+        );
+        assert_eq!(
+            adjustments_2.last().unwrap().adjustment_type,
+            RatingAdjustmentType::Match
+        );
+        assert_eq!(
+            adjustments_3_taiko.last().unwrap().adjustment_type,
+            RatingAdjustmentType::Initial
+        );
     }
 }
