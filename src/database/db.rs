@@ -70,7 +70,7 @@ impl DbClient {
         for row in rows {
             let match_id = row.get::<_, i32>("match_id");
             let game_id = row.get::<_, i32>("game_id");
-            let score_id = row.get::<_, i32>("game_score_id"); // Ensuring the score has the correct game_id
+            let score_id = row.get::<_, i32>("game_score_id");
 
             matches_map
                 .entry(match_id)
@@ -205,6 +205,10 @@ impl DbClient {
         }
     }
 
+    /// Fetches all players from the database with their ruleset data.
+    /// If a player has no ruleset data, they will not be included.
+    /// This is important because a player could be in the system but still
+    /// be waiting for the dataworker to process their data.
     pub async fn get_players(&self) -> Vec<Player> {
         info!("Fetching players...");
         let mut players: Vec<Player> = Vec::new();
@@ -223,10 +227,10 @@ impl DbClient {
 
         let mut current_player_id = -1;
         let mut current_ruleset_data: Vec<RulesetData> = Vec::new();
-        
+
         for (i, row) in rows.iter().enumerate() {
             let player_id = row.get::<_, i32>("player_id");
-            
+
             // If we're at the end of the loop, or the player id has changed, save the previous player's ruleset data.
             if player_id != current_player_id || i == rows.len() - 1 {
                 // If they had no ruleset data, the `current_ruleset_data` vector will be empty.
@@ -235,13 +239,13 @@ impl DbClient {
                         last_player.ruleset_data = Some(current_ruleset_data.clone());
                     }
                 }
-                
+
                 // Start a new player
                 current_player_id = player_id;
 
                 // Clear out previous player's ruleset data
                 current_ruleset_data.clear();
-                
+
                 let player = Player {
                     id: row.get("player_id"),
                     username: row.get("username"),
@@ -251,13 +255,13 @@ impl DbClient {
                 };
                 players.push(player);
             }
-            
+
             // Push this row's ruleset data
-            if let Some(ruleset_data) = self.ruleset_data_from_row(&row) {
+            if let Some(ruleset_data) = self.ruleset_data_from_row(row) {
                 current_ruleset_data.push(ruleset_data);
             }
         }
-        
+
         info!("Players fetched");
         players
     }

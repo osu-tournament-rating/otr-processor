@@ -192,30 +192,37 @@ impl OtrModel {
         }
     }
 
+    /// # Rate Game
     /// Calculates ratings for a single game using the PlackettLuce model.
     /// We pass in the Ruleset to avoid situations where the Game's ruleset
     /// is different from the tournament's Ruleset.
     ///
-    /// # Returns
+    /// ## Returns
     /// Returns a mapping of player IDs to their calculated ratings for this game.
     ///
-    /// # Panics
+    /// ## Panics
     /// Panics if a player doesn't have an existing rating for the game's ruleset.
+    /// This happens when a player has no ruleset data and the processor
+    /// attempts to rate a game for them.
     fn rate(&self, game: &Game, ruleset: &Ruleset) -> HashMap<i32, Rating> {
         let mut player_ratings = Vec::new();
         let mut placements = Vec::new();
 
-        // Build input vectors maintaining index correlation
         for score in &game.scores {
-            let rating = self
-                .rating_tracker
-                .get_rating(score.player_id, *ruleset)
-                .unwrap_or_else(|| {
-                    panic!(
-                        "Player {}: No rating found when rating game [game: {:?} | ruleset: {:?}]",
-                        score.player_id, game, ruleset
-                    )
-                });
+            let Some(rating) = self.rating_tracker.get_rating(score.player_id, *ruleset) else {
+                // If the player is present in the score, but not
+                // present in the rating tracker,
+                // then they are in the system but have not yet
+                // been picked up by the DataWorkerService. Thus,
+                // they have no ruleset data and need to wait until
+                // the dataworker has processed their data.
+                //
+                // We cannot process here because we don't know what the
+                // player's initial rating would be. If we fallback to the
+                // default rating, that can throw the entire system out of
+                // balance.
+                continue;
+            };
 
             player_ratings.push(rating);
             placements.push(score.placement as usize);
@@ -376,11 +383,13 @@ impl OtrModel {
                     self.rating_tracker.insert_or_update(&[updated.clone()]);
                 }
             } else {
-                log::warn!(
-                    "No rating found for player [Id: {} | Ruleset: {:?}]",
-                    player_id,
-                    match_.ruleset
-                );
+                // Player not present in the rating tracker.
+                // This means they are a player, but do not have
+                // any data from the DataWorkerService. This is common when:
+                //
+                // 1. The player is restricted or otherwise can't be fetched from the osu! API
+                // 2. The player was recently added to the system and has not yet been processed by the DataWorkerService
+                continue;
             }
         }
     }
