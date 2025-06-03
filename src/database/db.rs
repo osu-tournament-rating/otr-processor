@@ -130,8 +130,8 @@ impl DbClient {
         let mut match_update_sql = Vec::new();
         let id_result = self.client.query(tournament_id_sql, &[]).await;
 
-        if id_result.is_ok() {
-            for row in id_result.unwrap().iter() {
+        if let Ok(rows) = id_result {
+            for row in rows.iter() {
                 tournament_update_sql.push(format!(
                     "UPDATE tournaments SET processing_status = 4 \
                 WHERE id = {};\n",
@@ -273,8 +273,10 @@ impl DbClient {
         let global_rank = row.try_get::<_, i32>("global_rank");
         let earliest_global_rank = row.try_get::<_, Option<i32>>("earliest_global_rank");
 
-        if ruleset.is_ok() && global_rank.is_ok() && earliest_global_rank.is_ok() {
-            let parsed_ruleset = Ruleset::try_from(ruleset.unwrap());
+        if let (Ok(ruleset_val), Ok(global_rank_val), Ok(earliest_global_rank_val)) =
+            (ruleset, global_rank, earliest_global_rank)
+        {
+            let parsed_ruleset = Ruleset::try_from(ruleset_val);
             if parsed_ruleset.is_err() {
                 // Return nothing
                 return None;
@@ -282,8 +284,8 @@ impl DbClient {
 
             return Some(RulesetData {
                 ruleset: parsed_ruleset.unwrap(),
-                global_rank: global_rank.unwrap(),
-                earliest_global_rank: earliest_global_rank.unwrap()
+                global_rank: global_rank_val,
+                earliest_global_rank: earliest_global_rank_val
             });
         }
 
@@ -568,21 +570,15 @@ impl DbClient {
         let data = matches.iter().map(|f| f.id).collect_vec();
         let match_id_str = data.into_iter().join(",");
 
-        let match_update_sql = format!(
-            "UPDATE matches SET processing_status \
-        = 5 WHERE id = ANY(ARRAY[{}])",
-            match_id_str
-        );
+        let match_update_sql =
+            format!("UPDATE matches SET processing_status = 5 WHERE id = ANY(ARRAY[{match_id_str}])");
 
         self.client.execute(match_update_sql.as_str(), &[]).await.unwrap();
     }
 
     async fn truncate_table(&self, table: &str) {
         self.client
-            .execute(
-                format!("TRUNCATE TABLE {} RESTART IDENTITY CASCADE", table).as_str(),
-                &[]
-            )
+            .execute(format!("TRUNCATE TABLE {table} RESTART IDENTITY CASCADE").as_str(), &[])
             .await
             .unwrap();
 
@@ -596,11 +592,11 @@ impl DbClient {
         };
 
         self.client
-            .execute(&format!("SET session_replication_role = '{}';", role_str), &[])
+            .execute(&format!("SET session_replication_role = '{role_str}';"), &[])
             .await
             .unwrap();
 
-        info!("Executed SET session_replication_role = '{}';", role_str)
+        info!("Executed SET session_replication_role = '{role_str}';")
     }
 
     // Access the underlying Client

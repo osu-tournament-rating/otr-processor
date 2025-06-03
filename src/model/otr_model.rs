@@ -20,7 +20,7 @@ use openskill::{
     model::{model::Model, plackett_luce::PlackettLuce},
     rating::{Rating, TeamRating}
 };
-use std::collections::HashMap;
+use std::{collections::HashMap, slice::from_ref};
 use strum::IntoEnumIterator;
 
 /// o!TR Model Implementation
@@ -347,7 +347,7 @@ impl OtrModel {
                 .map(|r| r.ruleset)
                 .expect("Leaderboard should not be empty");
 
-            let progress = progress_bar(leaderboard.len() as u64, format!("Applying decay: [{:?}]", ruleset));
+            let progress = progress_bar(leaderboard.len() as u64, format!("Applying decay: [{ruleset:?}]"));
 
             let mut updated_ratings = Vec::new();
             for rating in leaderboard {
@@ -380,7 +380,7 @@ impl OtrModel {
             if let Some(rating) = self.rating_tracker.get_rating(player_id, match_.ruleset) {
                 let mut current = rating.clone();
                 if let Ok(Some(updated)) = decay_system.decay(&mut current) {
-                    self.rating_tracker.insert_or_update(&[updated.clone()]);
+                    self.rating_tracker.insert_or_update(from_ref(updated));
                 }
             } else {
                 // Player not present in the rating tracker.
