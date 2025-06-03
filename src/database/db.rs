@@ -7,6 +7,8 @@ use log::{error, info};
 use postgres_types::ToSql;
 use std::{collections::HashMap, sync::Arc};
 use tokio_postgres::{Client, Error, NoTls, Row};
+use bytes::Bytes;
+use futures::SinkExt;
 
 #[derive(Clone)]
 pub struct DbClient {
@@ -317,56 +319,58 @@ impl DbClient {
         info!("Rating adjustments saved");
     }
 
-    /// Save all rating adjustments in a single batch query
+    /// Save all rating adjustments in a single batch query using PostgreSQL COPY with modern async approach
     async fn save_rating_adjustments(&self, adjustment_mapping: &HashMap<i32, Vec<RatingAdjustment>>) {
-        // Prepare the base query
-        let base_query = "INSERT INTO rating_adjustments (player_id, ruleset, player_rating_id, match_id, \
-        rating_before, rating_after, volatility_before, volatility_after, timestamp, adjustment_type) \
-        VALUES ";
+        if adjustment_mapping.is_empty() {
+            return;
+        }
 
-        // Collect parameters for batch insertion
-        let mut values: Vec<String> = Vec::new();
+        let copy_query = "COPY rating_adjustments (player_id, ruleset, player_rating_id, match_id, \
+        rating_before, rating_after, volatility_before, volatility_after, timestamp, adjustment_type) \
+        FROM STDIN WITH (FORMAT TEXT, DELIMITER E'\\t')";
 
         let p_bar = progress_bar(
             adjustment_mapping.len() as u64,
-            "Creating rating adjustment queries".to_string()
+            "Saving rating adjustments".to_string()
         )
         .unwrap();
+
+        let sink = self.client.copy_in(copy_query).await
+            .expect("Failed to initiate COPY IN operation");
+        
+        tokio::pin!(sink);
+
         for (player_rating_id, adjustments) in adjustment_mapping.iter() {
             for adjustment in adjustments {
-                // Create a tuple for each adjustment
-                let match_id = adjustment.match_id.map_or("NULL".to_string(), |id| id.to_string());
+                let match_id_str = adjustment.match_id
+                    .map(|id| id.to_string())
+                    .unwrap_or_else(|| "\\N".to_string());
 
-                let value_tuple = format!(
-                    "({}, {}, {}, {}, {}, {}, {}, {}, '{}', {})",
+                let row_data = format!(
+                    "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
                     adjustment.player_id,
                     adjustment.ruleset as i32,
                     player_rating_id,
-                    match_id,
+                    match_id_str,
                     adjustment.rating_before,
                     adjustment.rating_after,
                     adjustment.volatility_before,
                     adjustment.volatility_after,
-                    adjustment.timestamp.format("%Y-%m-%d %H:%M:%S"), // Assuming timestamp is NaiveDateTime
+                    adjustment.timestamp.format("%Y-%m-%d %H:%M:%S"),
                     adjustment.adjustment_type as i32
                 );
-                values.push(value_tuple);
-            }
 
+                let data_bytes = Bytes::from(row_data.into_bytes());
+                sink.send(data_bytes).await
+                    .expect("Failed to send data to COPY operation");
+            }
             p_bar.inc(1);
         }
 
+        sink.close().await
+            .expect("Failed to finalize COPY operation");
+
         p_bar.finish();
-
-        // Combine the query with all the values
-        let full_query = format!("{}{}", base_query, values.join(", "));
-        let empty: Vec<String> = Vec::new();
-
-        // Execute the batch query
-        self.client
-            .execute_raw(&full_query, &empty)
-            .await
-            .expect("Failed to execute bulk insert");
     }
 
     /// Saves multiple PlayerRatings, returning a vector of primary keys
