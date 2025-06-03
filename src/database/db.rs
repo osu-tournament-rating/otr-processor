@@ -319,7 +319,7 @@ impl DbClient {
         info!("Rating adjustments saved");
     }
 
-    /// Save all rating adjustments in a single batch query using PostgreSQL COPY with modern async approach
+    /// Save all rating adjustments in a single batch query using PostgreSQL COPY
     async fn save_rating_adjustments(&self, adjustment_mapping: &HashMap<i32, Vec<RatingAdjustment>>) {
         if adjustment_mapping.is_empty() {
             return;
@@ -458,7 +458,7 @@ impl DbClient {
             self.batch_insert_highest_ranks(&new_ranks).await;
         }
 
-        // Update existing ranks individually (updates can't be batched with COPY)
+        // Update existing ranks
         if !updates.is_empty() {
             let update_pbar = progress_bar(updates.len() as u64, "Updating existing highest ranks".to_string()).unwrap();
             for rating in updates {
