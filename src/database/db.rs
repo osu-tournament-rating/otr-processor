@@ -2,6 +2,8 @@ use super::db_structs::{
     Game, GameScore, Match, Player, PlayerHighestRank, PlayerRating, RatingAdjustment, ReplicationRole, RulesetData
 };
 use crate::{model::structures::ruleset::Ruleset, utils::progress_utils::progress_bar};
+use bytes::Bytes;
+use futures::SinkExt;
 use itertools::Itertools;
 use log::{error, info};
 use postgres_types::ToSql;
@@ -317,70 +319,84 @@ impl DbClient {
         info!("Rating adjustments saved");
     }
 
-    /// Save all rating adjustments in a single batch query
+    /// Save all rating adjustments in a single batch query using PostgreSQL COPY
     async fn save_rating_adjustments(&self, adjustment_mapping: &HashMap<i32, Vec<RatingAdjustment>>) {
-        // Prepare the base query
-        let base_query = "INSERT INTO rating_adjustments (player_id, ruleset, player_rating_id, match_id, \
+        if adjustment_mapping.is_empty() {
+            return;
+        }
+
+        let copy_query = "COPY rating_adjustments (player_id, ruleset, player_rating_id, match_id, \
         rating_before, rating_after, volatility_before, volatility_after, timestamp, adjustment_type) \
-        VALUES ";
+        FROM STDIN WITH (FORMAT TEXT, DELIMITER E'\\t')";
 
-        // Collect parameters for batch insertion
-        let mut values: Vec<String> = Vec::new();
+        let p_bar = progress_bar(adjustment_mapping.len() as u64, "Saving rating adjustments".to_string()).unwrap();
 
-        let p_bar = progress_bar(
-            adjustment_mapping.len() as u64,
-            "Creating rating adjustment queries".to_string()
-        )
-        .unwrap();
+        let sink = self
+            .client
+            .copy_in(copy_query)
+            .await
+            .expect("Failed to initiate COPY IN operation");
+
+        tokio::pin!(sink);
+
         for (player_rating_id, adjustments) in adjustment_mapping.iter() {
             for adjustment in adjustments {
-                // Create a tuple for each adjustment
-                let match_id = adjustment.match_id.map_or("NULL".to_string(), |id| id.to_string());
+                let match_id_str = adjustment
+                    .match_id
+                    .map(|id| id.to_string())
+                    .unwrap_or_else(|| "\\N".to_string());
 
-                let value_tuple = format!(
-                    "({}, {}, {}, {}, {}, {}, {}, {}, '{}', {})",
+                let row_data = format!(
+                    "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
                     adjustment.player_id,
                     adjustment.ruleset as i32,
                     player_rating_id,
-                    match_id,
+                    match_id_str,
                     adjustment.rating_before,
                     adjustment.rating_after,
                     adjustment.volatility_before,
                     adjustment.volatility_after,
-                    adjustment.timestamp.format("%Y-%m-%d %H:%M:%S"), // Assuming timestamp is NaiveDateTime
+                    adjustment.timestamp.format("%Y-%m-%d %H:%M:%S"),
                     adjustment.adjustment_type as i32
                 );
-                values.push(value_tuple);
-            }
 
+                let data_bytes = Bytes::from(row_data.into_bytes());
+                sink.send(data_bytes)
+                    .await
+                    .expect("Failed to send data to COPY operation");
+            }
             p_bar.inc(1);
         }
 
+        sink.close().await.expect("Failed to finalize COPY operation");
+
         p_bar.finish();
-
-        // Combine the query with all the values
-        let full_query = format!("{}{}", base_query, values.join(", "));
-        let empty: Vec<String> = Vec::new();
-
-        // Execute the batch query
-        self.client
-            .execute_raw(&full_query, &empty)
-            .await
-            .expect("Failed to execute bulk insert");
     }
 
-    /// Saves multiple PlayerRatings, returning a vector of primary keys
+    /// Saves multiple PlayerRatings using COPY for efficiency, returning a vector of primary keys
     async fn save_player_ratings(&self, player_ratings: &[PlayerRating]) -> Vec<i32> {
-        // Create a list of value placeholders
-        let mut query = "INSERT INTO player_ratings (player_id, ruleset, rating, volatility, \
-                     percentile, global_rank, country_rank) VALUES"
-            .to_string();
-        let mut value_placeholders: Vec<String> = Vec::new();
+        if player_ratings.is_empty() {
+            error!("No player_rating data to save to database");
+            panic!();
+        }
 
-        for rating in player_ratings.iter() {
-            // Directly embed the values into the query string
-            value_placeholders.push(format!(
-                "({}, {}, {}, {}, {}, {}, {})",
+        let copy_query = "COPY player_ratings (player_id, ruleset, rating, volatility, \
+            percentile, global_rank, country_rank) \
+            FROM STDIN WITH (FORMAT TEXT, DELIMITER E'\\t')";
+
+        let sink = self
+            .client
+            .copy_in(copy_query)
+            .await
+            .expect("Failed to initiate COPY IN operation for player_ratings");
+
+        tokio::pin!(sink);
+
+        let p_bar = progress_bar(player_ratings.len() as u64, "Saving player ratings".to_string()).unwrap();
+
+        for rating in player_ratings {
+            let row_data = format!(
+                "{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
                 rating.player_id,
                 rating.ruleset as i32,
                 rating.rating,
@@ -388,22 +404,35 @@ impl DbClient {
                 rating.percentile,
                 rating.global_rank,
                 rating.country_rank
-            ));
+            );
+
+            let data_bytes = Bytes::from(row_data.into_bytes());
+            sink.send(data_bytes)
+                .await
+                .expect("Failed to send data to COPY operation");
+
+            p_bar.inc(1);
         }
 
-        query += &value_placeholders.join(", ");
-        query += " RETURNING id";
+        sink.close()
+            .await
+            .expect("Failed to finalize COPY operation for player_ratings");
 
-        if value_placeholders.is_empty() {
-            error!("No player_rating data to save to database");
-            panic!();
-        }
+        p_bar.finish();
 
-        // Execute the batch insert
-        let rows = self.client.query(query.as_str(), &[]).await.unwrap();
+        // Query back the IDs - we need to match on the unique combination of fields
+        // Since we just inserted these records, we can order by ID and take the last N records
+        let count = player_ratings.len() as i64;
+        let rows = self
+            .client
+            .query("SELECT id FROM player_ratings ORDER BY id DESC LIMIT $1", &[&count])
+            .await
+            .unwrap();
 
-        // Collect and return the IDs
-        rows.iter().map(|row| row.get("id")).collect()
+        // Reverse to get them in insertion order
+        let mut ids: Vec<i32> = rows.iter().map(|row| row.get("id")).collect();
+        ids.reverse();
+        ids
     }
 
     async fn insert_or_update_highest_ranks(&self, player_ratings: &[PlayerRating]) {
@@ -411,25 +440,81 @@ impl DbClient {
         let current_highest_ranks = self.get_highest_ranks().await;
 
         info!("Found {} highest ranks", current_highest_ranks.len());
-        // If the current rank is None, create it. If the current rank is Some and
-        // either the PlayerRating's global rank or country rank is higher than the current highest
-        // rank, update it.
-        //
-        // Only update values which are higher than the current highest rank
 
-        let pbar = progress_bar(player_ratings.len() as u64, "Updating highest ranks".to_string()).unwrap();
+        let pbar = progress_bar(player_ratings.len() as u64, "Processing highest ranks".to_string()).unwrap();
+
+        let mut new_ranks = Vec::new();
+        let mut updates = Vec::new();
 
         for rating in player_ratings {
             if let Some(Some(current_rank)) = current_highest_ranks.get(&(rating.player_id, rating.ruleset)) {
                 if rating.global_rank < current_rank.global_rank {
-                    self.update_highest_rank(rating.player_id, rating).await;
+                    updates.push(rating);
                 }
             } else {
-                self.insert_highest_rank(rating.player_id, rating).await;
+                new_ranks.push(rating);
             }
-
             pbar.inc(1);
         }
+
+        pbar.finish_with_message("Processed highest ranks classification");
+
+        // Batch insert new ranks using COPY
+        if !new_ranks.is_empty() {
+            self.batch_insert_highest_ranks(&new_ranks).await;
+        }
+
+        // Update existing ranks
+        if !updates.is_empty() {
+            let update_pbar =
+                progress_bar(updates.len() as u64, "Updating existing highest ranks".to_string()).unwrap();
+            for rating in updates {
+                self.update_highest_rank(rating.player_id, rating).await;
+                update_pbar.inc(1);
+            }
+            update_pbar.finish();
+        }
+    }
+
+    async fn batch_insert_highest_ranks(&self, player_ratings: &[&PlayerRating]) {
+        let copy_query = "COPY player_highest_ranks (player_id, ruleset, global_rank, global_rank_date, country_rank, country_rank_date) \
+            FROM STDIN WITH (FORMAT TEXT, DELIMITER E'\\t')";
+
+        let sink = self
+            .client
+            .copy_in(copy_query)
+            .await
+            .expect("Failed to initiate COPY IN operation for player_highest_ranks");
+
+        tokio::pin!(sink);
+
+        let p_bar = progress_bar(player_ratings.len() as u64, "Inserting new highest ranks".to_string()).unwrap();
+
+        for rating in player_ratings {
+            let timestamp = rating.adjustments.last().unwrap().timestamp;
+            let row_data = format!(
+                "{}\t{}\t{}\t{}\t{}\t{}\n",
+                rating.player_id,
+                rating.ruleset as i32,
+                rating.global_rank,
+                timestamp.format("%Y-%m-%d %H:%M:%S"),
+                rating.country_rank,
+                timestamp.format("%Y-%m-%d %H:%M:%S")
+            );
+
+            let data_bytes = Bytes::from(row_data.into_bytes());
+            sink.send(data_bytes)
+                .await
+                .expect("Failed to send data to COPY operation");
+
+            p_bar.inc(1);
+        }
+
+        sink.close()
+            .await
+            .expect("Failed to finalize COPY operation for player_highest_ranks");
+
+        p_bar.finish();
     }
 
     async fn get_highest_ranks(&self) -> HashMap<(i32, Ruleset), Option<PlayerHighestRank>> {
@@ -460,21 +545,6 @@ impl DbClient {
             }
             None => HashMap::new()
         }
-    }
-
-    async fn insert_highest_rank(&self, player_id: i32, player_rating: &PlayerRating) {
-        let timestamp = player_rating.adjustments.last().unwrap().timestamp;
-        let query = "INSERT INTO player_highest_ranks (player_id, ruleset, global_rank, global_rank_date, country_rank, country_rank_date) VALUES ($1, $2, $3, $4, $5, $6)";
-        let values: &[&(dyn ToSql + Sync)] = &[
-            &player_id,
-            &(player_rating.ruleset as i32),
-            &player_rating.global_rank,
-            &timestamp,
-            &player_rating.country_rank,
-            &timestamp
-        ];
-
-        self.client.execute(query, values).await.unwrap();
     }
 
     async fn update_highest_rank(&self, player_id: i32, player_rating: &PlayerRating) {
