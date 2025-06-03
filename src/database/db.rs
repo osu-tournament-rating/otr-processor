@@ -2,13 +2,13 @@ use super::db_structs::{
     Game, GameScore, Match, Player, PlayerHighestRank, PlayerRating, RatingAdjustment, ReplicationRole, RulesetData
 };
 use crate::{model::structures::ruleset::Ruleset, utils::progress_utils::progress_bar};
+use bytes::Bytes;
+use futures::SinkExt;
 use itertools::Itertools;
 use log::{error, info};
 use postgres_types::ToSql;
 use std::{collections::HashMap, sync::Arc};
 use tokio_postgres::{Client, Error, NoTls, Row};
-use bytes::Bytes;
-use futures::SinkExt;
 
 #[derive(Clone)]
 pub struct DbClient {
@@ -329,20 +329,20 @@ impl DbClient {
         rating_before, rating_after, volatility_before, volatility_after, timestamp, adjustment_type) \
         FROM STDIN WITH (FORMAT TEXT, DELIMITER E'\\t')";
 
-        let p_bar = progress_bar(
-            adjustment_mapping.len() as u64,
-            "Saving rating adjustments".to_string()
-        )
-        .unwrap();
+        let p_bar = progress_bar(adjustment_mapping.len() as u64, "Saving rating adjustments".to_string()).unwrap();
 
-        let sink = self.client.copy_in(copy_query).await
+        let sink = self
+            .client
+            .copy_in(copy_query)
+            .await
             .expect("Failed to initiate COPY IN operation");
-        
+
         tokio::pin!(sink);
 
         for (player_rating_id, adjustments) in adjustment_mapping.iter() {
             for adjustment in adjustments {
-                let match_id_str = adjustment.match_id
+                let match_id_str = adjustment
+                    .match_id
                     .map(|id| id.to_string())
                     .unwrap_or_else(|| "\\N".to_string());
 
@@ -361,14 +361,14 @@ impl DbClient {
                 );
 
                 let data_bytes = Bytes::from(row_data.into_bytes());
-                sink.send(data_bytes).await
+                sink.send(data_bytes)
+                    .await
                     .expect("Failed to send data to COPY operation");
             }
             p_bar.inc(1);
         }
 
-        sink.close().await
-            .expect("Failed to finalize COPY operation");
+        sink.close().await.expect("Failed to finalize COPY operation");
 
         p_bar.finish();
     }
@@ -384,9 +384,12 @@ impl DbClient {
             percentile, global_rank, country_rank) \
             FROM STDIN WITH (FORMAT TEXT, DELIMITER E'\\t')";
 
-        let sink = self.client.copy_in(copy_query).await
+        let sink = self
+            .client
+            .copy_in(copy_query)
+            .await
             .expect("Failed to initiate COPY IN operation for player_ratings");
-        
+
         tokio::pin!(sink);
 
         let p_bar = progress_bar(player_ratings.len() as u64, "Saving player ratings".to_string()).unwrap();
@@ -404,13 +407,15 @@ impl DbClient {
             );
 
             let data_bytes = Bytes::from(row_data.into_bytes());
-            sink.send(data_bytes).await
+            sink.send(data_bytes)
+                .await
                 .expect("Failed to send data to COPY operation");
-            
+
             p_bar.inc(1);
         }
 
-        sink.close().await
+        sink.close()
+            .await
             .expect("Failed to finalize COPY operation for player_ratings");
 
         p_bar.finish();
@@ -418,10 +423,11 @@ impl DbClient {
         // Query back the IDs - we need to match on the unique combination of fields
         // Since we just inserted these records, we can order by ID and take the last N records
         let count = player_ratings.len() as i64;
-        let rows = self.client.query(
-            "SELECT id FROM player_ratings ORDER BY id DESC LIMIT $1",
-            &[&count]
-        ).await.unwrap();
+        let rows = self
+            .client
+            .query("SELECT id FROM player_ratings ORDER BY id DESC LIMIT $1", &[&count])
+            .await
+            .unwrap();
 
         // Reverse to get them in insertion order
         let mut ids: Vec<i32> = rows.iter().map(|row| row.get("id")).collect();
@@ -460,7 +466,8 @@ impl DbClient {
 
         // Update existing ranks
         if !updates.is_empty() {
-            let update_pbar = progress_bar(updates.len() as u64, "Updating existing highest ranks".to_string()).unwrap();
+            let update_pbar =
+                progress_bar(updates.len() as u64, "Updating existing highest ranks".to_string()).unwrap();
             for rating in updates {
                 self.update_highest_rank(rating.player_id, rating).await;
                 update_pbar.inc(1);
@@ -473,9 +480,12 @@ impl DbClient {
         let copy_query = "COPY player_highest_ranks (player_id, ruleset, global_rank, global_rank_date, country_rank, country_rank_date) \
             FROM STDIN WITH (FORMAT TEXT, DELIMITER E'\\t')";
 
-        let sink = self.client.copy_in(copy_query).await
+        let sink = self
+            .client
+            .copy_in(copy_query)
+            .await
             .expect("Failed to initiate COPY IN operation for player_highest_ranks");
-        
+
         tokio::pin!(sink);
 
         let p_bar = progress_bar(player_ratings.len() as u64, "Inserting new highest ranks".to_string()).unwrap();
@@ -493,13 +503,15 @@ impl DbClient {
             );
 
             let data_bytes = Bytes::from(row_data.into_bytes());
-            sink.send(data_bytes).await
+            sink.send(data_bytes)
+                .await
                 .expect("Failed to send data to COPY operation");
-            
+
             p_bar.inc(1);
         }
 
-        sink.close().await
+        sink.close()
+            .await
             .expect("Failed to finalize COPY operation for player_highest_ranks");
 
         p_bar.finish();
