@@ -6,13 +6,13 @@ pub const ABSOLUTE_RATING_FLOOR: f64 = 100.0;
 pub const BETA: f64 = DEFAULT_VOLATILITY / 2.0;
 
 /// Number of days a player can be inactive before their rating begins to decay
-pub const DECAY_DAYS: u64 = 121; // Approximately 4 months
+pub const DECAY_DAYS: u64 = 184; // Approximately 6 months
 
 /// Minimum rating that any player can decay to, based on their peak rating
 pub const DECAY_MINIMUM: f64 = 15.0 * MULTIPLIER;
 
 /// Amount of rating lost per decay cycle
-pub const DECAY_RATE: f64 = 0.06 * MULTIPLIER;
+pub const DECAY_RATE: f64 = 0.05 * MULTIPLIER;
 
 /// Initial volatility, higher values indicate more uncertainty in the rating
 pub const DEFAULT_VOLATILITY: f64 = 5.0 * MULTIPLIER;
@@ -27,11 +27,11 @@ pub const KAPPA: f64 = 0.0001;
 /// This brings ratings into a more readable range (e.g., 900 instead of 15)
 pub const MULTIPLIER: f64 = 60.0;
 
-/// Maximum possible initial rating in the osu! ruleset
-pub const OSU_INITIAL_RATING_CEILING: f64 = MULTIPLIER * 30.0; // 1800.0
+/// Maximum possible initial rating
+pub const INITIAL_RATING_CEILING: f64 = MULTIPLIER * 30.0; // 1800.0
 
-/// Minimum possible initial rating in the osu! ruleset before decay
-pub const OSU_INITIAL_RATING_FLOOR: f64 = MULTIPLIER * 5.0; // 300.0
+/// Minimum possible initial rating
+pub const INITIAL_RATING_FLOOR: f64 = MULTIPLIER * 5.0; // 300.0
 
 /// Tau parameter for the PlackettLuce rating model
 /// Controls the system's confidence in new ratings

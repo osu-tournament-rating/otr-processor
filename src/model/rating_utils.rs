@@ -3,13 +3,12 @@ use crate::{
     database::db_structs::{Match, Player, PlayerRating, RatingAdjustment},
     model::{
         constants,
-        constants::{DEFAULT_VOLATILITY, MULTIPLIER, OSU_INITIAL_RATING_CEILING},
+        constants::{DEFAULT_VOLATILITY, INITIAL_RATING_CEILING, INITIAL_RATING_FLOOR, MULTIPLIER},
         structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
     },
     utils::progress_utils::progress_bar
 };
 use chrono::{DateTime, Duration, FixedOffset};
-use constants::OSU_INITIAL_RATING_FLOOR;
 use std::{collections::HashMap, ops::Sub};
 
 pub fn create_initial_ratings(players: &[Player], matches: &[Match]) -> Vec<PlayerRating> {
@@ -99,7 +98,7 @@ fn initial_rating(player: &Player, ruleset: &Ruleset) -> f64 {
             // This is here because osu!track cannot track Mania4k and Mania7k separately.
             // Thus, a player_osu_ruleset_data entry exists for ManiaOther which must be
             // used specifically for earliest global rank info for these rulesets.
-            // Using the overall mania rank for the initial ratingis close enough in accuracy
+            // Using the overall mania rank for the initial rating is close enough in accuracy
             // for our purposes.
             if matches!(ruleset, Ruleset::Mania4k | Ruleset::Mania7k) {
                 // First, try to get earliest_global_rank from ManiaOther (ruleset 3)
@@ -142,32 +141,36 @@ fn mu_from_rank(rank: i32, ruleset: Ruleset) -> f64 {
     let z = (rank as f64 / mean.exp()).ln() / std_dev;
     let val = MULTIPLIER * (18.0 - (if z > 0.0 { left_slope } else { right_slope }) * z);
 
-    if val < OSU_INITIAL_RATING_FLOOR {
-        return OSU_INITIAL_RATING_FLOOR;
+    if val < INITIAL_RATING_FLOOR {
+        return INITIAL_RATING_FLOOR;
     }
 
-    if val > OSU_INITIAL_RATING_CEILING {
-        return OSU_INITIAL_RATING_CEILING;
+    if val > INITIAL_RATING_CEILING {
+        return INITIAL_RATING_CEILING;
     }
 
     val
 }
 
+/// Mean of ln(earliest_known_global_rank) for all players in a given ruleset
 fn mean_from_ruleset(ruleset: Ruleset) -> f64 {
     match ruleset {
-        Ruleset::Osu => 9.91,
-        Ruleset::Taiko => 7.59,
-        Ruleset::Catch => 6.75,
-        Ruleset::Mania4k | Ruleset::Mania7k | Ruleset::ManiaOther => 8.18
+        Ruleset::Osu => 9.99,
+        Ruleset::Taiko => 7.28,
+        Ruleset::Catch => 6.85,
+        Ruleset::Mania4k | Ruleset::ManiaOther => 8.02,
+        Ruleset::Mania7k => 6.11
     }
 }
 
+/// Standard deviation of ln(earliest_known_global_rank) for all players in a given ruleset
 fn std_dev_from_ruleset(ruleset: Ruleset) -> f64 {
     match ruleset {
-        Ruleset::Osu => 1.59,
-        Ruleset::Taiko => 1.56,
-        Ruleset::Catch => 1.54,
-        Ruleset::Mania4k | Ruleset::Mania7k | Ruleset::ManiaOther => 1.55
+        Ruleset::Osu => 1.77,
+        Ruleset::Taiko => 1.6,
+        Ruleset::Catch => 1.62,
+        Ruleset::Mania4k | Ruleset::ManiaOther => 1.54,
+        Ruleset::Mania7k => 1.59
     }
 }
 
@@ -176,7 +179,7 @@ mod tests {
     use crate::{
         database::db_structs::Player,
         model::{
-            constants::{FALLBACK_RATING, OSU_INITIAL_RATING_CEILING, OSU_INITIAL_RATING_FLOOR},
+            constants::{FALLBACK_RATING, INITIAL_RATING_CEILING, INITIAL_RATING_FLOOR},
             rating_utils::{mu_from_rank, std_dev_from_ruleset},
             structures::ruleset::Ruleset::{Catch, Mania4k, Mania7k, ManiaOther, Osu, Taiko}
         },
@@ -184,67 +187,34 @@ mod tests {
     };
 
     #[test]
-    fn test_ruleset_stddev_osu() {
-        let expected = 1.59;
-        let actual = std_dev_from_ruleset(Osu);
-
-        assert_eq!(expected, actual)
-    }
-
-    #[test]
-    fn test_ruleset_stddev_taiko() {
-        let expected = 1.56;
-        let actual = std_dev_from_ruleset(Taiko);
-
-        assert_eq!(expected, actual)
-    }
-
-    #[test]
-    fn test_ruleset_stddev_catch() {
-        let expected = 1.54;
-        let actual = std_dev_from_ruleset(Catch);
-
-        assert_eq!(expected, actual)
-    }
-
-    #[test]
-    fn test_ruleset_stddev_mania_4k_7k() {
-        let expected = 1.55;
-        let actual_4k = std_dev_from_ruleset(ManiaOther);
-        let actual_7k = std_dev_from_ruleset(Mania4k);
-
-        assert_eq!(expected, actual_4k);
-        assert_eq!(expected, actual_7k);
-    }
-
-    #[test]
     fn test_mu_from_rank_maximum() {
         let rank = 1;
-        let expected_mu = OSU_INITIAL_RATING_CEILING;
+        let expected_mu = INITIAL_RATING_CEILING;
+
+        // We do not test for Mania 7K here, as the average rank is high enough to where the
+        // rank #1 player does not reach the initial rating ceiling.
 
         let actual_mu_osu = mu_from_rank(rank, Osu);
         let actual_mu_taiko = mu_from_rank(rank, Taiko);
         let actual_mu_catch = mu_from_rank(rank, Catch);
-        let actual_mu_mania_4k = mu_from_rank(rank, ManiaOther);
-        let actual_mu_mania_7k = mu_from_rank(rank, Mania4k);
+        let actual_mu_mania_4k = mu_from_rank(rank, Mania4k);
 
         assert_eq!(expected_mu, actual_mu_osu);
         assert_eq!(expected_mu, actual_mu_taiko);
         assert_eq!(expected_mu, actual_mu_catch);
         assert_eq!(expected_mu, actual_mu_mania_4k);
-        assert_eq!(expected_mu, actual_mu_mania_7k);
     }
 
     #[test]
     fn test_mu_from_rank_minimum() {
         let rank = 10_000_000;
-        let expected_mu = OSU_INITIAL_RATING_FLOOR;
+        let expected_mu = INITIAL_RATING_FLOOR;
 
         let actual_mu_osu = mu_from_rank(rank, Osu);
         let actual_mu_taiko = mu_from_rank(rank, Taiko);
         let actual_mu_catch = mu_from_rank(rank, Catch);
-        let actual_mu_mania_4k = mu_from_rank(rank, ManiaOther);
-        let actual_mu_mania_7k = mu_from_rank(rank, Mania4k);
+        let actual_mu_mania_4k = mu_from_rank(rank, Mania4k);
+        let actual_mu_mania_7k = mu_from_rank(rank, Mania7k);
 
         assert_eq!(expected_mu, actual_mu_osu);
         assert_eq!(expected_mu, actual_mu_taiko);
