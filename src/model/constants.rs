@@ -27,11 +27,11 @@ pub const KAPPA: f64 = 0.0001;
 /// This brings ratings into a more readable range (e.g., 900 instead of 15)
 pub const MULTIPLIER: f64 = 60.0;
 
-/// Maximum possible initial rating in the osu! ruleset
-pub const OSU_INITIAL_RATING_CEILING: f64 = MULTIPLIER * 30.0; // 1800.0
+/// Maximum possible initial rating
+pub const INITIAL_RATING_CEILING: f64 = MULTIPLIER * 30.0; // 1800.0
 
-/// Minimum possible initial rating in the osu! ruleset before decay
-pub const OSU_INITIAL_RATING_FLOOR: f64 = MULTIPLIER * 5.0; // 300.0
+/// Minimum possible initial rating
+pub const INITIAL_RATING_FLOOR: f64 = MULTIPLIER * 5.0; // 300.0
 
 /// Tau parameter for the PlackettLuce rating model
 /// Controls the system's confidence in new ratings

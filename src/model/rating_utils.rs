@@ -3,13 +3,12 @@ use crate::{
     database::db_structs::{Match, Player, PlayerRating, RatingAdjustment},
     model::{
         constants,
-        constants::{DEFAULT_VOLATILITY, MULTIPLIER, OSU_INITIAL_RATING_CEILING},
+        constants::{DEFAULT_VOLATILITY, MULTIPLIER, INITIAL_RATING_CEILING, INITIAL_RATING_FLOOR},
         structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
     },
     utils::progress_utils::progress_bar
 };
 use chrono::{DateTime, Duration, FixedOffset};
-use constants::OSU_INITIAL_RATING_FLOOR;
 use std::{collections::HashMap, ops::Sub};
 
 pub fn create_initial_ratings(players: &[Player], matches: &[Match]) -> Vec<PlayerRating> {
@@ -142,12 +141,12 @@ fn mu_from_rank(rank: i32, ruleset: Ruleset) -> f64 {
     let z = (rank as f64 / mean.exp()).ln() / std_dev;
     let val = MULTIPLIER * (18.0 - (if z > 0.0 { left_slope } else { right_slope }) * z);
 
-    if val < OSU_INITIAL_RATING_FLOOR {
-        return OSU_INITIAL_RATING_FLOOR;
+    if val < INITIAL_RATING_FLOOR {
+        return INITIAL_RATING_FLOOR;
     }
 
-    if val > OSU_INITIAL_RATING_CEILING {
-        return OSU_INITIAL_RATING_CEILING;
+    if val > INITIAL_RATING_CEILING {
+        return INITIAL_RATING_CEILING;
     }
 
     val
@@ -180,7 +179,7 @@ mod tests {
     use crate::{
         database::db_structs::Player,
         model::{
-            constants::{FALLBACK_RATING, OSU_INITIAL_RATING_CEILING, OSU_INITIAL_RATING_FLOOR},
+            constants::{FALLBACK_RATING, INITIAL_RATING_CEILING, INITIAL_RATING_FLOOR},
             rating_utils::{mu_from_rank, std_dev_from_ruleset},
             structures::ruleset::Ruleset::{Catch, Mania4k, Mania7k, ManiaOther, Osu, Taiko}
         },
@@ -190,7 +189,7 @@ mod tests {
     #[test]
     fn test_mu_from_rank_maximum() {
         let rank = 1;
-        let expected_mu = OSU_INITIAL_RATING_CEILING;
+        let expected_mu = INITIAL_RATING_CEILING;
 
         let actual_mu_osu = mu_from_rank(rank, Osu);
         let actual_mu_taiko = mu_from_rank(rank, Taiko);
@@ -208,7 +207,7 @@ mod tests {
     #[test]
     fn test_mu_from_rank_minimum() {
         let rank = 10_000_000;
-        let expected_mu = OSU_INITIAL_RATING_FLOOR;
+        let expected_mu = INITIAL_RATING_FLOOR;
 
         let actual_mu_osu = mu_from_rank(rank, Osu);
         let actual_mu_taiko = mu_from_rank(rank, Taiko);
