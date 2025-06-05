@@ -69,7 +69,7 @@ pub fn create_initial_ratings(players: &[Player], matches: &[Match]) -> Vec<Play
                 };
 
                 if rating.is_nan() || rating <= 0.0 {
-                    panic!("Initial rating is NaN or <= 0.0 for player: {:?}", player);
+                    panic!("Initial rating is NaN or <= 0.0 for: {player:?}");
                 }
 
                 ratings.push(PlayerRating {
@@ -95,6 +95,31 @@ pub fn create_initial_ratings(players: &[Player], matches: &[Match]) -> Vec<Play
 fn initial_rating(player: &Player, ruleset: &Ruleset) -> f64 {
     match &player.ruleset_data {
         Some(data) => {
+            // Special handling for Mania4k and Mania7k.
+            // This is here because osu!track cannot track Mania4k and Mania7k separately.
+            // Thus, a player_osu_ruleset_data entry exists for ManiaOther which must be
+            // used specifically for earliest global rank info for these rulesets.
+            // Using the overall mania rank for the initial ratingis close enough in accuracy
+            // for our purposes.
+            if matches!(ruleset, Ruleset::Mania4k | Ruleset::Mania7k) {
+                // First, try to get earliest_global_rank from ManiaOther (ruleset 3)
+                if let Some(mania_other_data) = data.iter().find(|rd| rd.ruleset == Ruleset::ManiaOther) {
+                    if let Some(earliest_rank) = mania_other_data.earliest_global_rank {
+                        return mu_from_rank(earliest_rank, *ruleset);
+                    }
+                }
+
+                // Fallback: use global_rank from the respective ruleset
+                if let Some(ruleset_data) = data.iter().find(|rd| rd.ruleset == *ruleset) {
+                    return mu_from_rank(ruleset_data.global_rank, *ruleset);
+                }
+
+                // If no data found, use fallback rating and log a warning
+                log::warn!("No data found for player, falling back to default initial rating: [player_id: {:?}, ruleset: {:?}]", player.id, ruleset);
+                return FALLBACK_RATING;
+            }
+
+            // Handle other rulesets as normal
             let ruleset_data = data.iter().find(|rd| rd.ruleset == *ruleset);
             let rank = ruleset_data.and_then(|rd| rd.earliest_global_rank.or(Some(rd.global_rank)));
 
@@ -155,7 +180,7 @@ mod tests {
     use crate::{
         database::db_structs::Player,
         model::{
-            constants::{OSU_INITIAL_RATING_CEILING, OSU_INITIAL_RATING_FLOOR},
+            constants::{FALLBACK_RATING, OSU_INITIAL_RATING_CEILING, OSU_INITIAL_RATING_FLOOR},
             rating_utils::{mu_from_rank, std_dev_from_ruleset},
             structures::ruleset::Ruleset::{Catch, Mania4k, Mania7k, ManiaOther, Osu, Taiko}
         },
@@ -249,27 +274,90 @@ mod tests {
                 generate_ruleset_data(Osu, 1, None),
                 generate_ruleset_data(Taiko, 1, None),
                 generate_ruleset_data(Catch, 1, None),
-                generate_ruleset_data(ManiaOther, 1, None),
                 generate_ruleset_data(Mania4k, 1, None),
+                generate_ruleset_data(Mania7k, 1, None),
             ])
         };
 
         let expected_osu = mu_from_rank(1, Osu);
         let expected_taiko = mu_from_rank(1, Taiko);
         let expected_catch = mu_from_rank(1, Catch);
-        let expected_mania4k = mu_from_rank(1, ManiaOther);
-        let expected_mania7k = mu_from_rank(1, Mania4k);
+        let expected_mania4k = mu_from_rank(1, Mania4k);
+        let expected_mania7k = mu_from_rank(1, Mania7k);
 
         let actual_osu = super::initial_rating(&player, &Osu);
         let actual_taiko = super::initial_rating(&player, &Taiko);
         let actual_catch = super::initial_rating(&player, &Catch);
-        let actual_mania_4k = super::initial_rating(&player, &ManiaOther);
-        let actual_mania_7k = super::initial_rating(&player, &Mania4k);
+        let actual_mania4k = super::initial_rating(&player, &Mania4k);
+        let actual_mania7k = super::initial_rating(&player, &Mania7k);
 
         assert_eq!(expected_osu, actual_osu);
         assert_eq!(expected_taiko, actual_taiko);
         assert_eq!(expected_catch, actual_catch);
-        assert_eq!(expected_mania4k, actual_mania_4k);
-        assert_eq!(expected_mania7k, actual_mania_7k);
+        assert_eq!(expected_mania4k, actual_mania4k);
+        assert_eq!(expected_mania7k, actual_mania7k);
+    }
+
+    #[test]
+    fn test_mania4k_mania7k_initial_rating_logic() {
+        use crate::model::structures::ruleset::Ruleset::*;
+
+        // Test case 1: Player with ManiaOther earliest_global_rank - should be preferred
+        let player_with_mania_other_earliest = Player {
+            id: 1,
+            username: Some("TestPlayer1".to_string()),
+            country: None,
+            ruleset_data: Some(vec![
+                generate_ruleset_data(ManiaOther, 5000, Some(1000)), // earliest_global_rank = 1000
+                generate_ruleset_data(Mania4k, 2000, None),          // global_rank = 2000
+                generate_ruleset_data(Mania7k, 3000, None),          // global_rank = 3000
+            ])
+        };
+
+        // Both Mania4k and Mania7k should use ManiaOther's earliest_global_rank (1000)
+        let mania4k_rating = super::initial_rating(&player_with_mania_other_earliest, &Mania4k);
+        let mania7k_rating = super::initial_rating(&player_with_mania_other_earliest, &Mania7k);
+        let expected_rating_from_mania_other = mu_from_rank(1000, Mania4k); // Using rank 1000 with Mania4k ruleset
+        let expected_rating_from_mania_other_7k = mu_from_rank(1000, Mania7k); // Using rank 1000 with Mania7k ruleset
+
+        assert_eq!(mania4k_rating, expected_rating_from_mania_other);
+        assert_eq!(mania7k_rating, expected_rating_from_mania_other_7k);
+
+        // Test case 2: Player without ManiaOther earliest_global_rank - should use respective ruleset global_rank
+        let player_without_mania_other_earliest = Player {
+            id: 2,
+            username: Some("TestPlayer2".to_string()),
+            country: None,
+            ruleset_data: Some(vec![
+                generate_ruleset_data(ManiaOther, 5000, None),    // No earliest_global_rank
+                generate_ruleset_data(Mania4k, 2000, Some(1500)), // global_rank = 2000, earliest = 1500
+                generate_ruleset_data(Mania7k, 3000, Some(2500)), // global_rank = 3000, earliest = 2500
+            ])
+        };
+
+        let mania4k_rating_fallback = super::initial_rating(&player_without_mania_other_earliest, &Mania4k);
+        let mania7k_rating_fallback = super::initial_rating(&player_without_mania_other_earliest, &Mania7k);
+        let expected_mania4k_fallback = mu_from_rank(2000, Mania4k); // Using Mania4k global_rank
+        let expected_mania7k_fallback = mu_from_rank(3000, Mania7k); // Using Mania7k global_rank
+
+        assert_eq!(mania4k_rating_fallback, expected_mania4k_fallback);
+        assert_eq!(mania7k_rating_fallback, expected_mania7k_fallback);
+
+        // Test case 3: Player with no relevant data - should use FALLBACK_RATING
+        let player_no_mania_data = Player {
+            id: 3,
+            username: Some("TestPlayer3".to_string()),
+            country: None,
+            ruleset_data: Some(vec![
+                generate_ruleset_data(Osu, 1000, None),
+                generate_ruleset_data(Taiko, 2000, None),
+            ])
+        };
+
+        let mania4k_rating_no_data = super::initial_rating(&player_no_mania_data, &Mania4k);
+        let mania7k_rating_no_data = super::initial_rating(&player_no_mania_data, &Mania7k);
+
+        assert_eq!(mania4k_rating_no_data, FALLBACK_RATING);
+        assert_eq!(mania7k_rating_no_data, FALLBACK_RATING);
     }
 }

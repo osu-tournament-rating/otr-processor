@@ -35,6 +35,8 @@ thiserror = "2.0.12"
 env_logger = "0.11.6"
 clap = { version = "4.5.37", features = ["derive", "env"] }
 log = "0.4.22"
+bytes = "1.10.1"
+futures = "0.3.31"
 
 [lints.rust]
 dead_code = "allow"

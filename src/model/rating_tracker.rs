@@ -154,7 +154,8 @@ impl RatingTracker {
             Ruleset::Taiko,
             Ruleset::Catch,
             Ruleset::ManiaOther,
-            Ruleset::Mania4k
+            Ruleset::Mania4k,
+            Ruleset::Mania7k
         ];
 
         // Process global rankings for each ruleset
@@ -599,5 +600,132 @@ mod tests {
         // Verify updated country rankings
         assert_eq!(tracker.get_rating(1, Ruleset::Osu).unwrap().country_rank, 1);
         assert_eq!(tracker.get_rating(2, Ruleset::Osu).unwrap().country_rank, 2);
+    }
+
+    #[test]
+    fn test_mania7k_ranking_calculation() {
+        let mut tracker = RatingTracker::new();
+
+        // Test specifically that Mania7k gets rankings calculated with multiple players
+        let ratings = vec![
+            generate_player_rating(1, Ruleset::Mania7k, 1300.0, 100.0, 1, None, None),
+            generate_player_rating(2, Ruleset::Mania7k, 1200.0, 100.0, 1, None, None),
+            generate_player_rating(3, Ruleset::Mania7k, 1100.0, 100.0, 1, None, None),
+        ];
+
+        let country_mapping = generate_country_mapping_player_ratings(&ratings, "US");
+        tracker.set_country_mapping(country_mapping);
+        tracker.insert_or_update(&ratings);
+
+        // Before sorting, all rankings should be 0
+        for rating in &ratings {
+            let player_rating = tracker.get_rating(rating.player_id, rating.ruleset).unwrap();
+            assert_eq!(player_rating.global_rank, 0);
+            assert_eq!(player_rating.country_rank, 0);
+            assert_eq!(player_rating.percentile, 0.0);
+        }
+
+        // Sort to calculate rankings
+        tracker.sort();
+
+        // After sorting, verify Mania7k players have proper rankings
+        // Player 1 (1300.0 rating) should be rank 1
+        let p1 = tracker.get_rating(1, Ruleset::Mania7k).unwrap();
+        assert_eq!(p1.global_rank, 1);
+        assert_eq!(p1.country_rank, 1);
+        assert_abs_diff_eq!(p1.percentile, RatingTracker::calculate_percentile(1, 3).unwrap());
+
+        // Player 2 (1200.0 rating) should be rank 2
+        let p2 = tracker.get_rating(2, Ruleset::Mania7k).unwrap();
+        assert_eq!(p2.global_rank, 2);
+        assert_eq!(p2.country_rank, 2);
+        assert_abs_diff_eq!(p2.percentile, RatingTracker::calculate_percentile(2, 3).unwrap());
+
+        // Player 3 (1100.0 rating) should be rank 3
+        let p3 = tracker.get_rating(3, Ruleset::Mania7k).unwrap();
+        assert_eq!(p3.global_rank, 3);
+        assert_eq!(p3.country_rank, 3);
+        assert_abs_diff_eq!(p3.percentile, RatingTracker::calculate_percentile(3, 3).unwrap());
+
+        // Verify all rankings are non-zero (except percentile for last place which is correctly 0.0)
+        assert_ne!(p1.global_rank, 0);
+        assert_ne!(p1.country_rank, 0);
+        assert_ne!(p1.percentile, 0.0); // Should be 66.67%
+
+        assert_ne!(p2.global_rank, 0);
+        assert_ne!(p2.country_rank, 0);
+        assert_ne!(p2.percentile, 0.0); // Should be 33.33%
+
+        assert_ne!(p3.global_rank, 0);
+        assert_ne!(p3.country_rank, 0);
+        assert_eq!(p3.percentile, 0.0); // Last place is correctly 0.0%
+    }
+
+    #[test]
+    fn test_all_rulesets_get_rankings() {
+        // Integration test to verify all rulesets get proper ranking calculations
+        let mut tracker = RatingTracker::new();
+
+        // Create one player for each ruleset to verify they all get processed
+        let all_rulesets = [
+            Ruleset::Osu,
+            Ruleset::Taiko,
+            Ruleset::Catch,
+            Ruleset::ManiaOther,
+            Ruleset::Mania4k,
+            Ruleset::Mania7k
+        ];
+
+        let mut ratings = Vec::new();
+        let mut country_mapping = HashMap::new();
+
+        for (i, &ruleset) in all_rulesets.iter().enumerate() {
+            let player_id = (i + 1) as i32;
+            ratings.push(generate_player_rating(
+                player_id,
+                ruleset,
+                1000.0 + (i as f64 * 100.0),
+                100.0,
+                1,
+                None,
+                None
+            ));
+            country_mapping.insert(player_id, "US".to_string());
+        }
+
+        tracker.set_country_mapping(country_mapping);
+        tracker.insert_or_update(&ratings);
+        tracker.sort();
+
+        // Verify every ruleset has a player with proper rankings
+        for (i, &ruleset) in all_rulesets.iter().enumerate() {
+            let player_id = (i + 1) as i32;
+            let rating = tracker.get_rating(player_id, ruleset).unwrap();
+
+            // All players should have rank 1 since they're the only player in their ruleset
+            assert_eq!(
+                rating.global_rank, 1,
+                "Player {} in ruleset {:?} should have global rank 1",
+                player_id, ruleset
+            );
+            assert_eq!(
+                rating.country_rank, 1,
+                "Player {} in ruleset {:?} should have country rank 1",
+                player_id, ruleset
+            );
+
+            // Single player should have 0.0 percentile (no one below them)
+            assert_eq!(
+                rating.percentile, 0.0,
+                "Player {} in ruleset {:?} should have 0.0 percentile",
+                player_id, ruleset
+            );
+        }
+
+        // Specifically verify Mania7k works (this would fail before the fix)
+        let mania7k_player = tracker.get_rating(6, Ruleset::Mania7k).unwrap();
+        assert_eq!(mania7k_player.global_rank, 1);
+        assert_eq!(mania7k_player.country_rank, 1);
+        assert_eq!(mania7k_player.percentile, 0.0);
     }
 }
