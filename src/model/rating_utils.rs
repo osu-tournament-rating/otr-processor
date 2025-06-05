@@ -195,8 +195,8 @@ mod tests {
         let actual_mu_osu = mu_from_rank(rank, Osu);
         let actual_mu_taiko = mu_from_rank(rank, Taiko);
         let actual_mu_catch = mu_from_rank(rank, Catch);
-        let actual_mu_mania_4k = mu_from_rank(rank, ManiaOther);
-        let actual_mu_mania_7k = mu_from_rank(rank, Mania4k);
+        let actual_mu_mania_4k = mu_from_rank(rank, Mania4k);
+        let actual_mu_mania_7k = mu_from_rank(rank, Mania7k);
 
         assert_eq!(expected_mu, actual_mu_osu);
         assert_eq!(expected_mu, actual_mu_taiko);
@@ -213,8 +213,8 @@ mod tests {
         let actual_mu_osu = mu_from_rank(rank, Osu);
         let actual_mu_taiko = mu_from_rank(rank, Taiko);
         let actual_mu_catch = mu_from_rank(rank, Catch);
-        let actual_mu_mania_4k = mu_from_rank(rank, ManiaOther);
-        let actual_mu_mania_7k = mu_from_rank(rank, Mania4k);
+        let actual_mu_mania_4k = mu_from_rank(rank, Mania4k);
+        let actual_mu_mania_7k = mu_from_rank(rank, Mania7k);
 
         assert_eq!(expected_mu, actual_mu_osu);
         assert_eq!(expected_mu, actual_mu_taiko);
