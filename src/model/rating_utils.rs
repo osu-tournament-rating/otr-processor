@@ -3,7 +3,7 @@ use crate::{
     database::db_structs::{Match, Player, PlayerRating, RatingAdjustment},
     model::{
         constants,
-        constants::{DEFAULT_VOLATILITY, MULTIPLIER, INITIAL_RATING_CEILING, INITIAL_RATING_FLOOR},
+        constants::{DEFAULT_VOLATILITY, INITIAL_RATING_CEILING, INITIAL_RATING_FLOOR, MULTIPLIER},
         structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
     },
     utils::progress_utils::progress_bar
@@ -152,7 +152,7 @@ fn mu_from_rank(rank: i32, ruleset: Ruleset) -> f64 {
     val
 }
 
-/// Mean of ln(initial rank) for all players in a given ruleset
+/// Mean of ln(earliest_known_global_rank) for all players in a given ruleset
 fn mean_from_ruleset(ruleset: Ruleset) -> f64 {
     match ruleset {
         Ruleset::Osu => 9.99,
@@ -163,7 +163,7 @@ fn mean_from_ruleset(ruleset: Ruleset) -> f64 {
     }
 }
 
-/// Standard deviation of ln(initial rank) for all players in a given ruleset
+/// Standard deviation of ln(earliest_known_global_rank) for all players in a given ruleset
 fn std_dev_from_ruleset(ruleset: Ruleset) -> f64 {
     match ruleset {
         Ruleset::Osu => 1.77,
@@ -191,17 +191,18 @@ mod tests {
         let rank = 1;
         let expected_mu = INITIAL_RATING_CEILING;
 
+        // We do not test for Mania 7K here, as the average rank is high enough to where the
+        // rank #1 player does not reach the initial rating ceiling.
+
         let actual_mu_osu = mu_from_rank(rank, Osu);
         let actual_mu_taiko = mu_from_rank(rank, Taiko);
         let actual_mu_catch = mu_from_rank(rank, Catch);
         let actual_mu_mania_4k = mu_from_rank(rank, Mania4k);
-        // let actual_mu_mania_7k = mu_from_rank(rank, Mania7k);
 
         assert_eq!(expected_mu, actual_mu_osu);
         assert_eq!(expected_mu, actual_mu_taiko);
         assert_eq!(expected_mu, actual_mu_catch);
         assert_eq!(expected_mu, actual_mu_mania_4k);
-        // assert_eq!(expected_mu, actual_mu_mania_7k);
     }
 
     #[test]
