@@ -157,14 +157,14 @@ mod tests {
         model::{
             constants::{OSU_INITIAL_RATING_CEILING, OSU_INITIAL_RATING_FLOOR},
             rating_utils::{mu_from_rank, std_dev_from_ruleset},
-            structures::ruleset::Ruleset::{Catch, Mania4k, ManiaOther, Osu, Taiko}
+            structures::ruleset::Ruleset::{Catch, Mania4k, Mania7k, ManiaOther, Osu, Taiko}
         },
         utils::test_utils::generate_ruleset_data
     };
 
     #[test]
     fn test_ruleset_stddev_osu() {
-        let expected = 1.59;
+        let expected = 1.77;
         let actual = std_dev_from_ruleset(Osu);
 
         assert_eq!(expected, actual)
@@ -172,7 +172,7 @@ mod tests {
 
     #[test]
     fn test_ruleset_stddev_taiko() {
-        let expected = 1.56;
+        let expected = 1.6;
         let actual = std_dev_from_ruleset(Taiko);
 
         assert_eq!(expected, actual)
@@ -180,20 +180,26 @@ mod tests {
 
     #[test]
     fn test_ruleset_stddev_catch() {
-        let expected = 1.54;
+        let expected = 1.62;
         let actual = std_dev_from_ruleset(Catch);
 
         assert_eq!(expected, actual)
     }
 
     #[test]
-    fn test_ruleset_stddev_mania_4k_7k() {
-        let expected = 1.55;
-        let actual_4k = std_dev_from_ruleset(ManiaOther);
-        let actual_7k = std_dev_from_ruleset(Mania4k);
+    fn test_ruleset_stddev_mania_4k() {
+        let expected = 1.59;
+        let actual = std_dev_from_ruleset(Mania4k);
 
-        assert_eq!(expected, actual_4k);
-        assert_eq!(expected, actual_7k);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_ruleset_stddev_mania_7k() {
+        let expected = 1.54;
+        let actual = std_dev_from_ruleset(Mania7k);
+
+        assert_eq!(expected, actual);
     }
 
     #[test]
