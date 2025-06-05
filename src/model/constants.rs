@@ -6,7 +6,7 @@ pub const ABSOLUTE_RATING_FLOOR: f64 = 100.0;
 pub const BETA: f64 = DEFAULT_VOLATILITY / 2.0;
 
 /// Number of days a player can be inactive before their rating begins to decay
-pub const DECAY_DAYS: u64 = 121; // Approximately 4 months
+pub const DECAY_DAYS: u64 = 184; // Approximately 6 months
 
 /// Minimum rating that any player can decay to, based on their peak rating
 pub const DECAY_MINIMUM: f64 = 15.0 * MULTIPLIER;
