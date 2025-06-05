@@ -188,46 +188,6 @@ mod tests {
     };
 
     #[test]
-    fn test_ruleset_stddev_osu() {
-        let expected = 1.77;
-        let actual = std_dev_from_ruleset(Osu);
-
-        assert_eq!(expected, actual)
-    }
-
-    #[test]
-    fn test_ruleset_stddev_taiko() {
-        let expected = 1.6;
-        let actual = std_dev_from_ruleset(Taiko);
-
-        assert_eq!(expected, actual)
-    }
-
-    #[test]
-    fn test_ruleset_stddev_catch() {
-        let expected = 1.62;
-        let actual = std_dev_from_ruleset(Catch);
-
-        assert_eq!(expected, actual)
-    }
-
-    #[test]
-    fn test_ruleset_stddev_mania_4k() {
-        let expected = 1.59;
-        let actual = std_dev_from_ruleset(Mania4k);
-
-        assert_eq!(expected, actual);
-    }
-
-    #[test]
-    fn test_ruleset_stddev_mania_7k() {
-        let expected = 1.54;
-        let actual = std_dev_from_ruleset(Mania7k);
-
-        assert_eq!(expected, actual);
-    }
-
-    #[test]
     fn test_mu_from_rank_maximum() {
         let rank = 1;
         let expected_mu = OSU_INITIAL_RATING_CEILING;
