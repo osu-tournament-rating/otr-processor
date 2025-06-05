@@ -128,21 +128,25 @@ fn mu_from_rank(rank: i32, ruleset: Ruleset) -> f64 {
     val
 }
 
+/// Mean of ln(initial rank) for all players in a given ruleset
 fn mean_from_ruleset(ruleset: Ruleset) -> f64 {
     match ruleset {
-        Ruleset::Osu => 9.91,
-        Ruleset::Taiko => 7.59,
-        Ruleset::Catch => 6.75,
-        Ruleset::Mania4k | Ruleset::Mania7k | Ruleset::ManiaOther => 8.18
+        Ruleset::Osu => 9.99,
+        Ruleset::Taiko => 7.28,
+        Ruleset::Catch => 6.85,
+        Ruleset::Mania4k | Ruleset::ManiaOther => 8.02,
+        Ruleset::Mania7k => 6.11
     }
 }
 
+/// Standard deviation of ln(initial rank) for all players in a given ruleset
 fn std_dev_from_ruleset(ruleset: Ruleset) -> f64 {
     match ruleset {
-        Ruleset::Osu => 1.59,
-        Ruleset::Taiko => 1.56,
-        Ruleset::Catch => 1.54,
-        Ruleset::Mania4k | Ruleset::Mania7k | Ruleset::ManiaOther => 1.55
+        Ruleset::Osu => 1.77,
+        Ruleset::Taiko => 1.6,
+        Ruleset::Catch => 1.62,
+        Ruleset::Mania4k | Ruleset::ManiaOther => 1.54,
+        Ruleset::Mania7k => 1.59
     }
 }
 
