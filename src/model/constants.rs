@@ -12,7 +12,7 @@ pub const DECAY_DAYS: u64 = 184; // Approximately 6 months
 pub const DECAY_MINIMUM: f64 = 15.0 * MULTIPLIER;
 
 /// Amount of rating lost per decay cycle
-pub const DECAY_RATE: f64 = 0.06 * MULTIPLIER;
+pub const DECAY_RATE: f64 = 0.05 * MULTIPLIER;
 
 /// Initial volatility, higher values indicate more uncertainty in the rating
 pub const DEFAULT_VOLATILITY: f64 = 5.0 * MULTIPLIER;
