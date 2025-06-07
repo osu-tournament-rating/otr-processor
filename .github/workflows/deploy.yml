@@ -4,13 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       branch:
-        description: 'Branch to deploy from'
+        description: "Branch to deploy from"
         required: true
-        default: 'master'
+        default: "master"
       environment:
-        description: 'Environment to deploy to'
+        description: "Environment to deploy to"
         required: true
-        default: 'Staging'
+        default: "Staging"
         type: choice
         options:
           - Staging
@@ -19,7 +19,7 @@ on:
     branches:
       - master
     tags:
-      - 'v*'
+      - "[0-9][0-9][0-9][0-9].[0-9][0-9].[0-9][0-9]*"
 
 jobs:
   deploy:
@@ -43,7 +43,7 @@ jobs:
           elif [[ ${{ github.ref }} == 'refs/heads/master' ]]; then
             echo "Deploying to Staging due to push to master"
             echo "environment=staging" >> $GITHUB_OUTPUT
-          elif [[ ${{ github.ref }} == refs/tags/v* ]]; then
+          elif [[ ${{ github.ref }} == refs/tags/[0-9][0-9][0-9][0-9].[0-9][0-9].[0-9][0-9]* ]]; then
             echo "Deploying to Production due to tag creation"
             echo "environment=production" >> $GITHUB_OUTPUT
           fi
