@@ -2,7 +2,6 @@ use super::constants::FALLBACK_RATING;
 use crate::{
     database::db_structs::{Match, Player, PlayerRating, RatingAdjustment},
     model::{
-        constants,
         constants::{DEFAULT_VOLATILITY, INITIAL_RATING_CEILING, INITIAL_RATING_FLOOR, MULTIPLIER},
         structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
     },
@@ -180,8 +179,8 @@ mod tests {
         database::db_structs::Player,
         model::{
             constants::{FALLBACK_RATING, INITIAL_RATING_CEILING, INITIAL_RATING_FLOOR},
-            rating_utils::{mu_from_rank, std_dev_from_ruleset},
-            structures::ruleset::Ruleset::{Catch, Mania4k, Mania7k, ManiaOther, Osu, Taiko}
+            rating_utils::mu_from_rank,
+            structures::ruleset::Ruleset::{Catch, Mania4k, Mania7k, Osu, Taiko}
         },
         utils::test_utils::generate_ruleset_data
     };
