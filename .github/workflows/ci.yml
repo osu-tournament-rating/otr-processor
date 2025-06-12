@@ -44,14 +44,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Create .env
-        run: |
-          touch .env
-          echo "API_ROOT=${{ secrets.ENV_DEV__API_ROOT }}" >> .env
-          echo "CLIENT_ID=${{ secrets.ENV_DEV__OAUTH_CLIENT_ID }}" >> .env
-          echo "CLIENT_SECRET=${{ secrets.ENV_DEV__OAUTH_CLIENT_SECRET }}" >> .env
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
 
-      - name: Test
+      - name: Run tests
         run: cargo test
