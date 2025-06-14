@@ -34,22 +34,47 @@ jobs:
       - name: Log in to Docker Hub
         run: echo "$DOCKERHUB_TOKEN" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
 
-      - name: Determine environment
-        id: determine_env
+      - name: Determine tags
+        id: determine_tags
         run: |
-          if [[ ${{ github.event_name }} == 'workflow_dispatch' ]]; then
-            echo "Selected environment: ${{ github.event.inputs.environment }}"
-            echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
-          elif [[ ${{ github.ref }} == 'refs/heads/master' ]]; then
+          image_prefix="${DOCKERHUB_USERNAME}/otr-processor"
+          
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            if [[ "${{ github.event.inputs.environment }}" == "Staging" ]]; then
+              echo "PRIMARY_TAG=staging" >> $GITHUB_OUTPUT
+              echo "TAGS=${image_prefix}:staging" >> $GITHUB_OUTPUT
+            elif [[ "${{ github.event.inputs.environment }}" == "Production" ]]; then
+              # For manual production deployment, use 'production' tag for backward compatibility
+              echo "PRIMARY_TAG=production" >> $GITHUB_OUTPUT
+              echo "TAGS=${image_prefix}:production" >> $GITHUB_OUTPUT
+            fi
+          elif [[ "${{ github.ref }}" == "refs/heads/master" ]]; then
             echo "Deploying to Staging due to push to master"
-            echo "environment=staging" >> $GITHUB_OUTPUT
-          elif [[ ${{ github.ref }} == refs/tags/[0-9][0-9][0-9][0-9].[0-9][0-9].[0-9][0-9]* ]]; then
-            echo "Deploying to Production due to tag creation"
-            echo "environment=production" >> $GITHUB_OUTPUT
+            echo "PRIMARY_TAG=staging" >> $GITHUB_OUTPUT
+            echo "TAGS=${image_prefix}:staging" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref_type }}" == "tag" && "${{ github.ref_name }}" =~ ^[0-9]{4}\.[0-9]{2}\.[0-9]{2} ]]; then
+            echo "Deploying to Production due to tag creation: ${{ github.ref_name }}"
+            echo "PRIMARY_TAG=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            {
+              echo 'TAGS<<EOF'
+              echo "${image_prefix}:${{ github.ref_name }}"
+              echo "${image_prefix}:latest"
+              echo "${image_prefix}:production"
+              echo 'EOF'
+            } >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Build Docker image
-        run: docker build -t stagecodes/otr-processor:${{ steps.determine_env.outputs.environment }} .
-
-      - name: Push Docker image to Docker Hub
-        run: docker push stagecodes/otr-processor:${{ steps.determine_env.outputs.environment }}
+      - name: Build and push Docker image
+        run: |
+          # Build the image with the primary tag
+          docker build -t ${DOCKERHUB_USERNAME}/otr-processor:${{ steps.determine_tags.outputs.PRIMARY_TAG }} .
+          
+          # Tag and push all specified tags
+          while IFS= read -r tag; do
+            if [[ -n "$tag" ]]; then
+              echo "Tagging as: $tag"
+              docker tag ${DOCKERHUB_USERNAME}/otr-processor:${{ steps.determine_tags.outputs.PRIMARY_TAG }} $tag
+              echo "Pushing: $tag"
+              docker push $tag
+            fi
+          done <<< "${{ steps.determine_tags.outputs.TAGS }}"
