@@ -8,10 +8,12 @@ use std::collections::HashMap;
 use tokio;
 
 use super::test_helpers::TestDatabase;
+use crate::common::init_test_env;
 
 #[tokio::test]
 #[serial]
 async fn test_transaction_rollback_on_processing_failure() {
+    init_test_env();
     let test_db = TestDatabase::new().await.expect("Failed to create test database");
     test_db.seed_test_data().await.expect("Failed to seed test data");
 

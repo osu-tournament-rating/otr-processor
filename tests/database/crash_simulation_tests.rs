@@ -3,6 +3,7 @@ use std::process::Command;
 use tokio;
 
 use super::test_helpers::TestDatabase;
+use crate::common::init_test_env;
 
 /// Helper to simulate a processor crash by running it in a subprocess and killing it
 async fn simulate_crash_during_processing(test_db: &TestDatabase, crash_after_ms: u64) -> std::process::Output {
@@ -30,7 +31,7 @@ async fn simulate_crash_during_processing(test_db: &TestDatabase, crash_after_ms
     // Start the processor in a subprocess
     let mut child = Command::new(binary_path)
         .env("CONNECTION_STRING", &test_db.connection_string)
-        .env("RUST_LOG", "info")
+        .env("RUST_LOG", "warn")
         .spawn()
         .expect("Failed to start processor");
 
@@ -47,6 +48,7 @@ async fn simulate_crash_during_processing(test_db: &TestDatabase, crash_after_ms
 #[tokio::test]
 #[serial]
 async fn test_crash_leaves_database_consistent() {
+    init_test_env();
     let test_db = TestDatabase::new().await.expect("Failed to create test database");
     test_db.seed_test_data().await.expect("Failed to seed test data");
 

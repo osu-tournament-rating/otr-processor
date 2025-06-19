@@ -1,7 +1,10 @@
 use indicatif::ProgressBar;
+use log::{info, log_enabled, Level};
 
 pub fn progress_bar(len: u64, msg: String) -> Option<ProgressBar> {
-    if cfg!(test) {
+    // Only show progress bars if INFO logging is enabled
+    if !log_enabled!(Level::Info) {
+        info!("{}", msg);
         return None;
     }
 
@@ -17,7 +20,9 @@ pub fn progress_bar(len: u64, msg: String) -> Option<ProgressBar> {
 }
 
 pub fn progress_bar_spinner(len: u64, msg: String) -> Option<ProgressBar> {
-    if cfg!(test) {
+    // Only show progress bars if INFO logging is enabled
+    if !log_enabled!(Level::Info) {
+        info!("{}", msg);
         return None;
     }
 
@@ -32,7 +37,9 @@ pub fn progress_bar_spinner(len: u64, msg: String) -> Option<ProgressBar> {
 }
 
 pub fn indeterminate_bar(msg: String) -> Option<ProgressBar> {
-    if cfg!(test) {
+    // Only show progress bars if INFO logging is enabled
+    if !log_enabled!(Level::Info) {
+        info!("{}", msg);
         return None;
     }
 
