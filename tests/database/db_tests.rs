@@ -7,10 +7,12 @@ use serial_test::serial;
 use tokio;
 
 use super::test_helpers::TestDatabase;
+use crate::common::init_test_env;
 
 #[tokio::test]
 #[serial]
 async fn test_get_players() {
+    init_test_env();
     let test_db = TestDatabase::new().await.expect("Failed to create test database");
     test_db.seed_test_data().await.expect("Failed to seed test data");
 
@@ -37,6 +39,7 @@ async fn test_get_players() {
 #[tokio::test]
 #[serial]
 async fn test_get_matches() {
+    init_test_env();
     let test_db = TestDatabase::new().await.expect("Failed to create test database");
     test_db.seed_test_data().await.expect("Failed to seed test data");
 
@@ -63,6 +66,7 @@ async fn test_get_matches() {
 #[tokio::test]
 #[serial]
 async fn test_rollback_processing_statuses() {
+    init_test_env();
     let test_db = TestDatabase::new().await.expect("Failed to create test database");
     test_db.seed_test_data().await.expect("Failed to seed test data");
 
@@ -106,6 +110,7 @@ async fn test_rollback_processing_statuses() {
 #[tokio::test]
 #[serial]
 async fn test_save_results() {
+    init_test_env();
     let test_db = TestDatabase::new().await.expect("Failed to create test database");
     test_db.seed_test_data().await.expect("Failed to seed test data");
 
@@ -186,6 +191,7 @@ async fn test_save_results() {
 #[tokio::test]
 #[serial]
 async fn test_roll_forward_processing_statuses() {
+    init_test_env();
     let test_db = TestDatabase::new().await.expect("Failed to create test database");
     test_db.seed_test_data().await.expect("Failed to seed test data");
 
@@ -220,6 +226,7 @@ async fn test_roll_forward_processing_statuses() {
 #[tokio::test]
 #[serial]
 async fn test_empty_database() {
+    init_test_env();
     let test_db = TestDatabase::new().await.expect("Failed to create test database");
     // Don't seed data
 

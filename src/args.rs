@@ -10,7 +10,7 @@ pub struct Args {
     /// Ignores database constraints when processing.
     /// Allows those without access to the users table
     /// to modify the tournaments table
-    #[arg(short, long, action = clap::ArgAction::SetTrue)]
+    #[arg(short, long, env = "IGNORE_CONSTRAINTS", action = clap::ArgAction::SetTrue)]
     pub ignore_constraints: bool,
 
     /// Log level (trace, debug, info, warn, error)

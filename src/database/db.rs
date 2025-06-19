@@ -150,7 +150,7 @@ impl DbClient {
             panic!("Failed to fetch tournament ids");
         }
 
-        let p_bar = progress_bar(2, "Rolling back tournament processing statuses".to_string()).unwrap();
+        let p_bar = progress_bar(2, "Rolling back tournament processing statuses".to_string());
 
         // Update tournaments
         self.client
@@ -158,8 +158,10 @@ impl DbClient {
             .await
             .expect("Failed to batch execute tournament processing status rollback");
 
-        p_bar.inc(1);
-        p_bar.set_message("Rolling back match processing statuses");
+        if let Some(ref bar) = p_bar {
+            bar.inc(1);
+            bar.set_message("Rolling back match processing statuses");
+        }
 
         // Update matches
         self.client
@@ -167,13 +169,17 @@ impl DbClient {
             .await
             .expect("Failed to execute match processing status rollback");
 
-        p_bar.inc(1);
+        if let Some(ref bar) = p_bar {
+            bar.inc(1);
+        }
 
         if self.ignore_constraints {
             self.set_replication(ReplicationRole::Origin).await;
         }
 
-        p_bar.finish_with_message("Completed processing status rollback for tournaments and matches")
+        if let Some(bar) = p_bar {
+            bar.finish_with_message("Completed processing status rollback for tournaments and matches");
+        }
     }
 
     fn match_from_row(row: &Row) -> Match {
@@ -301,13 +307,15 @@ impl DbClient {
     }
 
     async fn save_ratings_and_adjustments_with_mapping(&self, player_ratings: &&[PlayerRating]) {
-        let p_bar = progress_bar(player_ratings.len() as u64, "Saving player ratings to db".to_string()).unwrap();
+        let p_bar = progress_bar(player_ratings.len() as u64, "Saving player ratings to db".to_string());
 
         let mut mapping: HashMap<i32, Vec<RatingAdjustment>> = HashMap::new();
         let parent_ids = self.save_player_ratings(player_ratings).await;
 
-        p_bar.inc(1);
-        p_bar.finish();
+        if let Some(ref bar) = p_bar {
+            bar.inc(1);
+            bar.finish();
+        }
 
         for (i, rating) in player_ratings.iter().enumerate() {
             let parent_id = parent_ids.get(i).unwrap();
@@ -331,7 +339,7 @@ impl DbClient {
         rating_before, rating_after, volatility_before, volatility_after, timestamp, adjustment_type) \
         FROM STDIN WITH (FORMAT TEXT, DELIMITER E'\\t')";
 
-        let p_bar = progress_bar(adjustment_mapping.len() as u64, "Saving rating adjustments".to_string()).unwrap();
+        let p_bar = progress_bar(adjustment_mapping.len() as u64, "Saving rating adjustments".to_string());
 
         let sink = self
             .client
@@ -367,12 +375,16 @@ impl DbClient {
                     .await
                     .expect("Failed to send data to COPY operation");
             }
-            p_bar.inc(1);
+            if let Some(ref bar) = p_bar {
+                bar.inc(1);
+            }
         }
 
         sink.close().await.expect("Failed to finalize COPY operation");
 
-        p_bar.finish();
+        if let Some(bar) = p_bar {
+            bar.finish();
+        }
     }
 
     /// Saves multiple PlayerRatings using COPY for efficiency, returning a vector of primary keys
@@ -394,7 +406,7 @@ impl DbClient {
 
         tokio::pin!(sink);
 
-        let p_bar = progress_bar(player_ratings.len() as u64, "Saving player ratings".to_string()).unwrap();
+        let p_bar = progress_bar(player_ratings.len() as u64, "Saving player ratings".to_string());
 
         for rating in player_ratings {
             let row_data = format!(
@@ -413,14 +425,18 @@ impl DbClient {
                 .await
                 .expect("Failed to send data to COPY operation");
 
-            p_bar.inc(1);
+            if let Some(ref bar) = p_bar {
+                bar.inc(1);
+            }
         }
 
         sink.close()
             .await
             .expect("Failed to finalize COPY operation for player_ratings");
 
-        p_bar.finish();
+        if let Some(bar) = p_bar {
+            bar.finish();
+        }
 
         // Query back the IDs - we need to match on the unique combination of fields
         // Since we just inserted these records, we can order by ID and take the last N records
@@ -443,7 +459,7 @@ impl DbClient {
 
         info!("Found {} highest ranks", current_highest_ranks.len());
 
-        let pbar = progress_bar(player_ratings.len() as u64, "Processing highest ranks".to_string()).unwrap();
+        let pbar = progress_bar(player_ratings.len() as u64, "Processing highest ranks".to_string());
 
         let mut new_ranks = Vec::new();
         let mut updates = Vec::new();
@@ -456,10 +472,14 @@ impl DbClient {
             } else {
                 new_ranks.push(rating);
             }
-            pbar.inc(1);
+            if let Some(ref bar) = pbar {
+                bar.inc(1);
+            }
         }
 
-        pbar.finish_with_message("Processed highest ranks classification");
+        if let Some(bar) = pbar {
+            bar.finish_with_message("Processed highest ranks classification");
+        }
 
         // Batch insert new ranks using COPY
         if !new_ranks.is_empty() {
@@ -468,13 +488,16 @@ impl DbClient {
 
         // Update existing ranks
         if !updates.is_empty() {
-            let update_pbar =
-                progress_bar(updates.len() as u64, "Updating existing highest ranks".to_string()).unwrap();
+            let update_pbar = progress_bar(updates.len() as u64, "Updating existing highest ranks".to_string());
             for rating in updates {
                 self.update_highest_rank(rating.player_id, rating).await;
-                update_pbar.inc(1);
+                if let Some(ref bar) = update_pbar {
+                    bar.inc(1);
+                }
             }
-            update_pbar.finish();
+            if let Some(bar) = update_pbar {
+                bar.finish();
+            }
         }
     }
 
@@ -490,7 +513,7 @@ impl DbClient {
 
         tokio::pin!(sink);
 
-        let p_bar = progress_bar(player_ratings.len() as u64, "Inserting new highest ranks".to_string()).unwrap();
+        let p_bar = progress_bar(player_ratings.len() as u64, "Inserting new highest ranks".to_string());
 
         for rating in player_ratings {
             let timestamp = rating.adjustments.last().unwrap().timestamp;
@@ -509,14 +532,18 @@ impl DbClient {
                 .await
                 .expect("Failed to send data to COPY operation");
 
-            p_bar.inc(1);
+            if let Some(ref bar) = p_bar {
+                bar.inc(1);
+            }
         }
 
         sink.close()
             .await
             .expect("Failed to finalize COPY operation for player_highest_ranks");
 
-        p_bar.finish();
+        if let Some(bar) = p_bar {
+            bar.finish();
+        }
     }
 
     async fn get_highest_ranks(&self) -> HashMap<(i32, Ruleset), Option<PlayerHighestRank>> {

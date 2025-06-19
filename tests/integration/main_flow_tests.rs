@@ -1,3 +1,6 @@
+use crate::common::init_test_env;
+use clap::Parser;
+use otr_processor::args::Args;
 use serial_test::serial;
 use std::process::Command;
 
@@ -5,6 +8,7 @@ use std::process::Command;
 #[test]
 #[serial]
 fn test_application_exits_on_connection_failure() {
+    init_test_env();
     // Build the processor binary
     let build_output = Command::new("cargo")
         .args(&["build", "--bin", "otr-processor"])
@@ -32,7 +36,7 @@ fn test_application_exits_on_connection_failure() {
             "CONNECTION_STRING",
             "host=invalid_host port=5432 user=postgres password=wrong dbname=nonexistent"
         )
-        .env("RUST_LOG", "error")
+        .env("RUST_LOG", "warn")
         .output()
         .expect("Failed to execute processor");
 
@@ -54,6 +58,7 @@ fn test_application_exits_on_connection_failure() {
 #[test]
 #[serial]
 fn test_application_exits_on_missing_connection_string() {
+    init_test_env();
     // Build the processor binary
     let build_output = Command::new("cargo")
         .args(&["build", "--bin", "otr-processor"])
@@ -83,7 +88,7 @@ fn test_application_exits_on_missing_connection_string() {
     let output = Command::new(&binary_path)
         .current_dir(&temp_dir)
         .env_clear() // Clear all environment variables
-        .env("RUST_LOG", "error")
+        .env("RUST_LOG", "warn")
         .env("PATH", std::env::var("PATH").unwrap_or_default()) // Keep PATH for system
         .output()
         .expect("Failed to execute processor");
@@ -103,4 +108,39 @@ fn test_application_exits_on_missing_connection_string() {
         "Should report missing CONNECTION_STRING. Got: {}",
         stderr
     );
+}
+
+/// Test that IGNORE_CONSTRAINTS environment variable works
+#[test]
+#[serial]
+fn test_ignore_constraints_env_var() {
+    init_test_env();
+    // Test 1: Environment variable set to true should override default
+    std::env::set_var("IGNORE_CONSTRAINTS", "true");
+    let args = Args::parse_from(&["otr-processor"]);
+    assert!(
+        args.ignore_constraints,
+        "IGNORE_CONSTRAINTS=true should set ignore_constraints to true"
+    );
+    std::env::remove_var("IGNORE_CONSTRAINTS");
+
+    // Test 2: Environment variable set to false
+    std::env::set_var("IGNORE_CONSTRAINTS", "false");
+    let args = Args::parse_from(&["otr-processor"]);
+    assert!(
+        !args.ignore_constraints,
+        "IGNORE_CONSTRAINTS=false should set ignore_constraints to false"
+    );
+    std::env::remove_var("IGNORE_CONSTRAINTS");
+
+    // Test 3: CLI argument works when no env var is set
+    let args = Args::parse_from(&["otr-processor", "--ignore-constraints"]);
+    assert!(
+        args.ignore_constraints,
+        "CLI argument should work when no env var is set"
+    );
+
+    // Test 4: Default is false when neither env var nor CLI arg is set
+    let args = Args::parse_from(&["otr-processor"]);
+    assert!(!args.ignore_constraints, "Default should be false");
 }
