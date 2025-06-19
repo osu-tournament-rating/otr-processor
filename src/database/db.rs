@@ -594,6 +594,10 @@ impl DbClient {
     pub async fn roll_forward_processing_statuses(&self, matches: &[Match]) {
         info!("Updating processing status for all matches");
 
+        if self.ignore_constraints {
+            self.set_replication(ReplicationRole::Replica).await;
+        }
+
         let data = matches.iter().map(|f| f.id).collect_vec();
         let match_id_str = data.into_iter().join(",");
 
@@ -601,6 +605,10 @@ impl DbClient {
             format!("UPDATE matches SET processing_status = 5 WHERE id = ANY(ARRAY[{match_id_str}])");
 
         self.client.execute(match_update_sql.as_str(), &[]).await.unwrap();
+
+        if self.ignore_constraints {
+            self.set_replication(ReplicationRole::Origin).await;
+        }
     }
 
     async fn truncate_table(&self, table: &str) {
