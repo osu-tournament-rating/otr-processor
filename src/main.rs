@@ -4,6 +4,7 @@ use log::{debug, info};
 use otr_processor::{
     args::Args,
     database::db::DbClient,
+    messaging::RabbitMqPublisher,
     model::{otr_model::OtrModel, rating_utils::create_initial_ratings},
     utils::test_utils::generate_country_mapping_players
 };
@@ -31,6 +32,15 @@ async fn main() {
 
     let client: DbClient = client(&args).await;
 
+    // Initialize RabbitMQ publisher
+    let mut rabbitmq_publisher = match initialize_rabbitmq().await {
+        Ok(publisher) => Some(publisher),
+        Err(e) => {
+            log::warn!("Failed to initialize RabbitMQ: {}. Continuing without messaging.", e);
+            None
+        }
+    };
+
     // BEGIN TRANSACTION - executed on the connection
     client
         .client()
@@ -49,6 +59,10 @@ async fn main() {
         let matches = client.get_matches().await;
         let players = client.get_players().await;
         debug!("Fetched {} matches and {} players.", matches.len(), players.len());
+
+        // Fetch tournament information for processed matches
+        let tournament_info = client.get_tournament_info_for_matches(&matches).await;
+        info!("Fetched tournament information for {} tournaments.", tournament_info.len());
 
         // 3. Generate initial ratings
         let initial_ratings = create_initial_ratings(&players, &matches);
@@ -74,6 +88,18 @@ async fn main() {
         client.roll_forward_processing_statuses(&matches).await;
         info!("Processing statuses updated.");
 
+        // 9. Emit messages for processed tournaments
+        if let Some(ref publisher) = rabbitmq_publisher {
+            for (tournament_id, tournament_data) in &tournament_info {
+                let action = "generateStats";
+                let correlation_id = None; // Could generate a UUID here if needed
+                match publisher.publish_tournament_processed(*tournament_id, action, correlation_id).await {
+                    Ok(_) => info!("Published tournament processed message for tournament {}: {}", tournament_id, tournament_data.name),
+                    Err(e) => log::error!("Failed to publish message for tournament {}: {}", tournament_id, e),
+                }
+            }
+        }
+
         Ok::<(), Box<dyn std::error::Error + Send + Sync>>(())
     }
     .await;
@@ -94,6 +120,7 @@ async fn main() {
                         Ok(_) => log::error!("Transaction rolled back due to commit failure"),
                         Err(rollback_err) => log::error!("Failed to rollback transaction: {}", rollback_err)
                     }
+                    cleanup_rabbitmq(&mut rabbitmq_publisher).await;
                     std::process::exit(1);
                 }
             }
@@ -108,9 +135,13 @@ async fn main() {
                     log::error!("WARNING: Transaction may be left in an inconsistent state");
                 }
             }
+            cleanup_rabbitmq(&mut rabbitmq_publisher).await;
             std::process::exit(1);
         }
     }
+
+    // Clean up RabbitMQ connection
+    cleanup_rabbitmq(&mut rabbitmq_publisher).await;
 }
 
 async fn client(args: &Args) -> DbClient {
@@ -123,6 +154,27 @@ async fn client(args: &Args) -> DbClient {
             log::error!("Failed to connect to database: {}", e);
             log::error!("Application cannot start without a valid database connection");
             std::process::exit(1);
+        }
+    }
+}
+
+async fn initialize_rabbitmq() -> Result<RabbitMqPublisher, Box<dyn std::error::Error>> {
+    let rabbitmq_url = std::env::var("RABBITMQ_URL")
+        .unwrap_or_else(|_| "amqp://admin:admin@localhost:5672".to_string());
+    
+    let routing_key = std::env::var("RABBITMQ_ROUTING_KEY")
+        .unwrap_or_else(|_| "processing.ratings.tournaments".to_string());
+
+    let mut publisher = RabbitMqPublisher::new(routing_key.clone(), routing_key);
+    publisher.connect(&rabbitmq_url).await?;
+    
+    Ok(publisher)
+}
+
+async fn cleanup_rabbitmq(publisher: &mut Option<RabbitMqPublisher>) {
+    if let Some(mut publisher) = publisher.take() {
+        if let Err(e) = publisher.close().await {
+            log::error!("Failed to close RabbitMQ connection: {}", e);
         }
     }
 }

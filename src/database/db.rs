@@ -1,5 +1,5 @@
 use super::db_structs::{
-    Game, GameScore, Match, Player, PlayerHighestRank, PlayerRating, RatingAdjustment, ReplicationRole, RulesetData
+    Game, GameScore, Match, Player, PlayerHighestRank, PlayerRating, RatingAdjustment, ReplicationRole, RulesetData, TournamentInfo
 };
 use crate::{model::structures::ruleset::Ruleset, utils::progress_utils::progress_bar};
 use bytes::Bytes;
@@ -609,6 +609,54 @@ impl DbClient {
         if self.ignore_constraints {
             self.set_replication(ReplicationRole::Origin).await;
         }
+    }
+
+    pub async fn get_tournament_info_for_matches(&self, matches: &[Match]) -> HashMap<i32, TournamentInfo> {
+        let mut tournament_info: HashMap<i32, TournamentInfo> = HashMap::new();
+        
+        if matches.is_empty() {
+            return tournament_info;
+        }
+
+        // Get unique match IDs
+        let match_ids: Vec<i32> = matches.iter().map(|m| m.id).collect();
+        let match_id_str = match_ids.iter().map(|id| id.to_string()).join(",");
+
+        // Query to get tournament information for the processed matches
+        let query = format!(
+            "SELECT DISTINCT 
+                t.id AS tournament_id,
+                t.name AS tournament_name,
+                COUNT(DISTINCT m.id) AS match_count,
+                COUNT(DISTINCT gs.player_id) AS player_count
+            FROM tournaments t
+            JOIN matches m ON t.id = m.tournament_id
+            JOIN games g ON m.id = g.match_id
+            JOIN game_scores gs ON g.id = gs.game_id
+            WHERE m.id = ANY(ARRAY[{}])
+            GROUP BY t.id, t.name",
+            match_id_str
+        );
+
+        match self.client.query(&query, &[]).await {
+            Ok(rows) => {
+                for row in rows {
+                    let tournament_id: i32 = row.get("tournament_id");
+                    let info = TournamentInfo {
+                        id: tournament_id,
+                        name: row.get("tournament_name"),
+                        match_count: row.get::<_, i64>("match_count") as i32,
+                        player_count: row.get::<_, i64>("player_count") as i32,
+                    };
+                    tournament_info.insert(tournament_id, info);
+                }
+            }
+            Err(e) => {
+                log::error!("Failed to fetch tournament information: {}", e);
+            }
+        }
+
+        tournament_info
     }
 
     async fn truncate_table(&self, table: &str) {
