@@ -108,10 +108,10 @@ impl TestDatabase {
 
         // Insert a test tournament
         client.execute(
-            "INSERT INTO tournaments (name, abbreviation, forum_url, rank_range_lower_bound, ruleset, lobby_size, processing_status, verification_status) 
+            "INSERT INTO tournaments (name, abbreviation, forum_url, rank_range_lower_bound, ruleset, lobby_size, verification_status) 
              OVERRIDING SYSTEM VALUE
              VALUES 
-             ('Test Tournament', 'TT', 'https://example.com', 0, 0, 8, 0, 4)",
+             ('Test Tournament', 'TT', 'https://example.com', 0, 0, 8, 4)",
             &[]
         ).await?;
 
@@ -121,14 +121,16 @@ impl TestDatabase {
             .get(0);
 
         // Insert test matches
-        client.execute(
-            "INSERT INTO matches (osu_id, name, start_time, end_time, processing_status, verification_status, tournament_id) 
+        client
+            .execute(
+                "INSERT INTO matches (osu_id, name, start_time, end_time, verification_status, tournament_id) 
              OVERRIDING SYSTEM VALUE
              VALUES 
-             (12345, 'Test Match 1', '2024-01-01 12:00:00+00', '2024-01-01 13:00:00+00', 4, 4, $1),
-             (12346, 'Test Match 2', '2024-01-02 12:00:00+00', '2024-01-02 13:00:00+00', 4, 4, $1)",
-            &[&tournament_id]
-        ).await?;
+             (12345, 'Test Match 1', '2024-01-01 12:00:00+00', '2024-01-01 13:00:00+00', 4, $1),
+             (12346, 'Test Match 2', '2024-01-02 12:00:00+00', '2024-01-02 13:00:00+00', 4, $1)",
+                &[&tournament_id]
+            )
+            .await?;
 
         let match_ids: Vec<i32> = client
             .query("SELECT id FROM matches ORDER BY osu_id", &[])
@@ -178,7 +180,6 @@ impl TestDatabase {
                 0,
                 0,
                 4,
-                0,
                 0
             ),
             (
@@ -200,7 +201,6 @@ impl TestDatabase {
                 0,
                 0,
                 4,
-                0,
                 0
             ),
             (
@@ -222,7 +222,6 @@ impl TestDatabase {
                 0,
                 0,
                 4,
-                0,
                 0
             ),
             (
@@ -244,7 +243,6 @@ impl TestDatabase {
                 0,
                 0,
                 4,
-                0,
                 0
             ),
             (
@@ -266,7 +264,6 @@ impl TestDatabase {
                 0,
                 0,
                 4,
-                0,
                 0
             ),
             (
@@ -288,7 +285,6 @@ impl TestDatabase {
                 0,
                 0,
                 4,
-                0,
                 0
             ),
             (
@@ -310,7 +306,6 @@ impl TestDatabase {
                 0,
                 0,
                 4,
-                0,
                 0
             ),
             (
@@ -332,7 +327,6 @@ impl TestDatabase {
                 0,
                 0,
                 4,
-                0,
                 0
             ),
             (
@@ -354,7 +348,6 @@ impl TestDatabase {
                 0,
                 0,
                 4,
-                0,
                 0
             ),
             (
@@ -376,7 +369,6 @@ impl TestDatabase {
                 0,
                 0,
                 4,
-                0,
                 0
             ),
         ];
@@ -400,18 +392,17 @@ impl TestDatabase {
             mods,
             ruleset,
             verification_status,
-            rejection_reason,
-            processing_status
+            rejection_reason
         ) in score_values
         {
             client.execute(
-                "INSERT INTO game_scores (player_id, game_id, team, score, max_combo, count50, count100, count300, count_miss, count_geki, count_katu, perfect, pass, placement, grade, mods, ruleset, verification_status, rejection_reason, processing_status) 
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)",
+                "INSERT INTO game_scores (player_id, game_id, team, score, max_combo, count50, count100, count300, count_miss, count_geki, count_katu, perfect, pass, placement, grade, mods, ruleset, verification_status, rejection_reason) 
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)",
                 &[
                     &player_id, &game_id, &team, &score, &max_combo,
                     &count50, &count100, &count300, &count_miss, &count_geki,
                     &count_katu, &perfect, &pass, &placement, &grade,
-                    &mods, &ruleset, &verification_status, &rejection_reason, &processing_status
+                    &mods, &ruleset, &verification_status, &rejection_reason
                 ]
             ).await?;
         }

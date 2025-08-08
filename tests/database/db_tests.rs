@@ -4,7 +4,6 @@ use otr_processor::{
     model::structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
 };
 use serial_test::serial;
-use tokio;
 
 use super::test_helpers::TestDatabase;
 use crate::common::init_test_env;
@@ -61,50 +60,6 @@ async fn test_get_matches() {
     assert_eq!(matches[0].games[0].scores.len(), 4);
     assert_eq!(matches[0].games[1].scores.len(), 4);
     assert_eq!(matches[1].games[0].scores.len(), 2);
-}
-
-#[tokio::test]
-#[serial]
-async fn test_rollback_processing_statuses() {
-    init_test_env();
-    let test_db = TestDatabase::new().await.expect("Failed to create test database");
-    test_db.seed_test_data().await.expect("Failed to seed test data");
-
-    let db_client = DbClient::connect(&test_db.connection_string, false)
-        .await
-        .expect("Failed to connect");
-
-    // Set some matches to processed status 5 (which is what rollback looks for)
-    let update_client = test_db.get_client().await.expect("Failed to get client");
-    update_client
-        .execute("UPDATE matches SET processing_status = 5 WHERE id IN (1, 2)", &[])
-        .await
-        .expect("Failed to update match status");
-
-    update_client
-        .execute("UPDATE tournaments SET processing_status = 5 WHERE id = 1", &[])
-        .await
-        .expect("Failed to update tournament status");
-
-    // Rollback
-    db_client.rollback_processing_statuses().await;
-
-    // Check statuses were reset to 4
-    let check_client = test_db.get_client().await.expect("Failed to get client");
-    let match_status: i32 = check_client
-        .query_one("SELECT processing_status FROM matches WHERE id = 1", &[])
-        .await
-        .expect("Failed to query")
-        .get(0);
-
-    let tournament_status: i32 = check_client
-        .query_one("SELECT processing_status FROM tournaments WHERE id = 1", &[])
-        .await
-        .expect("Failed to query")
-        .get(0);
-
-    assert_eq!(match_status, 4);
-    assert_eq!(tournament_status, 4);
 }
 
 #[tokio::test]
@@ -186,41 +141,6 @@ async fn test_save_results() {
 
     assert_eq!(rating_count, 2);
     assert_eq!(adjustment_count, 2); // We have 2 adjustments, one for each player rating
-}
-
-#[tokio::test]
-#[serial]
-async fn test_roll_forward_processing_statuses() {
-    init_test_env();
-    let test_db = TestDatabase::new().await.expect("Failed to create test database");
-    test_db.seed_test_data().await.expect("Failed to seed test data");
-
-    let db_client = DbClient::connect(&test_db.connection_string, false)
-        .await
-        .expect("Failed to connect");
-
-    // Get matches to pass to roll_forward
-    let matches = db_client.get_matches().await;
-
-    // Roll forward
-    db_client.roll_forward_processing_statuses(&matches).await;
-
-    // Check statuses were updated
-    let check_client = test_db.get_client().await.expect("Failed to get client");
-    let match_status: i32 = check_client
-        .query_one("SELECT processing_status FROM matches WHERE id = 1", &[])
-        .await
-        .expect("Failed to query")
-        .get(0);
-
-    let tournament_status: i32 = check_client
-        .query_one("SELECT processing_status FROM tournaments WHERE id = 1", &[])
-        .await
-        .expect("Failed to query")
-        .get(0);
-
-    assert_eq!(match_status, 5);
-    assert_eq!(tournament_status, 0); // Tournament status remains unchanged by roll_forward
 }
 
 #[tokio::test]

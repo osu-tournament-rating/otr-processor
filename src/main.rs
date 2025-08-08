@@ -51,13 +51,16 @@ async fn main() {
 
     // Execute all operations
     let process_result = async {
-        // 1. Rollback processing statuses of matches & tournaments
-        client.rollback_processing_statuses().await;
-        info!("Rollback processing statuses completed.");
-
-        // 2. Fetch matches and players for processing
+        // 1. Fetch matches and players for processing
         let matches = client.get_matches().await;
         let players = client.get_players().await;
+
+        if matches.is_empty() {
+            log::warn!("No matches found to process! Check that matches have verification_status=4");
+        } else {
+            info!("Found {} matches ready for processing", matches.len());
+        }
+
         debug!("Fetched {} matches and {} players.", matches.len(), players.len());
 
         // Fetch tournament information for processed matches
@@ -67,31 +70,27 @@ async fn main() {
             tournament_info.len()
         );
 
-        // 3. Generate initial ratings
+        // 2. Generate initial ratings
         let initial_ratings = create_initial_ratings(&players, &matches);
         info!("Initial ratings generated.");
 
-        // 4. Generate country mapping and set
+        // 3. Generate country mapping and set
         let country_mapping: HashMap<i32, String> = generate_country_mapping_players(&players);
         info!("Country mapping generated.");
 
-        // 5. Create the model
+        // 4. Create the model
         let mut model = OtrModel::new(&initial_ratings, &country_mapping);
         info!("OTR model created.");
 
-        // 6. Process matches
+        // 5. Process matches
         let results = model.process(&matches);
         info!("Matches processed.");
 
-        // 7. Save results in database
+        // 6. Save results in database
         client.save_results(&results).await;
         info!("Results saved to database.");
 
-        // 8. Update all match processing statuses
-        client.roll_forward_processing_statuses(&matches).await;
-        info!("Processing statuses updated.");
-
-        // 9. Emit messages for processed tournaments
+        // 7. Emit messages for processed tournaments
         if let Some(ref publisher) = rabbitmq_publisher {
             for (tournament_id, tournament_data) in &tournament_info {
                 let action = "generateStats";

@@ -1,6 +1,5 @@
 use serial_test::serial;
 use std::process::Command;
-use tokio;
 
 use super::test_helpers::TestDatabase;
 use crate::common::init_test_env;
@@ -9,7 +8,7 @@ use crate::common::init_test_env;
 async fn simulate_crash_during_processing(test_db: &TestDatabase, crash_after_ms: u64) -> std::process::Output {
     // Build the processor binary if needed
     let build_output = Command::new("cargo")
-        .args(&["build", "--bin", "otr-processor"])
+        .args(["build", "--bin", "otr-processor"])
         .output()
         .expect("Failed to execute cargo build");
 
@@ -61,14 +60,7 @@ async fn test_crash_leaves_database_consistent() {
         .expect("Failed to query")
         .get(0);
 
-    let initial_match_status: i32 = check_client
-        .query_one("SELECT processing_status FROM matches WHERE id = 1", &[])
-        .await
-        .expect("Failed to query")
-        .get(0);
-
     assert_eq!(initial_rating_count, 0, "Should start with no ratings");
-    assert_eq!(initial_match_status, 4, "Should start with status 4");
 
     // Simulate crash after 30ms (enough time to start processing but not commit)
     simulate_crash_during_processing(&test_db, 30).await;
@@ -83,17 +75,7 @@ async fn test_crash_leaves_database_consistent() {
         .expect("Failed to query")
         .get(0);
 
-    let post_crash_match_status: i32 = check_client
-        .query_one("SELECT processing_status FROM matches WHERE id = 1", &[])
-        .await
-        .expect("Failed to query")
-        .get(0);
-
     assert_eq!(post_crash_rating_count, 0, "Ratings should be rolled back after crash");
-    assert_eq!(
-        post_crash_match_status, 4,
-        "Match status should be rolled back after crash"
-    );
 
     // Verify no lingering transactions
     let active_transactions: i64 = check_client

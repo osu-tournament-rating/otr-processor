@@ -48,11 +48,9 @@ impl DbClient {
 
         // The WHERE query here does the following:
         //
-        // 1. Only consider verified tournaments with verified matches that have a processing_status of 'NeedsProcessorData'.
+        // 1. Only consider verified tournaments with verified matches.
         // 2. From these matches, we only include the games and scores which are verified.
         //
-        //  We can safely assume that for all matches awaiting processor data every
-        //     game and game score is completely done with processing
         info!("Fetching matches...");
         let rows = self.client.query("
             SELECT
@@ -65,7 +63,7 @@ impl DbClient {
                      JOIN games g ON m.id = g.match_id
                      JOIN game_scores gs ON g.id = gs.game_id
             WHERE t.verification_status = 4 AND m.verification_status = 4 AND g.verification_status = 4
-              AND gs.verification_status = 4 AND m.processing_status = 4
+              AND gs.verification_status = 4
             ORDER BY gs.id;", &[]).await.unwrap();
 
         info!("Matches fetched, iterating...");
@@ -115,72 +113,29 @@ impl DbClient {
         let mut matches = matches_map.values().cloned().collect_vec();
         matches.sort_by(|a, b| a.start_time.cmp(&b.start_time));
 
-        info!("Match fetching complete");
+        // Log any matches that have no games or games with no scores
+        for match_ in &matches {
+            if match_.games.is_empty() {
+                log::error!(
+                    "Match ID {} ('{}') has no games! This match will be skipped during processing.",
+                    match_.id,
+                    match_.name
+                );
+            } else {
+                for game in &match_.games {
+                    if game.scores.is_empty() {
+                        log::error!(
+                            "Game ID {} in Match ID {} ('{}') has no scores! This game will cause issues during processing.",
+                            game.id, match_.id, match_.name
+                        );
+                    }
+                }
+            }
+        }
+
+        info!("Match fetching complete - {} matches will be processed", matches.len());
+
         matches
-    }
-
-    pub async fn rollback_processing_statuses(&self) {
-        if self.ignore_constraints {
-            self.set_replication(ReplicationRole::Replica).await;
-        }
-
-        let tournament_id_sql =
-            "SELECT tournament_id FROM matches WHERE processing_status = 5 AND verification_status = 4;";
-
-        let mut tournament_update_sql = Vec::new();
-        let mut match_update_sql = Vec::new();
-        let id_result = self.client.query(tournament_id_sql, &[]).await;
-
-        if let Ok(rows) = id_result {
-            for row in rows.iter() {
-                tournament_update_sql.push(format!(
-                    "UPDATE tournaments SET processing_status = 4 \
-                WHERE id = {};\n",
-                    row.get::<_, i32>(0)
-                ));
-                match_update_sql.push(format!(
-                    "UPDATE matches SET processing_status = 4 WHERE \
-                    processing_status = 5 AND tournament_id = {} AND verification_status = 4;\n",
-                    row.get::<_, i32>(0)
-                ))
-            }
-        } else {
-            if self.ignore_constraints {
-                self.set_replication(ReplicationRole::Origin).await;
-            }
-            panic!("Failed to fetch tournament ids");
-        }
-
-        let p_bar = progress_bar(2, "Rolling back tournament processing statuses".to_string());
-
-        // Update tournaments
-        self.client
-            .batch_execute(tournament_update_sql.join("\n").as_str())
-            .await
-            .expect("Failed to batch execute tournament processing status rollback");
-
-        if let Some(ref bar) = p_bar {
-            bar.inc(1);
-            bar.set_message("Rolling back match processing statuses");
-        }
-
-        // Update matches
-        self.client
-            .batch_execute(match_update_sql.join("\n").as_str())
-            .await
-            .expect("Failed to execute match processing status rollback");
-
-        if let Some(ref bar) = p_bar {
-            bar.inc(1);
-        }
-
-        if self.ignore_constraints {
-            self.set_replication(ReplicationRole::Origin).await;
-        }
-
-        if let Some(bar) = p_bar {
-            bar.finish_with_message("Completed processing status rollback for tournaments and matches");
-        }
     }
 
     fn match_from_row(row: &Row) -> Match {
@@ -592,26 +547,6 @@ impl DbClient {
         self.client.execute(query, values).await.unwrap();
     }
 
-    pub async fn roll_forward_processing_statuses(&self, matches: &[Match]) {
-        info!("Updating processing status for all matches");
-
-        if self.ignore_constraints {
-            self.set_replication(ReplicationRole::Replica).await;
-        }
-
-        let data = matches.iter().map(|f| f.id).collect_vec();
-        let match_id_str = data.into_iter().join(",");
-
-        let match_update_sql =
-            format!("UPDATE matches SET processing_status = 5 WHERE id = ANY(ARRAY[{match_id_str}])");
-
-        self.client.execute(match_update_sql.as_str(), &[]).await.unwrap();
-
-        if self.ignore_constraints {
-            self.set_replication(ReplicationRole::Origin).await;
-        }
-    }
-
     pub async fn get_tournament_info_for_matches(&self, matches: &[Match]) -> HashMap<i32, TournamentInfo> {
         let mut tournament_info: HashMap<i32, TournamentInfo> = HashMap::new();
 
@@ -687,4 +622,5 @@ impl DbClient {
     pub fn client(&self) -> Arc<Client> {
         Arc::clone(&self.client)
     }
+
 }
