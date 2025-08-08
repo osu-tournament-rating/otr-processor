@@ -105,5 +105,5 @@ pub struct TournamentInfo {
     pub id: i32,
     pub name: String,
     pub match_count: i32,
-    pub player_count: i32,
+    pub player_count: i32
 }

@@ -1,5 +1,6 @@
 use super::db_structs::{
-    Game, GameScore, Match, Player, PlayerHighestRank, PlayerRating, RatingAdjustment, ReplicationRole, RulesetData, TournamentInfo
+    Game, GameScore, Match, Player, PlayerHighestRank, PlayerRating, RatingAdjustment, ReplicationRole, RulesetData,
+    TournamentInfo
 };
 use crate::{model::structures::ruleset::Ruleset, utils::progress_utils::progress_bar};
 use bytes::Bytes;
@@ -613,7 +614,7 @@ impl DbClient {
 
     pub async fn get_tournament_info_for_matches(&self, matches: &[Match]) -> HashMap<i32, TournamentInfo> {
         let mut tournament_info: HashMap<i32, TournamentInfo> = HashMap::new();
-        
+
         if matches.is_empty() {
             return tournament_info;
         }
@@ -646,7 +647,7 @@ impl DbClient {
                         id: tournament_id,
                         name: row.get("tournament_name"),
                         match_count: row.get::<_, i64>("match_count") as i32,
-                        player_count: row.get::<_, i64>("player_count") as i32,
+                        player_count: row.get::<_, i64>("player_count") as i32
                     };
                     tournament_info.insert(tournament_id, info);
                 }

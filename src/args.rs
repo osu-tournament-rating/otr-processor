@@ -25,11 +25,7 @@ pub struct Args {
     pub log_level: String,
 
     /// RabbitMQ connection URL
-    #[arg(
-        long,
-        env = "RABBITMQ_URL",
-        help = "RabbitMQ connection URL"
-    )]
+    #[arg(long, env = "RABBITMQ_URL", help = "RabbitMQ connection URL")]
     pub rabbitmq_url: String,
 
     /// RabbitMQ routing key for tournament processed events

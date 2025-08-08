@@ -17,15 +17,15 @@ pub struct RabbitMqConfig {
     /// Exchange name for tournament processing events
     pub exchange: String,
     /// Routing key for tournament processed messages
-    pub routing_key: String,
+    pub routing_key: String
 }
 
 impl RabbitMqConfig {
     /// Creates a new RabbitMQ configuration from environment variables
     pub fn from_env() -> Result<Self, env::VarError> {
-        let routing_key = env::var("RABBITMQ_ROUTING_KEY")
-            .unwrap_or_else(|_| "processing.ratings.tournaments".to_string());
-        
+        let routing_key =
+            env::var("RABBITMQ_ROUTING_KEY").unwrap_or_else(|_| "processing.ratings.tournaments".to_string());
+
         Ok(Self {
             host: env::var("RABBITMQ_HOST").unwrap_or_else(|_| "localhost".to_string()),
             username: env::var("RABBITMQ_USERNAME")?,
@@ -36,7 +36,7 @@ impl RabbitMqConfig {
                 .parse()
                 .unwrap_or(5672),
             exchange: routing_key.clone(),
-            routing_key,
+            routing_key
         })
     }
 
@@ -63,7 +63,7 @@ impl Default for RabbitMqConfig {
             vhost: "/".to_string(),
             port: 5672,
             exchange: routing_key.clone(),
-            routing_key,
+            routing_key
         }
     }
 }
@@ -81,7 +81,7 @@ mod tests {
             vhost: "/".to_string(),
             port: 5672,
             exchange: "test.exchange".to_string(),
-            routing_key: "test.key".to_string(),
+            routing_key: "test.key".to_string()
         };
 
         assert_eq!(
@@ -99,12 +99,9 @@ mod tests {
             vhost: "/myapp".to_string(),
             port: 5673,
             exchange: "events".to_string(),
-            routing_key: "app.events".to_string(),
+            routing_key: "app.events".to_string()
         };
 
-        assert_eq!(
-            config.connection_url(),
-            "amqp://admin:secret@localhost:5673/%2Fmyapp"
-        );
+        assert_eq!(config.connection_url(), "amqp://admin:secret@localhost:5673/%2Fmyapp");
     }
 }

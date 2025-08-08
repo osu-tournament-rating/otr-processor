@@ -62,7 +62,10 @@ async fn main() {
 
         // Fetch tournament information for processed matches
         let tournament_info = client.get_tournament_info_for_matches(&matches).await;
-        info!("Fetched tournament information for {} tournaments.", tournament_info.len());
+        info!(
+            "Fetched tournament information for {} tournaments.",
+            tournament_info.len()
+        );
 
         // 3. Generate initial ratings
         let initial_ratings = create_initial_ratings(&players, &matches);
@@ -93,9 +96,15 @@ async fn main() {
             for (tournament_id, tournament_data) in &tournament_info {
                 let action = "generateStats";
                 let correlation_id = None; // Could generate a UUID here if needed
-                match publisher.publish_tournament_processed(*tournament_id, action, correlation_id).await {
-                    Ok(_) => info!("Published tournament processed message for tournament {}: {}", tournament_id, tournament_data.name),
-                    Err(e) => log::error!("Failed to publish message for tournament {}: {}", tournament_id, e),
+                match publisher
+                    .publish_tournament_processed(*tournament_id, action, correlation_id)
+                    .await
+                {
+                    Ok(_) => info!(
+                        "Published tournament processed message for tournament {}: {}",
+                        tournament_id, tournament_data.name
+                    ),
+                    Err(e) => log::error!("Failed to publish message for tournament {}: {}", tournament_id, e)
                 }
             }
         }
@@ -159,15 +168,15 @@ async fn client(args: &Args) -> DbClient {
 }
 
 async fn initialize_rabbitmq() -> Result<RabbitMqPublisher, Box<dyn std::error::Error>> {
-    let rabbitmq_url = std::env::var("RABBITMQ_URL")
-        .unwrap_or_else(|_| "amqp://admin:admin@localhost:5672".to_string());
-    
-    let routing_key = std::env::var("RABBITMQ_ROUTING_KEY")
-        .unwrap_or_else(|_| "processing.ratings.tournaments".to_string());
+    let rabbitmq_url =
+        std::env::var("RABBITMQ_URL").unwrap_or_else(|_| "amqp://admin:admin@localhost:5672".to_string());
+
+    let routing_key =
+        std::env::var("RABBITMQ_ROUTING_KEY").unwrap_or_else(|_| "processing.ratings.tournaments".to_string());
 
     let mut publisher = RabbitMqPublisher::new(routing_key.clone(), routing_key);
     publisher.connect(&rabbitmq_url).await?;
-    
+
     Ok(publisher)
 }
 
