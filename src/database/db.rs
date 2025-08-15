@@ -622,5 +622,4 @@ impl DbClient {
     pub fn client(&self) -> Arc<Client> {
         Arc::clone(&self.client)
     }
-
 }

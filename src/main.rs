@@ -9,6 +9,7 @@ use otr_processor::{
     utils::test_utils::generate_country_mapping_players
 };
 use std::{collections::HashMap, time::Instant};
+use uuid::Uuid;
 
 #[tokio::main]
 async fn main() {
@@ -91,10 +92,17 @@ async fn main() {
         info!("Results saved to database.");
 
         // 7. Emit messages for processed tournaments
-        if let Some(ref publisher) = rabbitmq_publisher {
+        if let Some(ref mut publisher) = rabbitmq_publisher {
             for (tournament_id, tournament_data) in &tournament_info {
                 let action = "generateStats";
-                let correlation_id = None; // Could generate a UUID here if needed
+                let correlation_id = Some(Uuid::new_v4().to_string());
+
+                // Ensure connection is healthy before publishing
+                if let Err(e) = publisher.ensure_connected().await {
+                    log::error!("Failed to ensure RabbitMQ connection: {}", e);
+                    continue;
+                }
+
                 match publisher
                     .publish_tournament_processed(*tournament_id, action, correlation_id)
                     .await

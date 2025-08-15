@@ -25,13 +25,19 @@ pub struct Args {
     pub log_level: String,
 
     /// RabbitMQ connection URL
-    #[arg(long, env = "RABBITMQ_URL", help = "RabbitMQ connection URL")]
+    #[arg(
+        long,
+        env = "RABBITMQ_URL",
+        default_value = "amqp://guest:guest@localhost:5672",
+        help = "RabbitMQ connection URL"
+    )]
     pub rabbitmq_url: String,
 
     /// RabbitMQ routing key for tournament processed events
     #[arg(
         long,
         env = "RABBITMQ_ROUTING_KEY",
+        default_value = "processing.ratings.tournaments",
         help = "RabbitMQ routing key for tournament processed events"
     )]
     pub rabbitmq_routing_key: String,
@@ -40,6 +46,7 @@ pub struct Args {
     #[arg(
         long,
         env = "RABBITMQ_ENABLED",
+        default_value = "true",
         action = clap::ArgAction::SetTrue,
         help = "Enable publishing messages to RabbitMQ"
     )]
