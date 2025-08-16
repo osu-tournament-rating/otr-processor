@@ -23,16 +23,12 @@ pub enum PublisherError {
     NotInitialized
 }
 
-/// Message sent when a tournament has been processed
-/// This format matches what the DWS TournamentProcessedConsumer expects
+/// Message sent to trigger tournament statistics processing
+/// This format matches what the DWS TournamentStatsConsumer expects
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
-pub struct TournamentProcessedMessage {
-    pub tournament_id: i32,
-    pub processed_at: DateTime<Utc>,
-    pub action: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub correlation_id: Option<String>
+pub struct ProcessTournamentStatsMessage {
+    pub tournament_id: i32
 }
 
 /// MassTransit message envelope structure
@@ -60,9 +56,11 @@ pub struct RabbitMqPublisher {
 impl RabbitMqPublisher {
     /// Creates a new RabbitMQ publisher instance
     pub fn new(exchange: String, routing_key: String) -> Self {
-        let mut config = RabbitMqConfig::default();
-        config.exchange = exchange;
-        config.routing_key = routing_key;
+        let config = RabbitMqConfig {
+            exchange,
+            routing_key,
+            ..Default::default()
+        };
         let connection_url = config.connection_url();
 
         Self {
@@ -179,11 +177,10 @@ impl RabbitMqPublisher {
         self.connect_with_retry().await
     }
 
-    /// Publishes a tournament processed message
-    pub async fn publish_tournament_processed(
+    /// Publishes a tournament stats processing message
+    pub async fn publish_tournament_stats(
         &self,
         tournament_id: i32,
-        action: &str,
         correlation_id: Option<String>
     ) -> Result<(), PublisherError> {
         let channel = self.channel.as_ref().ok_or(PublisherError::NotInitialized)?;
@@ -191,12 +188,7 @@ impl RabbitMqPublisher {
         let message_id = Uuid::new_v4().to_string();
         let conversation_id = Uuid::new_v4().to_string();
 
-        let message = TournamentProcessedMessage {
-            tournament_id,
-            processed_at: Utc::now(),
-            action: action.to_string(),
-            correlation_id: correlation_id.clone()
-        };
+        let message = ProcessTournamentStatsMessage { tournament_id };
 
         // Wrap in MassTransit envelope
         let envelope = MassTransitEnvelope {
@@ -205,7 +197,7 @@ impl RabbitMqPublisher {
             correlation_id: correlation_id.clone(),
             source_address: format!("{}/{}", self.config.broker_address(), self.config.exchange),
             destination_address: format!("{}/{}", self.config.broker_address(), self.config.routing_key),
-            message_type: vec!["urn:message:DWS.Messages:TournamentProcessedMessage".to_string()],
+            message_type: vec!["urn:message:DWS.Messages:ProcessTournamentStatsMessage".to_string()],
             message,
             sent_time: Utc::now()
         };
@@ -234,9 +226,8 @@ impl RabbitMqPublisher {
             .await?;
 
         log::debug!(
-            "Published tournament processed message for tournament {} with action '{}' to exchange '{}' with routing key '{}'",
+            "Published tournament stats message for tournament {} to exchange '{}' with routing key '{}'",
             tournament_id,
-            action,
             self.config.exchange,
             self.config.routing_key
         );

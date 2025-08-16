@@ -33,12 +33,12 @@ pub struct Args {
     )]
     pub rabbitmq_url: String,
 
-    /// RabbitMQ routing key for tournament processed events
+    /// RabbitMQ routing key for tournament stats events
     #[arg(
         long,
         env = "RABBITMQ_ROUTING_KEY",
-        default_value = "processing.ratings.tournaments",
-        help = "RabbitMQ routing key for tournament processed events"
+        default_value = "processing.stats.tournaments",
+        help = "RabbitMQ routing key for tournament stats events"
     )]
     pub rabbitmq_routing_key: String,
 

@@ -1,5 +1,4 @@
-use crate::messaging::{RabbitMqConfig, RabbitMqPublisher, TournamentProcessedMessage};
-use chrono::Utc;
+use crate::messaging::{ProcessTournamentStatsMessage, RabbitMqConfig, RabbitMqPublisher};
 use std::time::Duration;
 
 #[cfg(test)]
@@ -32,16 +31,9 @@ mod publisher_tests {
 
     #[test]
     fn test_tournament_message_creation() {
-        let message = TournamentProcessedMessage {
-            tournament_id: 123,
-            processed_at: Utc::now(),
-            action: "generateStats".to_string(),
-            correlation_id: Some("test-correlation-id".to_string())
-        };
+        let message = ProcessTournamentStatsMessage { tournament_id: 123 };
 
         assert_eq!(message.tournament_id, 123);
-        assert_eq!(message.action, "generateStats");
-        assert_eq!(message.correlation_id, Some("test-correlation-id".to_string()));
     }
 
     #[tokio::test]
@@ -173,7 +165,7 @@ mod integration_tests {
 
         if let Ok(mut publisher) = RabbitMqPublisher::connect_from_config(&config).await {
             let result = publisher
-                .publish_tournament_processed(123, "test_action", Some("test-correlation-id".to_string()))
+                .publish_tournament_stats(123, Some("test-correlation-id".to_string()))
                 .await;
 
             assert!(result.is_ok());

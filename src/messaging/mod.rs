@@ -5,4 +5,4 @@ pub mod publisher;
 mod tests;
 
 pub use config::RabbitMqConfig;
-pub use publisher::{PublisherError, RabbitMqPublisher, TournamentProcessedMessage};
+pub use publisher::{ProcessTournamentStatsMessage, PublisherError, RabbitMqPublisher};

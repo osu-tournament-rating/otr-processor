@@ -37,7 +37,7 @@ impl RabbitMqConfig {
         }
 
         let routing_key =
-            env::var("RABBITMQ_ROUTING_KEY").unwrap_or_else(|_| "processing.ratings.tournaments".to_string());
+            env::var("RABBITMQ_ROUTING_KEY").unwrap_or_else(|_| "processing.stats.tournaments".to_string());
 
         Ok(Self {
             host: env::var("RABBITMQ_HOST").unwrap_or_else(|_| "localhost".to_string()),
@@ -84,7 +84,7 @@ impl RabbitMqConfig {
         let port = port_str.parse().unwrap_or(5672);
 
         let routing_key =
-            env::var("RABBITMQ_ROUTING_KEY").unwrap_or_else(|_| "processing.ratings.tournaments".to_string());
+            env::var("RABBITMQ_ROUTING_KEY").unwrap_or_else(|_| "processing.stats.tournaments".to_string());
 
         Ok(Self {
             host: host.to_string(),
@@ -138,7 +138,7 @@ impl RabbitMqConfig {
 
 impl Default for RabbitMqConfig {
     fn default() -> Self {
-        let routing_key = "processing.ratings.tournaments".to_string();
+        let routing_key = "processing.stats.tournaments".to_string();
         Self {
             host: "localhost".to_string(),
             username: "guest".to_string(),
@@ -274,8 +274,8 @@ mod tests {
         assert_eq!(config.password, "guest");
         assert_eq!(config.vhost, "/");
         assert_eq!(config.port, 5672);
-        assert_eq!(config.exchange, "processing.ratings.tournaments");
-        assert_eq!(config.routing_key, "processing.ratings.tournaments");
+        assert_eq!(config.exchange, "processing.stats.tournaments");
+        assert_eq!(config.routing_key, "processing.stats.tournaments");
         assert!(config.enabled);
         assert_eq!(config.retry_attempts, 5);
         assert_eq!(config.retry_delay, Duration::from_millis(100));

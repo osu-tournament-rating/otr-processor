@@ -94,7 +94,6 @@ async fn main() {
         // 7. Emit messages for processed tournaments
         if let Some(ref mut publisher) = rabbitmq_publisher {
             for (tournament_id, tournament_data) in &tournament_info {
-                let action = "generateStats";
                 let correlation_id = Some(Uuid::new_v4().to_string());
 
                 // Ensure connection is healthy before publishing
@@ -103,12 +102,9 @@ async fn main() {
                     continue;
                 }
 
-                match publisher
-                    .publish_tournament_processed(*tournament_id, action, correlation_id)
-                    .await
-                {
+                match publisher.publish_tournament_stats(*tournament_id, correlation_id).await {
                     Ok(_) => info!(
-                        "Published tournament processed message for tournament {}: {}",
+                        "Published tournament stats message for tournament {}: {}",
                         tournament_id, tournament_data.name
                     ),
                     Err(e) => log::error!("Failed to publish message for tournament {}: {}", tournament_id, e)
@@ -179,7 +175,7 @@ async fn initialize_rabbitmq() -> Result<RabbitMqPublisher, Box<dyn std::error::
         std::env::var("RABBITMQ_URL").unwrap_or_else(|_| "amqp://admin:admin@localhost:5672".to_string());
 
     let routing_key =
-        std::env::var("RABBITMQ_ROUTING_KEY").unwrap_or_else(|_| "processing.ratings.tournaments".to_string());
+        std::env::var("RABBITMQ_ROUTING_KEY").unwrap_or_else(|_| "processing.stats.tournaments".to_string());
 
     let mut publisher = RabbitMqPublisher::new(routing_key.clone(), routing_key);
     publisher.connect(&rabbitmq_url).await?;
