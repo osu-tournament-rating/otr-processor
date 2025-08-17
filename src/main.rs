@@ -71,27 +71,32 @@ async fn main() {
             tournament_info.len()
         );
 
-        // 2. Generate initial ratings
+        // 2. Calculate and update game score placements
+        // This must happen after data fetching and storage, before rating processing
+        client.calculate_and_update_game_score_placements().await;
+        info!("Game score placements calculated and updated.");
+
+        // 3. Generate initial ratings
         let initial_ratings = create_initial_ratings(&players, &matches);
         info!("Initial ratings generated.");
 
-        // 3. Generate country mapping and set
+        // 4. Generate country mapping and set
         let country_mapping: HashMap<i32, String> = generate_country_mapping_players(&players);
         info!("Country mapping generated.");
 
-        // 4. Create the model
+        // 5. Create the model
         let mut model = OtrModel::new(&initial_ratings, &country_mapping);
         info!("OTR model created.");
 
-        // 5. Process matches
+        // 6. Process matches
         let results = model.process(&matches);
         info!("Matches processed.");
 
-        // 6. Save results in database
+        // 7. Save results in database
         client.save_results(&results).await;
         info!("Results saved to database.");
 
-        // 7. Emit messages for processed tournaments
+        // 8. Emit messages for processed tournaments
         if let Some(ref mut publisher) = rabbitmq_publisher {
             for (tournament_id, tournament_data) in &tournament_info {
                 let correlation_id = Some(Uuid::new_v4().to_string());
@@ -103,7 +108,7 @@ async fn main() {
                 }
 
                 match publisher.publish_tournament_stats(*tournament_id, correlation_id).await {
-                    Ok(_) => info!(
+                    Ok(_) => debug!(
                         "Published tournament stats message for tournament {}: {}",
                         tournament_id, tournament_data.name
                     ),

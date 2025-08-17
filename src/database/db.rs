@@ -622,4 +622,162 @@ impl DbClient {
     pub fn client(&self) -> Arc<Client> {
         Arc::clone(&self.client)
     }
+
+    /// Calculate and update placements for all game scores
+    /// Verified scores get placement based on score ranking (1=highest)
+    /// Non-verified scores get placement=0
+    pub async fn calculate_and_update_game_score_placements(&self) {
+        info!("Calculating game score placements...");
+
+        // Fetch all game scores, including verification status and current placement
+        let rows = self
+            .client
+            .query(
+                "
+            SELECT 
+                gs.id AS score_id,
+                gs.game_id,
+                gs.score,
+                gs.verification_status,
+                gs.placement AS current_placement
+            FROM game_scores gs
+            ORDER BY gs.game_id, gs.score DESC, gs.id
+        ",
+                &[]
+            )
+            .await
+            .unwrap();
+
+        if rows.is_empty() {
+            info!("No game scores found to update placements");
+            return;
+        }
+
+        // Process scores by game
+        let mut updates: Vec<(i32, i32)> = Vec::new(); // (score_id, placement)
+        let mut current_game_id = -1;
+        let mut placement_counter = 0;
+        let mut total_scores = 0;
+        let mut scores_needing_update = 0;
+
+        for row in rows {
+            let score_id: i32 = row.get("score_id");
+            let game_id: i32 = row.get("game_id");
+            let verification_status: i32 = row.get("verification_status");
+            let current_placement: i32 = row.get("current_placement");
+
+            total_scores += 1;
+
+            // Reset placement counter for new game
+            if game_id != current_game_id {
+                current_game_id = game_id;
+                placement_counter = 0;
+            }
+
+            // Calculate placement
+            let new_placement = if verification_status == 4 {
+                // Verified scores get sequential placement starting from 1
+                placement_counter += 1;
+                placement_counter
+            } else {
+                // Non-verified scores get placement=0
+                0
+            };
+
+            // Only add to updates if placement has changed
+            if new_placement != current_placement {
+                updates.push((score_id, new_placement));
+                scores_needing_update += 1;
+            }
+        }
+
+        info!(
+            "Processed {} game scores, {} need placement updates",
+            total_scores, scores_needing_update
+        );
+
+        // Update placements in database using batch update
+        if !updates.is_empty() {
+            self.update_game_score_placements(&updates).await;
+        } else {
+            info!("No placement updates needed");
+        }
+    }
+
+    /// Update game score placements in the database
+    async fn update_game_score_placements(&self, updates: &[(i32, i32)]) {
+        if updates.is_empty() {
+            return;
+        }
+
+        info!("Updating {} game score placements in database...", updates.len());
+
+        // Use COPY for efficient bulk update via temporary table
+        let copy_query = "COPY temp_placement_updates (score_id, placement) \
+            FROM STDIN WITH (FORMAT TEXT, DELIMITER E'\\t')";
+
+        // Create temporary table
+        self.client
+            .execute(
+                "CREATE TEMP TABLE temp_placement_updates (score_id INTEGER, placement INTEGER)",
+                &[]
+            )
+            .await
+            .unwrap();
+
+        // Copy data to temp table
+        let sink = self
+            .client
+            .copy_in(copy_query)
+            .await
+            .expect("Failed to initiate COPY IN operation for placement updates");
+
+        tokio::pin!(sink);
+
+        let p_bar = progress_bar(updates.len() as u64, "Updating game score placements".to_string());
+
+        for (score_id, placement) in updates {
+            let row_data = format!("{}\t{}\n", score_id, placement);
+            let data_bytes = Bytes::from(row_data.into_bytes());
+            sink.send(data_bytes)
+                .await
+                .expect("Failed to send data to COPY operation");
+
+            if let Some(ref bar) = p_bar {
+                bar.inc(1);
+            }
+        }
+
+        sink.close()
+            .await
+            .expect("Failed to finalize COPY operation for placement updates");
+
+        if let Some(bar) = p_bar {
+            bar.finish();
+        }
+
+        // Update game_scores from temp table, including the updated timestamp
+        let updated_count = self
+            .client
+            .execute(
+                "
+                UPDATE game_scores gs
+                SET placement = tpu.placement,
+                    updated = NOW() AT TIME ZONE 'UTC'
+                FROM temp_placement_updates tpu
+                WHERE gs.id = tpu.score_id
+            ",
+                &[]
+            )
+            .await
+            .unwrap();
+
+        // Drop temp table
+        self.client
+            .execute("DROP TABLE temp_placement_updates", &[])
+            .await
+            .unwrap();
+
+        info!("Successfully updated {} game score placements", updated_count);
+    }
 }
