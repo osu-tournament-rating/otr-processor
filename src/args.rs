@@ -22,5 +22,33 @@ pub struct Args {
         value_parser = ["trace", "debug", "info", "warn", "error"],
         help = "Sets the logging verbosity"
     )]
-    pub log_level: String
+    pub log_level: String,
+
+    /// RabbitMQ connection URL
+    #[arg(
+        long,
+        env = "RABBITMQ_URL",
+        default_value = "amqp://guest:guest@localhost:5672",
+        help = "RabbitMQ connection URL"
+    )]
+    pub rabbitmq_url: String,
+
+    /// RabbitMQ routing key for tournament stats events
+    #[arg(
+        long,
+        env = "RABBITMQ_ROUTING_KEY",
+        default_value = "processing.stats.tournaments",
+        help = "RabbitMQ routing key for tournament stats events"
+    )]
+    pub rabbitmq_routing_key: String,
+
+    /// Enable RabbitMQ publishing
+    #[arg(
+        long,
+        env = "RABBITMQ_ENABLED",
+        default_value = "true",
+        action = clap::ArgAction::SetTrue,
+        help = "Enable publishing messages to RabbitMQ"
+    )]
+    pub rabbitmq_enabled: bool
 }

@@ -5,7 +5,6 @@ use otr_processor::{
 };
 use serial_test::serial;
 use std::collections::HashMap;
-use tokio;
 
 use super::test_helpers::TestDatabase;
 use crate::common::init_test_env;
@@ -28,18 +27,11 @@ async fn test_transaction_rollback_on_processing_failure() {
         .await
         .expect("Failed to begin transaction");
 
-    // Perform some operations
-    client.rollback_processing_statuses().await;
+    // Perform some operations (fetch matches to test transaction)
+    let matches = client.get_matches().await;
 
-    // Get the current state to verify rollback later
-    let check_client = test_db.get_client().await.expect("Failed to get client");
-    let initial_match_status: i32 = check_client
-        .query_one("SELECT processing_status FROM matches WHERE id = 1", &[])
-        .await
-        .expect("Failed to query")
-        .get(0);
-
-    assert_eq!(initial_match_status, 4); // Should be rolled back to 4
+    // Verify we have matches
+    assert!(!matches.is_empty(), "Should have matches in test data");
 
     // Now simulate a failure by rolling back
     client
@@ -48,15 +40,15 @@ async fn test_transaction_rollback_on_processing_failure() {
         .await
         .expect("Failed to rollback");
 
-    // Verify that changes were rolled back
-    let post_rollback_status: i32 = check_client
-        .query_one("SELECT processing_status FROM matches WHERE id = 1", &[])
+    // Verify that transaction was rolled back (check that no ratings were saved)
+    let check_client = test_db.get_client().await.expect("Failed to get client");
+    let rating_count: i64 = check_client
+        .query_one("SELECT COUNT(*) FROM player_ratings", &[])
         .await
         .expect("Failed to query")
         .get(0);
 
-    // Status should still be 4 since we didn't actually change it in the seed data
-    assert_eq!(post_rollback_status, 4);
+    assert_eq!(rating_count, 0, "No ratings should exist after rollback");
 }
 
 #[tokio::test]
@@ -77,7 +69,6 @@ async fn test_full_processing_transaction_commit() {
         .expect("Failed to begin transaction");
 
     // Run the full processing pipeline
-    client.rollback_processing_statuses().await;
     let matches = client.get_matches().await;
     let players = client.get_players().await;
 
@@ -87,7 +78,6 @@ async fn test_full_processing_transaction_commit() {
     let results = model.process(&matches);
 
     client.save_results(&results).await;
-    client.roll_forward_processing_statuses(&matches).await;
 
     // Commit transaction
     client.client().execute("COMMIT", &[]).await.expect("Failed to commit");
@@ -102,14 +92,6 @@ async fn test_full_processing_transaction_commit() {
         .get(0);
 
     assert!(rating_count > 0, "Ratings should have been saved");
-
-    let match_status: i32 = check_client
-        .query_one("SELECT processing_status FROM matches WHERE id = 1", &[])
-        .await
-        .expect("Failed to query")
-        .get(0);
-
-    assert_eq!(match_status, 5, "Match status should be updated to 5");
 }
 
 #[tokio::test]
@@ -130,7 +112,6 @@ async fn test_partial_processing_rollback() {
         .expect("Failed to begin transaction");
 
     // Perform partial operations
-    client.rollback_processing_statuses().await;
     let matches = client.get_matches().await;
     let players = client.get_players().await;
 
@@ -170,12 +151,4 @@ async fn test_partial_processing_rollback() {
         .get(0);
 
     assert_eq!(rating_count, 0, "No ratings should exist after rollback");
-
-    let match_status: i32 = check_client
-        .query_one("SELECT processing_status FROM matches WHERE id = 1", &[])
-        .await
-        .expect("Failed to query")
-        .get(0);
-
-    assert_eq!(match_status, 4, "Match status should remain at 4 after rollback");
 }

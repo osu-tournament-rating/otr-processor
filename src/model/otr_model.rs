@@ -1,5 +1,5 @@
 use super::{
-    constants::{BETA, KAPPA},
+    constants::{BETA, FALLBACK_RATING, KAPPA},
     decay::DecaySystem
 };
 use crate::{
@@ -14,13 +14,13 @@ use crate::{
     },
     utils::progress_utils::progress_bar
 };
-use chrono::Utc;
+use chrono::{Duration, Utc};
 use itertools::Itertools;
 use openskill::{
     model::{model::Model, plackett_luce::PlackettLuce},
     rating::{Rating, TeamRating}
 };
-use std::{collections::HashMap, slice::from_ref};
+use std::{collections::HashMap, ops::Sub, slice::from_ref};
 use strum::IntoEnumIterator;
 
 /// o!TR Model Implementation
@@ -89,7 +89,30 @@ impl OtrModel {
     pub fn process(&mut self, matches: &[Match]) -> Vec<PlayerRating> {
         let progress_bar = progress_bar(matches.len() as u64, "Processing match data".to_string());
 
-        for m in matches {
+        log::info!("Starting to process {} matches", matches.len());
+
+        for m in matches.iter() {
+            // Check for potential issues before processing
+            if m.games.is_empty() {
+                log::error!("Skipping match ID {} ('{}') - no games found!", m.id, m.name);
+                if let Some(pb) = &progress_bar {
+                    pb.inc(1);
+                }
+                continue;
+            }
+
+            let empty_games: Vec<_> = m.games.iter().filter(|g| g.scores.is_empty()).map(|g| g.id).collect();
+
+            if !empty_games.is_empty() {
+                log::warn!(
+                    "Match ID {} ('{}') has {} games with no scores: {:?}",
+                    m.id,
+                    m.name,
+                    empty_games.len(),
+                    empty_games
+                );
+            }
+
             self.process_match(m);
             if let Some(pb) = &progress_bar {
                 pb.inc(1);
@@ -100,6 +123,7 @@ impl OtrModel {
             pb.finish();
         }
 
+        log::info!("Finished processing matches, applying final decay pass");
         self.final_decay_pass();
         self.rating_tracker.sort();
         self.rating_tracker.get_all_ratings()
@@ -200,32 +224,50 @@ impl OtrModel {
     /// ## Returns
     /// Returns a mapping of player IDs to their calculated ratings for this game.
     ///
-    /// ## Panics
-    /// Panics if a player doesn't have an existing rating for the game's ruleset.
-    /// This happens when a player has no ruleset data and the processor
-    /// attempts to rate a game for them.
+    /// ## Note
+    /// If a player doesn't have an existing rating for the game's ruleset,
+    /// we use the fallback initial rating to allow them to participate.
     fn rate(&self, game: &Game, ruleset: &Ruleset) -> HashMap<i32, Rating> {
         let mut player_ratings = Vec::new();
         let mut placements = Vec::new();
+        let mut player_ids = Vec::new();
+
+        if game.scores.is_empty() {
+            log::warn!("Game ID {} has no scores, returning empty rating result", game.id);
+            return HashMap::new();
+        }
 
         for score in &game.scores {
-            let Some(rating) = self.rating_tracker.get_rating(score.player_id, *ruleset) else {
-                // If the player is present in the score, but not
-                // present in the rating tracker,
-                // then they are in the system but have not yet
-                // been picked up by the DataWorkerService. Thus,
-                // they have no ruleset data and need to wait until
-                // the dataworker has processed their data.
-                //
-                // We cannot process here because we don't know what the
-                // player's initial rating would be. If we fallback to the
-                // default rating, that can throw the entire system out of
-                // balance.
-                continue;
+            let rating = match self.rating_tracker.get_rating(score.player_id, *ruleset) {
+                Some(r) => r.clone(),
+                None => {
+                    // Player is present in the score, but not in the rating tracker.
+                    // This means they are in the system but have not yet been picked up
+                    // by the DataWorkerService. Alternatively, they may not have any
+                    // ruleset data, due to inactivity.
+                    log::debug!(
+                        "Game ID {}: Using fallback rating for player {} in ruleset {:?}",
+                        game.id,
+                        score.player_id,
+                        ruleset
+                    );
+                    PlayerRating {
+                        id: 0,
+                        player_id: score.player_id,
+                        ruleset: *ruleset,
+                        rating: FALLBACK_RATING,
+                        volatility: DEFAULT_VOLATILITY,
+                        percentile: 0.0,
+                        global_rank: 0,
+                        country_rank: 0,
+                        adjustments: vec![]
+                    }
+                }
             };
 
             player_ratings.push(rating);
             placements.push(score.placement as usize);
+            player_ids.push(score.player_id);
         }
 
         // Convert to OpenSkill format
@@ -243,10 +285,10 @@ impl OtrModel {
         let model_result = self.model.rate(model_input, placements);
 
         // Map results back to player IDs
-        player_ratings
+        player_ids
             .iter()
             .enumerate()
-            .map(|(i, r)| (r.player_id, model_result[i][0].clone()))
+            .map(|(i, &player_id)| (player_id, model_result[i][0].clone()))
             .collect()
     }
 
@@ -264,17 +306,21 @@ impl OtrModel {
         rating_map_a
             .into_iter()
             .map(|(player_id, ratings)| {
-                let current = self
-                    .rating_tracker
-                    .get_rating(player_id, match_.ruleset)
-                    .expect("Player rating should exist");
+                let (current_rating, current_volatility) =
+                    match self.rating_tracker.get_rating(player_id, match_.ruleset) {
+                        Some(r) => (r.rating, r.volatility),
+                        None => {
+                            // Player was just created with fallback rating
+                            (FALLBACK_RATING, DEFAULT_VOLATILITY)
+                        }
+                    };
                 (
                     player_id,
                     Self::calc_weighted_rating(
                         &ratings,
                         &rating_map_b[&player_id],
-                        current.rating,
-                        current.volatility,
+                        current_rating,
+                        current_volatility,
                         total_games
                     )
                 )
@@ -384,12 +430,33 @@ impl OtrModel {
                 }
             } else {
                 // Player not present in the rating tracker.
-                // This means they are a player, but do not have
-                // any data from the DataWorkerService. This is common when:
-                //
-                // 1. The player is restricted or otherwise can't be fetched from the osu! API
-                // 2. The player was recently added to the system and has not yet been processed by the DataWorkerService
-                continue;
+                // Create a fallback initial rating for them and add to tracker.
+
+                let adjustment = RatingAdjustment {
+                    player_id,
+                    ruleset: match_.ruleset,
+                    match_id: None,
+                    rating_before: 0.0,
+                    rating_after: FALLBACK_RATING,
+                    volatility_before: 0.0,
+                    volatility_after: DEFAULT_VOLATILITY,
+                    timestamp: match_.start_time.sub(Duration::seconds(1)),
+                    adjustment_type: RatingAdjustmentType::Initial
+                };
+
+                let initial_rating = PlayerRating {
+                    id: 0,
+                    player_id,
+                    ruleset: match_.ruleset,
+                    rating: FALLBACK_RATING,
+                    volatility: DEFAULT_VOLATILITY,
+                    percentile: 0.0,
+                    global_rank: 0,
+                    country_rank: 0,
+                    adjustments: vec![adjustment]
+                };
+
+                self.rating_tracker.insert_or_update(from_ref(&initial_rating));
             }
         }
     }
@@ -397,8 +464,25 @@ impl OtrModel {
     /// Updates the RatingTracker with the results of the rating calculation
     fn apply_results(&mut self, match_: &Match, rating_calc_result: &HashMap<i32, Rating>) {
         for (k, v) in rating_calc_result {
-            // Get their current rating
-            let mut player_rating = self.rating_tracker.get_rating(*k, match_.ruleset).unwrap().clone();
+            // Get their current rating or create a new one with fallback values
+            let mut player_rating = match self.rating_tracker.get_rating(*k, match_.ruleset) {
+                Some(r) => r.clone(),
+                None => {
+                    // Player was processed but doesn't exist in tracker yet
+                    // Create initial rating with fallback values
+                    PlayerRating {
+                        id: 0,
+                        player_id: *k,
+                        ruleset: match_.ruleset,
+                        rating: FALLBACK_RATING,
+                        volatility: DEFAULT_VOLATILITY,
+                        percentile: 0.0,
+                        global_rank: 0,
+                        country_rank: 0,
+                        adjustments: vec![]
+                    }
+                }
+            };
 
             // Create the adjustment
             let adjustment = RatingAdjustment {
@@ -742,12 +826,12 @@ mod tests {
         check_rating(7774, 570.60576, 268.68761); // Skyy
     }
 
-    /// Ensures that players not present in the rating tracker are skipped.
+    /// Ensures that players not present in the rating tracker get fallback ratings.
     /// This is important because this can happen when a player is restricted
     /// or otherwise can't be fetched from the osu! API, or when a player was
     /// recently added to the system and has not yet been processed by the DataWorkerService.
     #[test]
-    fn test_player_not_in_rating_tracker_skipped() {
+    fn test_player_not_in_rating_tracker_uses_fallback() {
         // Create a model with only 2 players in the rating tracker
         let player_ratings = vec![
             generate_player_rating(1, Osu, 1000.0, 100.0, 1, None, None),
@@ -766,35 +850,44 @@ mod tests {
 
         let game = generate_game(1, &placements);
 
-        // Rate the game - should only process players 1 and 2
+        // Rate the game - should now process all 3 players
         let rating_result = model.rate(&game, &Osu);
 
-        // Verify only players 1 and 2 are in the results
+        // Verify all 3 players are in the results
         assert_eq!(
             rating_result.len(),
-            2,
-            "Should only process players present in rating tracker"
+            3,
+            "Should process all players, using fallback rating for missing ones"
         );
         assert!(rating_result.contains_key(&1), "Player 1 should be processed");
         assert!(rating_result.contains_key(&2), "Player 2 should be processed");
-        assert!(!rating_result.contains_key(&3), "Player 3 should NOT be processed");
+        assert!(
+            rating_result.contains_key(&3),
+            "Player 3 should be processed with fallback rating"
+        );
 
         // Verify the ratings for processed players are reasonable
         let result_1 = rating_result.get(&1).unwrap();
         let result_2 = rating_result.get(&2).unwrap();
+        let result_3 = rating_result.get(&3).unwrap();
 
         // Player 1 (1st place) should have higher rating than Player 2 (2nd place)
         assert!(
             result_1.mu > result_2.mu,
             "Player 1 should have higher rating than Player 2"
         );
+
+        // Player 2 (2nd place) should have higher rating than Player 3 (3rd place)
+        assert!(
+            result_2.mu > result_3.mu,
+            "Player 2 should have higher rating than Player 3"
+        );
     }
 
     /// Tests that players with ratings in different rulesets than the match ruleset
-    /// are handled correctly (they should be skipped since they don't have a rating
-    /// for the specific ruleset being played).
+    /// are handled correctly (they should use fallback ratings for the new ruleset).
     #[test]
-    fn test_player_with_different_ruleset_rating_skipped() {
+    fn test_player_with_different_ruleset_rating_uses_fallback() {
         // Create players with ratings in different rulesets
         let player_ratings = vec![
             generate_player_rating(1, Osu, 1200.0, 100.0, 1, None, None), // Has Osu rating
@@ -816,14 +909,14 @@ mod tests {
 
         let game = generate_game(1, &placements);
 
-        // Rate the game for Osu ruleset - should only process players 1 and 2
+        // Rate the game for Osu ruleset - should now process all 4 players
         let rating_result = model.rate(&game, &Osu);
 
-        // Verify only players with Osu ratings are processed
+        // Verify all players are processed
         assert_eq!(
             rating_result.len(),
-            2,
-            "Should only process players with ratings for the match ruleset"
+            4,
+            "Should process all players, using fallback for those without Osu ratings"
         );
         assert!(
             rating_result.contains_key(&1),
@@ -834,12 +927,12 @@ mod tests {
             "Player 2 (Osu rating) should be processed"
         );
         assert!(
-            !rating_result.contains_key(&3),
-            "Player 3 (Taiko rating only) should NOT be processed"
+            rating_result.contains_key(&3),
+            "Player 3 (Taiko rating only) should be processed with fallback Osu rating"
         );
         assert!(
-            !rating_result.contains_key(&4),
-            "Player 4 (Catch rating only) should NOT be processed"
+            rating_result.contains_key(&4),
+            "Player 4 (Catch rating only) should be processed with fallback Osu rating"
         );
 
         // Verify that players with different ruleset ratings still exist in the tracker for their respective rulesets
@@ -853,11 +946,11 @@ mod tests {
         );
         assert!(
             model.rating_tracker.get_rating(3, Osu).is_none(),
-            "Player 3 should NOT have Osu rating"
+            "Player 3 should NOT have Osu rating in tracker initially"
         );
         assert!(
             model.rating_tracker.get_rating(4, Osu).is_none(),
-            "Player 4 should NOT have Osu rating"
+            "Player 4 should NOT have Osu rating in tracker initially"
         );
     }
 
@@ -900,7 +993,7 @@ mod tests {
         // Process the match
         model.process(&matches);
 
-        // Verify that only Osu players have updated ratings
+        // Verify that Osu players have updated ratings
         let final_rating_1 = model.rating_tracker.get_rating(1, Osu).unwrap();
         let final_rating_2 = model.rating_tracker.get_rating(2, Osu).unwrap();
         let final_rating_3_taiko = model.rating_tracker.get_rating(3, Taiko).unwrap();
@@ -921,16 +1014,17 @@ mod tests {
             "Player 3 Taiko rating should remain unchanged"
         );
 
-        // Player 3 should not have an Osu rating
+        // Player 3 should now have an Osu rating (created with fallback)
         assert!(
-            model.rating_tracker.get_rating(3, Osu).is_none(),
-            "Player 3 should not have Osu rating"
+            model.rating_tracker.get_rating(3, Osu).is_some(),
+            "Player 3 should have Osu rating created with fallback"
         );
 
         // Verify that Osu players have match adjustments
         let adjustments_1 = model.rating_tracker.get_rating_adjustments(1, Osu).unwrap();
         let adjustments_2 = model.rating_tracker.get_rating_adjustments(2, Osu).unwrap();
         let adjustments_3_taiko = model.rating_tracker.get_rating_adjustments(3, Taiko).unwrap();
+        let adjustments_3_osu = model.rating_tracker.get_rating_adjustments(3, Osu).unwrap();
 
         assert_eq!(
             adjustments_1.len(),
@@ -947,6 +1041,11 @@ mod tests {
             1,
             "Player 3 should only have Initial adjustment for Taiko"
         );
+        assert_eq!(
+            adjustments_3_osu.len(),
+            2,
+            "Player 3 should have Initial (fallback) + Match adjustments for Osu"
+        );
 
         // Verify the last adjustment types
         assert_eq!(
@@ -960,6 +1059,67 @@ mod tests {
         assert_eq!(
             adjustments_3_taiko.last().unwrap().adjustment_type,
             RatingAdjustmentType::Initial
+        );
+        assert_eq!(
+            adjustments_3_osu.last().unwrap().adjustment_type,
+            RatingAdjustmentType::Match
+        );
+    }
+
+    /// Test that match processing handles players without ruleset data correctly
+    /// by creating fallback ratings and tracking adjustments properly.
+    #[test]
+    fn test_match_processing_with_no_ruleset_data() {
+        use crate::model::constants::FALLBACK_RATING;
+
+        // Create a model with only one player in the rating tracker
+        let player_ratings = vec![generate_player_rating(1, Osu, 1200.0, 100.0, 1, None, None)];
+
+        let countries = generate_country_mapping_player_ratings(&player_ratings, "US");
+        let mut model = OtrModel::new(&player_ratings, &countries);
+
+        // Create matches with player 2 who has no initial rating
+        let placements = vec![
+            generate_placement(1, 1), // Player 1 - 1st place (has initial rating)
+            generate_placement(2, 2), // Player 2 - 2nd place (no initial rating)
+        ];
+
+        let games = vec![generate_game(1, &placements), generate_game(2, &placements)];
+
+        let matches = vec![generate_match(1, Osu, &games, Utc::now().fixed_offset())];
+
+        // Process the matches
+        model.process(&matches);
+
+        // Player 1 should have their rating updated from initial
+        let rating_1 = model.rating_tracker.get_rating(1, Osu).unwrap();
+        assert!(rating_1.rating > 1200.0, "Player 1 should win and gain rating");
+
+        // Player 2 should now exist with a rating based on fallback
+        let rating_2 = model.rating_tracker.get_rating(2, Osu).unwrap();
+        assert!(
+            rating_2.rating < FALLBACK_RATING,
+            "Player 2 should lose and drop below fallback rating"
+        );
+
+        // Check adjustments for player 2
+        let adjustments_2 = model.rating_tracker.get_rating_adjustments(2, Osu).unwrap();
+        assert_eq!(
+            adjustments_2.len(),
+            2,
+            "Player 2 should have Initial + Match adjustments"
+        );
+
+        // First adjustment should be Initial with fallback rating
+        assert_eq!(adjustments_2[0].adjustment_type, RatingAdjustmentType::Initial);
+        assert_eq!(adjustments_2[0].rating_after, FALLBACK_RATING);
+
+        // Second adjustment should be Match
+        assert_eq!(adjustments_2[1].adjustment_type, RatingAdjustmentType::Match);
+        assert_eq!(adjustments_2[1].rating_before, FALLBACK_RATING);
+        assert!(
+            adjustments_2[1].rating_after < FALLBACK_RATING,
+            "Should lose rating from fallback"
         );
     }
 }

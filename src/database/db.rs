@@ -1,5 +1,6 @@
 use super::db_structs::{
-    Game, GameScore, Match, Player, PlayerHighestRank, PlayerRating, RatingAdjustment, ReplicationRole, RulesetData
+    Game, GameScore, Match, Player, PlayerHighestRank, PlayerRating, RatingAdjustment, ReplicationRole, RulesetData,
+    TournamentInfo
 };
 use crate::{model::structures::ruleset::Ruleset, utils::progress_utils::progress_bar};
 use bytes::Bytes;
@@ -47,11 +48,9 @@ impl DbClient {
 
         // The WHERE query here does the following:
         //
-        // 1. Only consider verified tournaments with verified matches that have a processing_status of 'NeedsProcessorData'.
+        // 1. Only consider verified tournaments with verified matches.
         // 2. From these matches, we only include the games and scores which are verified.
         //
-        //  We can safely assume that for all matches awaiting processor data every
-        //     game and game score is completely done with processing
         info!("Fetching matches...");
         let rows = self.client.query("
             SELECT
@@ -64,7 +63,7 @@ impl DbClient {
                      JOIN games g ON m.id = g.match_id
                      JOIN game_scores gs ON g.id = gs.game_id
             WHERE t.verification_status = 4 AND m.verification_status = 4 AND g.verification_status = 4
-              AND gs.verification_status = 4 AND m.processing_status = 4
+              AND gs.verification_status = 4
             ORDER BY gs.id;", &[]).await.unwrap();
 
         info!("Matches fetched, iterating...");
@@ -114,72 +113,29 @@ impl DbClient {
         let mut matches = matches_map.values().cloned().collect_vec();
         matches.sort_by(|a, b| a.start_time.cmp(&b.start_time));
 
-        info!("Match fetching complete");
+        // Log any matches that have no games or games with no scores
+        for match_ in &matches {
+            if match_.games.is_empty() {
+                log::error!(
+                    "Match ID {} ('{}') has no games! This match will be skipped during processing.",
+                    match_.id,
+                    match_.name
+                );
+            } else {
+                for game in &match_.games {
+                    if game.scores.is_empty() {
+                        log::error!(
+                            "Game ID {} in Match ID {} ('{}') has no scores! This game will cause issues during processing.",
+                            game.id, match_.id, match_.name
+                        );
+                    }
+                }
+            }
+        }
+
+        info!("Match fetching complete - {} matches will be processed", matches.len());
+
         matches
-    }
-
-    pub async fn rollback_processing_statuses(&self) {
-        if self.ignore_constraints {
-            self.set_replication(ReplicationRole::Replica).await;
-        }
-
-        let tournament_id_sql =
-            "SELECT tournament_id FROM matches WHERE processing_status = 5 AND verification_status = 4;";
-
-        let mut tournament_update_sql = Vec::new();
-        let mut match_update_sql = Vec::new();
-        let id_result = self.client.query(tournament_id_sql, &[]).await;
-
-        if let Ok(rows) = id_result {
-            for row in rows.iter() {
-                tournament_update_sql.push(format!(
-                    "UPDATE tournaments SET processing_status = 4 \
-                WHERE id = {};\n",
-                    row.get::<_, i32>(0)
-                ));
-                match_update_sql.push(format!(
-                    "UPDATE matches SET processing_status = 4 WHERE \
-                    processing_status = 5 AND tournament_id = {} AND verification_status = 4;\n",
-                    row.get::<_, i32>(0)
-                ))
-            }
-        } else {
-            if self.ignore_constraints {
-                self.set_replication(ReplicationRole::Origin).await;
-            }
-            panic!("Failed to fetch tournament ids");
-        }
-
-        let p_bar = progress_bar(2, "Rolling back tournament processing statuses".to_string());
-
-        // Update tournaments
-        self.client
-            .batch_execute(tournament_update_sql.join("\n").as_str())
-            .await
-            .expect("Failed to batch execute tournament processing status rollback");
-
-        if let Some(ref bar) = p_bar {
-            bar.inc(1);
-            bar.set_message("Rolling back match processing statuses");
-        }
-
-        // Update matches
-        self.client
-            .batch_execute(match_update_sql.join("\n").as_str())
-            .await
-            .expect("Failed to execute match processing status rollback");
-
-        if let Some(ref bar) = p_bar {
-            bar.inc(1);
-        }
-
-        if self.ignore_constraints {
-            self.set_replication(ReplicationRole::Origin).await;
-        }
-
-        if let Some(bar) = p_bar {
-            bar.finish_with_message("Completed processing status rollback for tournaments and matches");
-        }
     }
 
     fn match_from_row(row: &Row) -> Match {
@@ -591,24 +547,52 @@ impl DbClient {
         self.client.execute(query, values).await.unwrap();
     }
 
-    pub async fn roll_forward_processing_statuses(&self, matches: &[Match]) {
-        info!("Updating processing status for all matches");
+    pub async fn get_tournament_info_for_matches(&self, matches: &[Match]) -> HashMap<i32, TournamentInfo> {
+        let mut tournament_info: HashMap<i32, TournamentInfo> = HashMap::new();
 
-        if self.ignore_constraints {
-            self.set_replication(ReplicationRole::Replica).await;
+        if matches.is_empty() {
+            return tournament_info;
         }
 
-        let data = matches.iter().map(|f| f.id).collect_vec();
-        let match_id_str = data.into_iter().join(",");
+        // Get unique match IDs
+        let match_ids: Vec<i32> = matches.iter().map(|m| m.id).collect();
+        let match_id_str = match_ids.iter().map(|id| id.to_string()).join(",");
 
-        let match_update_sql =
-            format!("UPDATE matches SET processing_status = 5 WHERE id = ANY(ARRAY[{match_id_str}])");
+        // Query to get tournament information for the processed matches
+        let query = format!(
+            "SELECT DISTINCT 
+                t.id AS tournament_id,
+                t.name AS tournament_name,
+                COUNT(DISTINCT m.id) AS match_count,
+                COUNT(DISTINCT gs.player_id) AS player_count
+            FROM tournaments t
+            JOIN matches m ON t.id = m.tournament_id
+            JOIN games g ON m.id = g.match_id
+            JOIN game_scores gs ON g.id = gs.game_id
+            WHERE m.id = ANY(ARRAY[{}])
+            GROUP BY t.id, t.name",
+            match_id_str
+        );
 
-        self.client.execute(match_update_sql.as_str(), &[]).await.unwrap();
-
-        if self.ignore_constraints {
-            self.set_replication(ReplicationRole::Origin).await;
+        match self.client.query(&query, &[]).await {
+            Ok(rows) => {
+                for row in rows {
+                    let tournament_id: i32 = row.get("tournament_id");
+                    let info = TournamentInfo {
+                        id: tournament_id,
+                        name: row.get("tournament_name"),
+                        match_count: row.get::<_, i64>("match_count") as i32,
+                        player_count: row.get::<_, i64>("player_count") as i32
+                    };
+                    tournament_info.insert(tournament_id, info);
+                }
+            }
+            Err(e) => {
+                log::error!("Failed to fetch tournament information: {}", e);
+            }
         }
+
+        tournament_info
     }
 
     async fn truncate_table(&self, table: &str) {
@@ -637,5 +621,163 @@ impl DbClient {
     // Access the underlying Client
     pub fn client(&self) -> Arc<Client> {
         Arc::clone(&self.client)
+    }
+
+    /// Calculate and update placements for all game scores
+    /// Verified scores get placement based on score ranking (1=highest)
+    /// Non-verified scores get placement=0
+    pub async fn calculate_and_update_game_score_placements(&self) {
+        info!("Calculating game score placements...");
+
+        // Fetch all game scores, including verification status and current placement
+        let rows = self
+            .client
+            .query(
+                "
+            SELECT 
+                gs.id AS score_id,
+                gs.game_id,
+                gs.score,
+                gs.verification_status,
+                gs.placement AS current_placement
+            FROM game_scores gs
+            ORDER BY gs.game_id, gs.score DESC, gs.id
+        ",
+                &[]
+            )
+            .await
+            .unwrap();
+
+        if rows.is_empty() {
+            info!("No game scores found to update placements");
+            return;
+        }
+
+        // Process scores by game
+        let mut updates: Vec<(i32, i32)> = Vec::new(); // (score_id, placement)
+        let mut current_game_id = -1;
+        let mut placement_counter = 0;
+        let mut total_scores = 0;
+        let mut scores_needing_update = 0;
+
+        for row in rows {
+            let score_id: i32 = row.get("score_id");
+            let game_id: i32 = row.get("game_id");
+            let verification_status: i32 = row.get("verification_status");
+            let current_placement: i32 = row.get("current_placement");
+
+            total_scores += 1;
+
+            // Reset placement counter for new game
+            if game_id != current_game_id {
+                current_game_id = game_id;
+                placement_counter = 0;
+            }
+
+            // Calculate placement
+            let new_placement = if verification_status == 4 {
+                // Verified scores get sequential placement starting from 1
+                placement_counter += 1;
+                placement_counter
+            } else {
+                // Non-verified scores get placement=0
+                0
+            };
+
+            // Only add to updates if placement has changed
+            if new_placement != current_placement {
+                updates.push((score_id, new_placement));
+                scores_needing_update += 1;
+            }
+        }
+
+        info!(
+            "Processed {} game scores, {} need placement updates",
+            total_scores, scores_needing_update
+        );
+
+        // Update placements in database using batch update
+        if !updates.is_empty() {
+            self.update_game_score_placements(&updates).await;
+        } else {
+            info!("No placement updates needed");
+        }
+    }
+
+    /// Update game score placements in the database
+    async fn update_game_score_placements(&self, updates: &[(i32, i32)]) {
+        if updates.is_empty() {
+            return;
+        }
+
+        info!("Updating {} game score placements in database...", updates.len());
+
+        // Use COPY for efficient bulk update via temporary table
+        let copy_query = "COPY temp_placement_updates (score_id, placement) \
+            FROM STDIN WITH (FORMAT TEXT, DELIMITER E'\\t')";
+
+        // Create temporary table
+        self.client
+            .execute(
+                "CREATE TEMP TABLE temp_placement_updates (score_id INTEGER, placement INTEGER)",
+                &[]
+            )
+            .await
+            .unwrap();
+
+        // Copy data to temp table
+        let sink = self
+            .client
+            .copy_in(copy_query)
+            .await
+            .expect("Failed to initiate COPY IN operation for placement updates");
+
+        tokio::pin!(sink);
+
+        let p_bar = progress_bar(updates.len() as u64, "Updating game score placements".to_string());
+
+        for (score_id, placement) in updates {
+            let row_data = format!("{}\t{}\n", score_id, placement);
+            let data_bytes = Bytes::from(row_data.into_bytes());
+            sink.send(data_bytes)
+                .await
+                .expect("Failed to send data to COPY operation");
+
+            if let Some(ref bar) = p_bar {
+                bar.inc(1);
+            }
+        }
+
+        sink.close()
+            .await
+            .expect("Failed to finalize COPY operation for placement updates");
+
+        if let Some(bar) = p_bar {
+            bar.finish();
+        }
+
+        // Update game_scores from temp table, including the updated timestamp
+        let updated_count = self
+            .client
+            .execute(
+                "
+                UPDATE game_scores gs
+                SET placement = tpu.placement,
+                    updated = NOW() AT TIME ZONE 'UTC'
+                FROM temp_placement_updates tpu
+                WHERE gs.id = tpu.score_id
+            ",
+                &[]
+            )
+            .await
+            .unwrap();
+
+        // Drop temp table
+        self.client
+            .execute("DROP TABLE temp_placement_updates", &[])
+            .await
+            .unwrap();
+
+        info!("Successfully updated {} game score placements", updated_count);
     }
 }

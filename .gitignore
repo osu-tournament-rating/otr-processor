@@ -1,6 +1,6 @@
 /target
 .env
 **/*.idea
-/.vscode/launch.json
+.vscode/
 .aider*
 CLAUDE.md
