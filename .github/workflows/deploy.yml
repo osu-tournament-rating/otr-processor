@@ -1,80 +1,51 @@
-name: Deploy
+name: Processor deploy
 
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
-      branch:
-        description: "Branch to deploy from"
+      target:
         required: true
-        default: "master"
-      environment:
+        type: string
         description: "Environment to deploy to"
-        required: true
-        default: "Staging"
-        type: choice
-        options:
-          - Staging
-          - Production
-  push:
-    branches:
-      - master
-    tags:
-      - "[0-9][0-9][0-9][0-9].[0-9][0-9].[0-9][0-9]*"
 
 jobs:
-  deploy:
+  publish:
     runs-on: ubuntu-latest
-    env:
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+    outputs:
+      TAG: ${{ steps.set-tag.outputs.PRIMARY_TAG }}
     steps:
-      - name: Checkout repository
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Log in to Docker Hub
-        run: echo "$DOCKERHUB_TOKEN" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Determine tags
-        id: determine_tags
+      - name: Set Docker Tags
+        id: set-tag
         run: |
-          image_prefix="${DOCKERHUB_USERNAME}/otr-processor"
-          
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            if [[ "${{ github.event.inputs.environment }}" == "Staging" ]]; then
-              echo "PRIMARY_TAG=staging" >> $GITHUB_OUTPUT
-              echo "TAGS=${image_prefix}:staging" >> $GITHUB_OUTPUT
-            elif [[ "${{ github.event.inputs.environment }}" == "Production" ]]; then
-              # For manual production deployment, use 'production' tag for backward compatibility
-              echo "PRIMARY_TAG=production" >> $GITHUB_OUTPUT
-              echo "TAGS=${image_prefix}:production" >> $GITHUB_OUTPUT
-            fi
-          elif [[ "${{ github.ref }}" == "refs/heads/master" ]]; then
-            echo "Deploying to Staging due to push to master"
+          image_prefix="${{ secrets.DOCKERHUB_USERNAME }}/otr-processor"
+          if [[ "${{ inputs.target }}" == "Staging" ]]; then
             echo "PRIMARY_TAG=staging" >> $GITHUB_OUTPUT
             echo "TAGS=${image_prefix}:staging" >> $GITHUB_OUTPUT
-          elif [[ "${{ github.ref_type }}" == "tag" && "${{ github.ref_name }}" =~ ^[0-9]{4}\.[0-9]{2}\.[0-9]{2} ]]; then
-            echo "Deploying to Production due to tag creation: ${{ github.ref_name }}"
+          elif [[ "${{ inputs.target }}" == "Production" && "${{ github.ref_type }}" == "tag" ]]; then
             echo "PRIMARY_TAG=${{ github.ref_name }}" >> $GITHUB_OUTPUT
             {
               echo 'TAGS<<EOF'
               echo "${image_prefix}:${{ github.ref_name }}"
               echo "${image_prefix}:latest"
-              echo "${image_prefix}:production"
               echo 'EOF'
             } >> "$GITHUB_OUTPUT"
+          else
+            echo "Invalid target: ${{ inputs.target }}"
+            exit 1
           fi
 
-      - name: Build and push Docker image
-        run: |
-          # Build the image with the primary tag
-          docker build -t ${DOCKERHUB_USERNAME}/otr-processor:${{ steps.determine_tags.outputs.PRIMARY_TAG }} .
-          
-          # Tag and push all specified tags
-          while IFS= read -r tag; do
-            if [[ -n "$tag" ]]; then
-              echo "Tagging as: $tag"
-              docker tag ${DOCKERHUB_USERNAME}/otr-processor:${{ steps.determine_tags.outputs.PRIMARY_TAG }} $tag
-              echo "Pushing: $tag"
-              docker push $tag
-            fi
-          done <<< "${{ steps.determine_tags.outputs.TAGS }}"
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.set-tag.outputs.TAGS }}
