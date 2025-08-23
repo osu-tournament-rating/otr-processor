@@ -15,7 +15,7 @@ pub const DECAY_MINIMUM: f64 = 15.0 * MULTIPLIER;
 pub const DECAY_RATE: f64 = 0.05 * MULTIPLIER;
 
 /// Initial volatility, higher values indicate more uncertainty in the rating
-pub const DEFAULT_VOLATILITY: f64 = 5.0 * MULTIPLIER;
+pub const DEFAULT_VOLATILITY: f64 = 6.0 * MULTIPLIER;
 
 /// Fallback default rating used when rating cannot be identified from osu! rank information
 pub const FALLBACK_RATING: f64 = 15.0 * MULTIPLIER;
