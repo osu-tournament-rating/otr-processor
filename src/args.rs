@@ -40,15 +40,5 @@ pub struct Args {
         default_value = "processing.stats.tournaments",
         help = "RabbitMQ routing key for tournament stats events"
     )]
-    pub rabbitmq_routing_key: String,
-
-    /// Enable RabbitMQ publishing
-    #[arg(
-        long,
-        env = "RABBITMQ_ENABLED",
-        default_value = "true",
-        action = clap::ArgAction::SetTrue,
-        help = "Enable publishing messages to RabbitMQ"
-    )]
-    pub rabbitmq_enabled: bool
+    pub rabbitmq_routing_key: String
 }
