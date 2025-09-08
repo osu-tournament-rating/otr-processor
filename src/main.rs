@@ -52,7 +52,12 @@ async fn main() {
 
     // Execute all operations
     let process_result = async {
-        // 1. Fetch matches and players for processing
+        // 1. Calculate and update game score placements
+        // This must happen before data fetching and rating processing
+        client.calculate_and_update_game_score_placements().await;
+        info!("Game score placements calculated and updated.");
+
+        // 2. Fetch matches and players for processing
         let matches = client.get_matches().await;
         let players = client.get_players().await;
 
@@ -70,11 +75,6 @@ async fn main() {
             "Fetched tournament information for {} tournaments.",
             tournament_info.len()
         );
-
-        // 2. Calculate and update game score placements
-        // This must happen after data fetching and storage, before rating processing
-        client.calculate_and_update_game_score_placements().await;
-        info!("Game score placements calculated and updated.");
 
         // 3. Generate initial ratings
         let initial_ratings = create_initial_ratings(&players, &matches);
