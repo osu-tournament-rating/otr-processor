@@ -1,4 +1,5 @@
-use crate::messaging::{ProcessTournamentStatsMessage, RabbitMqConfig, RabbitMqPublisher};
+use crate::messaging::{MessageMetadata, ProcessTournamentStatsMessage, RabbitMqConfig, RabbitMqPublisher};
+use chrono::Utc;
 use std::time::Duration;
 
 #[cfg(test)]
@@ -31,9 +32,17 @@ mod publisher_tests {
 
     #[test]
     fn test_tournament_message_creation() {
-        let message = ProcessTournamentStatsMessage { tournament_id: 123 };
+        let message = ProcessTournamentStatsMessage {
+            metadata: MessageMetadata {
+                requested_at: Utc::now(),
+                correlation_id: "corr-id".to_string(),
+                priority: 5
+            },
+            tournament_id: 123
+        };
 
         assert_eq!(message.tournament_id, 123);
+        assert_eq!(message.metadata.correlation_id, "corr-id");
     }
 
     #[tokio::test]
