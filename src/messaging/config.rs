@@ -16,8 +16,10 @@ pub struct RabbitMqConfig {
     pub port: u16,
     /// Exchange name for tournament processing events
     pub exchange: String,
-    /// Routing key for tournament processed messages
+    /// Queue name for tournament processed messages
     pub routing_key: String,
+    /// Optional queue max priority configuration
+    pub queue_max_priority: Option<u8>,
     /// Whether RabbitMQ publishing is enabled
     pub enabled: bool,
     /// Connection retry attempts
@@ -39,6 +41,11 @@ impl RabbitMqConfig {
         let routing_key =
             env::var("RABBITMQ_ROUTING_KEY").unwrap_or_else(|_| "processing.stats.tournaments".to_string());
 
+        let queue_max_priority = env::var("RABBITMQ_QUEUE_MAX_PRIORITY")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .or(Some(10));
+
         Ok(Self {
             host: env::var("RABBITMQ_HOST").unwrap_or_else(|_| "localhost".to_string()),
             username: env::var("RABBITMQ_USERNAME").unwrap_or_else(|_| "guest".to_string()),
@@ -50,6 +57,7 @@ impl RabbitMqConfig {
                 .unwrap_or(5672),
             exchange: routing_key.clone(),
             routing_key,
+            queue_max_priority,
             enabled: env::var("RABBITMQ_ENABLED")
                 .unwrap_or_else(|_| "true".to_string())
                 .parse()
@@ -86,6 +94,11 @@ impl RabbitMqConfig {
         let routing_key =
             env::var("RABBITMQ_ROUTING_KEY").unwrap_or_else(|_| "processing.stats.tournaments".to_string());
 
+        let queue_max_priority = env::var("RABBITMQ_QUEUE_MAX_PRIORITY")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .or(Some(10));
+
         Ok(Self {
             host: host.to_string(),
             username: username.to_string(),
@@ -98,6 +111,7 @@ impl RabbitMqConfig {
             port,
             exchange: routing_key.clone(),
             routing_key,
+            queue_max_priority,
             enabled: env::var("RABBITMQ_ENABLED")
                 .unwrap_or_else(|_| "true".to_string())
                 .parse()
@@ -147,6 +161,7 @@ impl Default for RabbitMqConfig {
             port: 5672,
             exchange: routing_key.clone(),
             routing_key,
+            queue_max_priority: Some(10),
             enabled: true,
             retry_attempts: 5,
             retry_delay: Duration::from_millis(100),
@@ -169,6 +184,7 @@ mod tests {
             port: 5672,
             exchange: "test.exchange".to_string(),
             routing_key: "test.key".to_string(),
+            queue_max_priority: Some(10),
             enabled: true,
             retry_attempts: 5,
             retry_delay: Duration::from_millis(100),
@@ -191,6 +207,7 @@ mod tests {
             port: 5673,
             exchange: "events".to_string(),
             routing_key: "app.events".to_string(),
+            queue_max_priority: Some(10),
             enabled: true,
             retry_attempts: 5,
             retry_delay: Duration::from_millis(100),
@@ -210,6 +227,7 @@ mod tests {
             port: 5672,
             exchange: "test.exchange".to_string(),
             routing_key: "test.key".to_string(),
+            queue_max_priority: Some(10),
             enabled: true,
             retry_attempts: 5,
             retry_delay: Duration::from_millis(100),
@@ -234,6 +252,7 @@ mod tests {
             port: 5672,
             exchange: "test.exchange".to_string(),
             routing_key: "test.key".to_string(),
+            queue_max_priority: Some(10),
             enabled: true,
             retry_attempts: 5,
             retry_delay: Duration::from_millis(100),
@@ -276,6 +295,7 @@ mod tests {
         assert_eq!(config.port, 5672);
         assert_eq!(config.exchange, "processing.stats.tournaments");
         assert_eq!(config.routing_key, "processing.stats.tournaments");
+        assert_eq!(config.queue_max_priority, Some(10));
         assert!(config.enabled);
         assert_eq!(config.retry_attempts, 5);
         assert_eq!(config.retry_delay, Duration::from_millis(100));
