@@ -2,11 +2,11 @@ use crate::messaging::config::RabbitMqConfig;
 use chrono::{DateTime, Utc};
 use lapin::{
     options::{BasicPublishOptions, ExchangeDeclareOptions},
-    types::{AMQPValue, FieldTable, LongString, ShortString},
+    types::FieldTable,
     BasicProperties, Channel, Connection, ConnectionProperties, ExchangeKind
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, sync::Arc};
+use std::sync::Arc;
 use thiserror::Error;
 use tokio::time::sleep;
 use uuid::Uuid;
@@ -26,24 +26,23 @@ pub enum PublisherError {
 /// Message sent to trigger tournament statistics processing
 /// This format matches what the DWS TournamentStatsConsumer expects
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "PascalCase")]
+#[serde(rename_all = "camelCase")]
 pub struct ProcessTournamentStatsMessage {
+    #[serde(flatten)]
+    pub metadata: MessageMetadata,
     pub tournament_id: i32
 }
 
-/// MassTransit message envelope structure
+/// Shared metadata for queue messages
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct MassTransitEnvelope<T> {
-    message_id: String,
-    conversation_id: String,
-    correlation_id: Option<String>,
-    source_address: String,
-    destination_address: String,
-    message_type: Vec<String>,
-    message: T,
-    sent_time: DateTime<Utc>
+pub struct MessageMetadata {
+    pub requested_at: DateTime<Utc>,
+    pub correlation_id: String,
+    pub priority: u8
 }
+
+const DEFAULT_PRIORITY: u8 = 5;
 
 /// RabbitMQ publisher for sending tournament processing events
 pub struct RabbitMqPublisher {
@@ -186,30 +185,18 @@ impl RabbitMqPublisher {
         let channel = self.channel.as_ref().ok_or(PublisherError::NotInitialized)?;
 
         let message_id = Uuid::new_v4().to_string();
-        let conversation_id = Uuid::new_v4().to_string();
+        let correlation_id = correlation_id.unwrap_or_else(|| Uuid::new_v4().to_string());
 
-        let message = ProcessTournamentStatsMessage { tournament_id };
-
-        // Wrap in MassTransit envelope
-        let envelope = MassTransitEnvelope {
-            message_id: message_id.clone(),
-            conversation_id: conversation_id.clone(),
-            correlation_id: correlation_id.clone(),
-            source_address: format!("{}/{}", self.config.broker_address(), self.config.exchange),
-            destination_address: format!("{}/{}", self.config.broker_address(), self.config.routing_key),
-            message_type: vec!["urn:message:DWS.Messages:ProcessTournamentStatsMessage".to_string()],
-            message,
-            sent_time: Utc::now()
+        let message = ProcessTournamentStatsMessage {
+            metadata: MessageMetadata {
+                requested_at: Utc::now(),
+                correlation_id: correlation_id.clone(),
+                priority: DEFAULT_PRIORITY
+            },
+            tournament_id
         };
 
-        let payload = serde_json::to_vec(&envelope)?;
-
-        // Create headers for MassTransit
-        let mut headers = BTreeMap::new();
-        headers.insert(
-            ShortString::from("Content-Type"),
-            AMQPValue::LongString(LongString::from("application/vnd.masstransit+json"))
-        );
+        let payload = serde_json::to_vec(&message)?;
 
         channel
             .basic_publish(
@@ -218,9 +205,11 @@ impl RabbitMqPublisher {
                 BasicPublishOptions::default(),
                 &payload,
                 BasicProperties::default()
-                    .with_content_type("application/vnd.masstransit+json".into())
-                    .with_headers(FieldTable::from(headers))
+                    .with_content_type("application/json".into())
                     .with_message_id(message_id.into())
+                    .with_correlation_id(correlation_id.into())
+                    .with_priority(message.metadata.priority)
+                    .with_delivery_mode(2)
                     .with_timestamp(Utc::now().timestamp() as u64)
             )
             .await?;
