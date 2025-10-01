@@ -12,42 +12,28 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: clippy
+      - run: cargo clippy --all-features --all-targets
 
-      - name: Install stable toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Run clippy
-        run: cargo clippy --all-features --all-targets
-
-  rustfmt:
+  fmt:
     name: Format
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Install nightly toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@nightly
         with:
           components: rustfmt
-          toolchain: nightly
-
-      - name: Check code formatting
-        run: cargo +nightly fmt -- --check
+      - run: cargo fmt -- --check
 
   test:
     name: Test
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install stable toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Run tests
-        run: cargo test
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@nightly
+      - run: cargo test --all-features

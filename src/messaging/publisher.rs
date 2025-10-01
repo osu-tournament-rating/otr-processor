@@ -1,8 +1,8 @@
 use crate::messaging::config::RabbitMqConfig;
 use chrono::{DateTime, Utc};
 use lapin::{
-    options::{BasicPublishOptions, ExchangeDeclareOptions},
-    types::FieldTable,
+    options::{BasicPublishOptions, ExchangeDeclareOptions, QueueBindOptions, QueueDeclareOptions},
+    types::{AMQPValue, FieldTable},
     BasicProperties, Channel, Connection, ConnectionProperties, ExchangeKind
 };
 use serde::{Deserialize, Serialize};
@@ -94,7 +94,22 @@ impl RabbitMqPublisher {
 
         let channel = connection.create_channel().await?;
 
-        // Declare the exchange (fanout type for broadcasting)
+        let mut arguments = FieldTable::default();
+        if let Some(priority) = self.config.queue_max_priority {
+            arguments.insert("x-max-priority".into(), AMQPValue::ShortShortUInt(priority));
+        }
+
+        channel
+            .queue_declare(
+                &self.config.routing_key,
+                QueueDeclareOptions {
+                    durable: true,
+                    ..Default::default()
+                },
+                arguments
+            )
+            .await?;
+
         channel
             .exchange_declare(
                 &self.config.exchange,
@@ -107,15 +122,25 @@ impl RabbitMqPublisher {
             )
             .await?;
 
+        channel
+            .queue_bind(
+                &self.config.routing_key,
+                &self.config.exchange,
+                &self.config.routing_key,
+                QueueBindOptions::default(),
+                FieldTable::default()
+            )
+            .await?;
+
         self.connection = Some(connection);
         self.channel = Some(channel);
 
         // Use safe URL for logging (without credentials)
         log::info!("Connected to RabbitMQ at {}", self.config.connection_url_safe());
         log::info!(
-            "Exchange '{}' declared with routing key '{}'",
-            self.config.exchange,
-            self.config.routing_key
+            "Queue '{}' declared and bound to exchange '{}'",
+            self.config.routing_key,
+            self.config.exchange
         );
 
         Ok(())

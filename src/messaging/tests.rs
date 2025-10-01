@@ -15,6 +15,7 @@ mod publisher_tests {
             port: 5672,
             exchange: "test.exchange".to_string(),
             routing_key: "test.routing.key".to_string(),
+            queue_max_priority: Some(10),
             enabled: true,
             retry_attempts: 3,
             retry_delay: Duration::from_millis(100),
@@ -86,6 +87,7 @@ mod config_tests {
         assert_eq!(config.port, 5673);
         assert_eq!(config.vhost, "/testvhost");
         assert_eq!(config.routing_key, "test.routing.key");
+        assert_eq!(config.queue_max_priority, Some(10));
 
         // Clean up
         cleanup_env_vars();
@@ -109,6 +111,7 @@ mod config_tests {
         env::set_var("RABBITMQ_RETRY_ATTEMPTS", "10");
         env::set_var("RABBITMQ_RETRY_DELAY_MS", "500");
         env::set_var("RABBITMQ_MAX_RETRY_DELAY_SECS", "60");
+        env::set_var("RABBITMQ_QUEUE_MAX_PRIORITY", "7");
 
         let config = RabbitMqConfig::from_env().unwrap();
 
@@ -118,6 +121,7 @@ mod config_tests {
         assert_eq!(config.port, 5673);
         assert_eq!(config.vhost, "/myvhost");
         assert_eq!(config.routing_key, "my.routing.key");
+        assert_eq!(config.queue_max_priority, Some(7));
         assert!(!config.enabled);
         assert_eq!(config.retry_attempts, 10);
         assert_eq!(config.retry_delay, Duration::from_millis(500));
@@ -139,6 +143,7 @@ mod config_tests {
         env::remove_var("RABBITMQ_RETRY_ATTEMPTS");
         env::remove_var("RABBITMQ_RETRY_DELAY_MS");
         env::remove_var("RABBITMQ_MAX_RETRY_DELAY_SECS");
+        env::remove_var("RABBITMQ_QUEUE_MAX_PRIORITY");
     }
 }
 
