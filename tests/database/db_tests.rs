@@ -160,3 +160,83 @@ async fn test_empty_database() {
     assert_eq!(players.len(), 0);
     assert_eq!(matches.len(), 0);
 }
+
+#[tokio::test]
+#[serial]
+async fn test_calculate_and_update_game_score_placements() {
+    init_test_env();
+    let test_db = TestDatabase::new().await.expect("Failed to create test database");
+    test_db.seed_test_data().await.expect("Failed to seed test data");
+
+    // Scramble existing placements and mark one score as unverified to exercise both paths.
+    let admin_client = test_db.get_client().await.expect("Failed to get client");
+    admin_client
+        .execute(
+            "
+            UPDATE game_scores
+            SET placement = 99
+            WHERE game_id = (SELECT game_id FROM game_scores ORDER BY game_id LIMIT 1)
+        ",
+            &[]
+        )
+        .await
+        .expect("Failed to scramble placements");
+    admin_client
+        .execute(
+            "
+            UPDATE game_scores
+            SET verification_status = 3
+            WHERE id = (SELECT id FROM game_scores ORDER BY id LIMIT 1)
+        ",
+            &[]
+        )
+        .await
+        .expect("Failed to mark a score as unverified");
+
+    let db_client = DbClient::connect(&test_db.connection_string, false)
+        .await
+        .expect("Failed to connect");
+
+    db_client.calculate_and_update_game_score_placements().await;
+
+    let rows = admin_client
+        .query(
+            "
+            SELECT game_id, score, verification_status, placement
+            FROM game_scores
+            ORDER BY game_id, score DESC, id
+        ",
+            &[]
+        )
+        .await
+        .expect("Failed to fetch placements");
+
+    let mut current_game: Option<i32> = None;
+    let mut expected_placement = 1;
+
+    for row in rows {
+        let game_id: i32 = row.get("game_id");
+        let verification_status: i32 = row.get("verification_status");
+        let placement: i32 = row.get("placement");
+
+        if current_game != Some(game_id) {
+            current_game = Some(game_id);
+            expected_placement = 1;
+        }
+
+        if verification_status == 4 {
+            assert_eq!(
+                placement, expected_placement,
+                "Verified score in game {} should have sequential placement",
+                game_id
+            );
+            expected_placement += 1;
+        } else {
+            assert_eq!(
+                placement, 0,
+                "Unverified score in game {} should have placement 0",
+                game_id
+            );
+        }
+    }
+}
