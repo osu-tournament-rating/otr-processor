@@ -113,7 +113,7 @@ fn initial_rating(player: &Player, ruleset: &Ruleset) -> f64 {
                 }
 
                 // If no data found, use fallback rating and log a warning
-                log::warn!("No data found for player, falling back to default initial rating: [player_id: {:?}, ruleset: {:?}]", player.id, ruleset);
+                log::debug!("No data found for player, falling back to default initial rating: [player_id: {:?}, ruleset: {:?}]", player.id, ruleset);
                 return FALLBACK_RATING;
             }
 

@@ -6,10 +6,86 @@ use crate::{model::structures::ruleset::Ruleset, utils::progress_utils::progress
 use bytes::Bytes;
 use futures::SinkExt;
 use itertools::Itertools;
-use log::{error, info};
+use log::{debug, error, info, warn};
 use postgres_types::ToSql;
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, time::Instant};
+use tokio::runtime::Handle;
 use tokio_postgres::{Client, Error, NoTls, Row};
+
+enum TransactionState {
+    Pending,
+    Committed,
+    RolledBack
+}
+
+pub struct DbTransactionGuard {
+    client: Arc<Client>,
+    state: TransactionState
+}
+
+impl DbTransactionGuard {
+    fn new(client: Arc<Client>) -> Self {
+        Self {
+            client,
+            state: TransactionState::Pending
+        }
+    }
+
+    pub async fn commit(&mut self) -> Result<(), Error> {
+        match self.state {
+            TransactionState::Pending => {
+                self.client.batch_execute("COMMIT").await?;
+                self.state = TransactionState::Committed;
+                Ok(())
+            }
+            TransactionState::Committed => {
+                warn!("Transaction commit called after it was already committed; ignoring");
+                Ok(())
+            }
+            TransactionState::RolledBack => {
+                warn!("Transaction commit called after rollback; ignoring");
+                Ok(())
+            }
+        }
+    }
+
+    pub async fn rollback(&mut self) -> Result<(), Error> {
+        match self.state {
+            TransactionState::Pending => {
+                self.client.batch_execute("ROLLBACK").await?;
+                self.state = TransactionState::RolledBack;
+                Ok(())
+            }
+            TransactionState::RolledBack => {
+                warn!("Transaction rollback called repeatedly; ignoring");
+                Ok(())
+            }
+            TransactionState::Committed => {
+                warn!("Transaction rollback requested after commit; ignoring");
+                Ok(())
+            }
+        }
+    }
+}
+
+impl Drop for DbTransactionGuard {
+    fn drop(&mut self) {
+        if matches!(self.state, TransactionState::Pending) {
+            let client = Arc::clone(&self.client);
+            if Handle::try_current().is_ok() {
+                tokio::spawn(async move {
+                    if let Err(e) = client.batch_execute("ROLLBACK").await {
+                        error!("Failed to rollback transaction during drop: {}", e);
+                    } else {
+                        info!("ROLLBACK TRANSACTION (triggered in Drop)");
+                    }
+                });
+            } else {
+                error!("Runtime unavailable to rollback dangling transaction; transaction left pending");
+            }
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct DbClient {
@@ -623,161 +699,96 @@ impl DbClient {
         Arc::clone(&self.client)
     }
 
+    pub async fn begin_transaction(&self) -> Result<DbTransactionGuard, Error> {
+        self.client.batch_execute("BEGIN").await?;
+        Ok(DbTransactionGuard::new(Arc::clone(&self.client)))
+    }
+
     /// Calculate and update placements for all game scores
     /// Verified scores get placement based on score ranking (1=highest)
     /// Non-verified scores get placement=0
     pub async fn calculate_and_update_game_score_placements(&self) {
         info!("Calculating game score placements...");
+        let timer = Instant::now();
 
-        // Fetch all game scores, including verification status and current placement
-        let rows = self
-            .client
-            .query(
-                "
-            SELECT 
-                gs.id AS score_id,
-                gs.game_id,
-                gs.score,
-                gs.verification_status,
-                gs.placement AS current_placement
-            FROM game_scores gs
-            ORDER BY gs.game_id, gs.score DESC, gs.id
-        ",
-                &[]
-            )
-            .await
-            .unwrap();
-
-        if rows.is_empty() {
-            info!("No game scores found to update placements");
-            return;
-        }
-
-        // Process scores by game
-        let mut updates: Vec<(i32, i32)> = Vec::new(); // (score_id, placement)
-        let mut current_game_id = -1;
-        let mut placement_counter = 0;
-        let mut total_scores = 0;
-        let mut scores_needing_update = 0;
-
-        for row in rows {
-            let score_id: i32 = row.get("score_id");
-            let game_id: i32 = row.get("game_id");
-            let verification_status: i32 = row.get("verification_status");
-            let current_placement: i32 = row.get("current_placement");
-
-            total_scores += 1;
-
-            // Reset placement counter for new game
-            if game_id != current_game_id {
-                current_game_id = game_id;
-                placement_counter = 0;
-            }
-
-            // Calculate placement
-            let new_placement = if verification_status == 4 {
-                // Verified scores get sequential placement starting from 1
-                placement_counter += 1;
-                placement_counter
-            } else {
-                // Non-verified scores get placement=0
-                0
-            };
-
-            // Only add to updates if placement has changed
-            if new_placement != current_placement {
-                updates.push((score_id, new_placement));
-                scores_needing_update += 1;
-            }
-        }
-
-        info!(
-            "Processed {} game scores, {} need placement updates",
-            total_scores, scores_needing_update
-        );
-
-        // Update placements in database using batch update
-        if !updates.is_empty() {
-            self.update_game_score_placements(&updates).await;
-        } else {
-            info!("No placement updates needed");
-        }
-    }
-
-    /// Update game score placements in the database
-    async fn update_game_score_placements(&self, updates: &[(i32, i32)]) {
-        if updates.is_empty() {
-            return;
-        }
-
-        info!("Updating {} game score placements in database...", updates.len());
-
-        // Use COPY for efficient bulk update via temporary table
-        let copy_query = "COPY temp_placement_updates (score_id, placement) \
-            FROM STDIN WITH (FORMAT TEXT, DELIMITER E'\\t')";
-
-        // Create temporary table
-        self.client
-            .execute(
-                "CREATE TEMP TABLE temp_placement_updates (score_id INTEGER, placement INTEGER)",
-                &[]
-            )
-            .await
-            .unwrap();
-
-        // Copy data to temp table
-        let sink = self
-            .client
-            .copy_in(copy_query)
-            .await
-            .expect("Failed to initiate COPY IN operation for placement updates");
-
-        tokio::pin!(sink);
-
-        let p_bar = progress_bar(updates.len() as u64, "Updating game score placements".to_string());
-
-        for (score_id, placement) in updates {
-            let row_data = format!("{}\t{}\n", score_id, placement);
-            let data_bytes = Bytes::from(row_data.into_bytes());
-            sink.send(data_bytes)
+        let mut total_scores: Option<i64> = None;
+        if log::log_enabled!(log::Level::Debug) {
+            if let Ok(stats_row) = self
+                .client
+                .query_one(
+                    "
+                    SELECT 
+                        COUNT(*) AS total_scores,
+                        COUNT(*) WHERE verification_status = 4 AS verified_scores
+                    FROM game_scores
+                ",
+                    &[]
+                )
                 .await
-                .expect("Failed to send data to COPY operation");
+            {
+                let total: i64 = stats_row.get("total_scores");
+                let verified: i64 = stats_row.get("verified_scores");
+                let pending = total - verified;
 
-            if let Some(ref bar) = p_bar {
-                bar.inc(1);
+                debug!(
+                    "Starting placement recalculation for {} scores ({} verified, {} pending verification)",
+                    total, verified, pending
+                );
+
+                total_scores = Some(total);
             }
         }
 
-        sink.close()
-            .await
-            .expect("Failed to finalize COPY operation for placement updates");
-
-        if let Some(bar) = p_bar {
-            bar.finish();
+        if total_scores.is_none() {
+            info!("Starting placement recalculation for game scores");
         }
 
-        // Update game_scores from temp table, including the updated timestamp
         let updated_count = self
             .client
             .execute(
                 "
-                UPDATE game_scores gs
-                SET placement = tpu.placement,
+                UPDATE game_scores AS gs
+                SET placement = np.new_placement,
                     updated = NOW() AT TIME ZONE 'UTC'
-                FROM temp_placement_updates tpu
-                WHERE gs.id = tpu.score_id
+                FROM (
+                    SELECT
+                        id,
+                        CASE
+                            WHEN verification_status = 4 THEN
+                                SUM(CASE WHEN verification_status = 4 THEN 1 ELSE 0 END)
+                                    OVER (
+                                        PARTITION BY game_id
+                                        ORDER BY score DESC, id
+                                        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                                    )
+                            ELSE 0
+                        END AS new_placement
+                    FROM game_scores
+                ) AS np
+                WHERE gs.id = np.id
+                    AND gs.placement IS DISTINCT FROM np.new_placement
             ",
                 &[]
             )
             .await
             .unwrap();
 
-        // Drop temp table
-        self.client
-            .execute("DROP TABLE temp_placement_updates", &[])
-            .await
-            .unwrap();
+        let elapsed_secs = timer.elapsed().as_secs_f64();
 
-        info!("Successfully updated {} game score placements", updated_count);
+        match (updated_count, total_scores) {
+            (0, Some(total)) => info!(
+                "Placements already up to date; scanned {} scores in {:.3}s",
+                total, elapsed_secs
+            ),
+            (0, None) => info!("Placements already up to date in {:.3}s", elapsed_secs),
+            (_, Some(total)) => info!(
+                "Updated placements for {} game scores in {:.3}s (out of {})",
+                updated_count, elapsed_secs, total
+            ),
+            (_, None) => info!(
+                "Updated placements for {} game scores in {:.3}s",
+                updated_count, elapsed_secs
+            )
+        }
     }
 }

@@ -42,12 +42,7 @@ async fn main() {
         }
     };
 
-    // BEGIN TRANSACTION - executed on the connection
-    client
-        .client()
-        .execute("BEGIN", &[])
-        .await
-        .expect("Failed to begin transaction");
+    let mut transaction_guard = client.begin_transaction().await.expect("Failed to begin transaction");
     info!("BEGIN TRANSACTION");
 
     // Execute all operations
@@ -124,33 +119,28 @@ async fn main() {
     match process_result {
         Ok(()) => {
             // COMMIT TRANSACTION
-            match client.client().execute("COMMIT", &[]).await {
-                Ok(_) => {
-                    info!("COMMIT TRANSACTION");
-                    let end = Instant::now();
-                    info!("Processing complete in {:.2?}", (end - start));
+            if let Err(e) = transaction_guard.commit().await {
+                log::error!("Failed to commit transaction: {}", e);
+                if let Err(rollback_err) = transaction_guard.rollback().await {
+                    log::error!("Failed to rollback transaction after commit failure: {}", rollback_err);
+                } else {
+                    log::error!("Transaction rolled back due to commit failure");
                 }
-                Err(e) => {
-                    log::error!("Failed to commit transaction: {}", e);
-                    // Attempt to rollback the transaction before exiting
-                    match client.client().execute("ROLLBACK", &[]).await {
-                        Ok(_) => log::error!("Transaction rolled back due to commit failure"),
-                        Err(rollback_err) => log::error!("Failed to rollback transaction: {}", rollback_err)
-                    }
-                    cleanup_rabbitmq(&mut rabbitmq_publisher).await;
-                    std::process::exit(1);
-                }
+                cleanup_rabbitmq(&mut rabbitmq_publisher).await;
+                std::process::exit(1);
             }
+            info!("COMMIT TRANSACTION");
+            let end = Instant::now();
+            info!("Processing complete in {:.2?}", (end - start));
         }
         Err(e) => {
             // ROLLBACK TRANSACTION
             log::error!("Processing failed: {}", e);
-            match client.client().execute("ROLLBACK", &[]).await {
-                Ok(_) => log::error!("ROLLBACK TRANSACTION completed"),
-                Err(rollback_err) => {
-                    log::error!("Failed to rollback transaction: {}", rollback_err);
-                    log::error!("WARNING: Transaction may be left in an inconsistent state");
-                }
+            if let Err(rollback_err) = transaction_guard.rollback().await {
+                log::error!("Failed to rollback transaction: {}", rollback_err);
+                log::error!("WARNING: Transaction may be left in an inconsistent state");
+            } else {
+                log::error!("ROLLBACK TRANSACTION completed");
             }
             cleanup_rabbitmq(&mut rabbitmq_publisher).await;
             std::process::exit(1);
