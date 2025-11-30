@@ -12,7 +12,7 @@ use crate::{
         rating_tracker::RatingTracker,
         structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
     },
-    utils::progress_utils::progress_bar
+    utils::progress_utils::progress_span
 };
 use chrono::{Duration, Utc};
 use itertools::Itertools;
@@ -22,6 +22,8 @@ use openskill::{
 };
 use std::{collections::HashMap, ops::Sub, slice::from_ref};
 use strum::IntoEnumIterator;
+use tracing::{debug, error, info, warn};
+use tracing_indicatif::span_ext::IndicatifSpanExt;
 
 /// o!TR Model Implementation
 ///
@@ -87,43 +89,34 @@ impl OtrModel {
     /// # Returns
     /// Returns a vector of all PlayerRatings after processing
     pub fn process(&mut self, matches: &[Match]) -> Vec<PlayerRating> {
-        let progress_bar = progress_bar(matches.len() as u64, "Processing match data".to_string());
+        let span = progress_span(matches.len() as u64, "Processing matches");
+        let _guard = span.enter();
 
-        log::info!("Starting to process {} matches", matches.len());
+        info!(match_count = matches.len(), "Starting to process matches");
 
         for m in matches.iter() {
-            // Check for potential issues before processing
             if m.games.is_empty() {
-                log::error!("Skipping match ID {} ('{}') - no games found!", m.id, m.name);
-                if let Some(pb) = &progress_bar {
-                    pb.inc(1);
-                }
+                error!(match_id = m.id, match_name = %m.name, "Skipping match - no games found");
+                span.pb_inc(1);
                 continue;
             }
 
             let empty_games: Vec<_> = m.games.iter().filter(|g| g.scores.is_empty()).map(|g| g.id).collect();
 
             if !empty_games.is_empty() {
-                log::warn!(
-                    "Match ID {} ('{}') has {} games with no scores: {:?}",
-                    m.id,
-                    m.name,
-                    empty_games.len(),
-                    empty_games
+                warn!(
+                    match_id = m.id,
+                    match_name = %m.name,
+                    empty_game_count = empty_games.len(),
+                    "Match has games with no scores"
                 );
             }
 
             self.process_match(m);
-            if let Some(pb) = &progress_bar {
-                pb.inc(1);
-            }
+            span.pb_inc(1);
         }
 
-        if let Some(pb) = &progress_bar {
-            pb.finish();
-        }
-
-        log::info!("Finished processing matches, applying final decay pass");
+        info!("Finished processing matches, applying final decay pass");
         self.final_decay_pass();
         self.rating_tracker.sort();
         self.rating_tracker.get_all_ratings()
@@ -233,7 +226,7 @@ impl OtrModel {
         let mut player_ids = Vec::new();
 
         if game.scores.is_empty() {
-            log::warn!("Game ID {} has no scores, returning empty rating result", game.id);
+            warn!(game_id = game.id, "Game has no scores, returning empty rating result");
             return HashMap::new();
         }
 
@@ -245,11 +238,11 @@ impl OtrModel {
                     // This means they are in the system but have not yet been picked up
                     // by the DataWorkerService. Alternatively, they may not have any
                     // ruleset data, due to inactivity.
-                    log::debug!(
-                        "Game ID {}: Using fallback rating for player {} in ruleset {:?}",
-                        game.id,
-                        score.player_id,
-                        ruleset
+                    debug!(
+                        game_id = game.id,
+                        player_id = score.player_id,
+                        ruleset = ?ruleset,
+                        "Using fallback rating for player"
                     );
                     PlayerRating {
                         id: 0,
@@ -387,13 +380,16 @@ impl OtrModel {
             .filter(|lb| !lb.is_empty())
             .collect();
 
+        let mut total_decayed = 0usize;
+
         for leaderboard in leaderboards {
             let ruleset = leaderboard
                 .first()
                 .map(|r| r.ruleset)
                 .expect("Leaderboard should not be empty");
 
-            let progress = progress_bar(leaderboard.len() as u64, format!("Applying decay: [{ruleset:?}]"));
+            let span = progress_span(leaderboard.len() as u64, format!("Applying decay [{ruleset:?}]"));
+            let _guard = span.enter();
 
             let mut updated_ratings = Vec::new();
             for rating in leaderboard {
@@ -401,19 +397,18 @@ impl OtrModel {
                 if let Ok(Some(updated)) = decay_system.decay(&mut current) {
                     updated_ratings.push(updated.clone());
                 }
-
-                if let Some(pb) = &progress {
-                    pb.inc(1);
-                }
-            }
-
-            if let Some(pb) = &progress {
-                pb.finish();
+                span.pb_inc(1);
             }
 
             if !updated_ratings.is_empty() {
+                debug!(ruleset = ?ruleset, decayed_count = updated_ratings.len(), "Decay pass completed for ruleset");
+                total_decayed += updated_ratings.len();
                 self.rating_tracker.insert_or_update(&updated_ratings);
             }
+        }
+
+        if total_decayed > 0 {
+            info!(total_decayed, "Final decay pass complete");
         }
     }
 

@@ -18,6 +18,7 @@ use crate::{
 };
 use chrono::{DateTime, Duration, FixedOffset};
 use thiserror::Error;
+use tracing::{debug, trace};
 
 /// Possible errors that can occur during the decay process
 #[derive(Error, Debug, PartialEq)]
@@ -73,6 +74,13 @@ impl DecaySystem {
         if decay_timestamps.is_empty() {
             return Ok(None);
         }
+
+        trace!(
+            player_id = player_rating.player_id,
+            ruleset = ?player_rating.ruleset,
+            cycles = decay_timestamps.len(),
+            "Applying decay cycles"
+        );
 
         self.apply_decay_adjustments(player_rating, decay_timestamps);
         Ok(Some(player_rating))
@@ -194,6 +202,7 @@ impl DecaySystem {
         let mut current_rating = player_rating.rating;
         let mut current_volatility = player_rating.volatility;
         let floor = self.calculate_decay_floor(player_rating);
+        let initial_rating = current_rating;
 
         let mut adjustments = Vec::with_capacity(timestamps.len());
 
@@ -203,6 +212,7 @@ impl DecaySystem {
 
             // Stop if we've hit the floor (no more decay possible)
             if new_rating == current_rating {
+                trace!(player_id = player_rating.player_id, floor, "Player hit decay floor");
                 break;
             }
 
@@ -220,6 +230,16 @@ impl DecaySystem {
 
             current_rating = new_rating;
             current_volatility = new_volatility;
+        }
+
+        if !adjustments.is_empty() {
+            debug!(
+                player_id = player_rating.player_id,
+                cycles = adjustments.len(),
+                rating_before = initial_rating,
+                rating_after = current_rating,
+                "Decay adjustments applied"
+            );
         }
 
         player_rating.adjustments.extend(adjustments);

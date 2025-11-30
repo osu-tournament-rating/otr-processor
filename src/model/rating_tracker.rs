@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use indexmap::IndexMap;
 use itertools::Itertools;
+use tracing::{debug, trace};
 
 use crate::database::db_structs::{PlayerRating, RatingAdjustment};
 
@@ -96,6 +97,7 @@ impl RatingTracker {
     /// # Arguments
     /// * `ratings` - Slice of PlayerRating objects to update
     pub fn insert_or_update(&mut self, ratings: &[PlayerRating]) {
+        trace!(count = ratings.len(), "Inserting/updating ratings");
         for rating in ratings {
             let cloned_rating = rating.clone();
             self.leaderboard
@@ -149,6 +151,8 @@ impl RatingTracker {
     ///    - Ensure all leaderboards are consistent
     ///    - Update all player records
     pub fn sort(&mut self) {
+        debug!(total_ratings = self.leaderboard.len(), "Sorting leaderboards");
+
         let rulesets = [
             Ruleset::Osu,
             Ruleset::Taiko,
@@ -169,6 +173,8 @@ impl RatingTracker {
 
         // Final consistency update
         self.ensure_leaderboard_consistency(&rulesets);
+
+        debug!("Leaderboard sorting complete");
     }
 
     /// Updates global rankings and percentiles for all rulesets

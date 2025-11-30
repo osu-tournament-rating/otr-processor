@@ -1,6 +1,4 @@
 use clap::Parser;
-use env_logger::Env;
-use log::{debug, info};
 use otr_processor::{
     args::Args,
     database::db::DbClient,
@@ -9,6 +7,9 @@ use otr_processor::{
     utils::test_utils::generate_country_mapping_players
 };
 use std::{collections::HashMap, time::Instant};
+use tracing::{debug, error, info, warn};
+use tracing_indicatif::IndicatifLayer;
+use tracing_subscriber::{prelude::*, EnvFilter};
 use uuid::Uuid;
 
 #[tokio::main]
@@ -22,8 +23,8 @@ async fn main() {
     // Parse args
     let args = Args::parse();
 
-    // Initialize logger
-    env_logger::Builder::from_env(Env::default().default_filter_or(&args.log_level)).init();
+    // Initialize tracing with indicatif integration
+    init_tracing(&args.log_level);
 
     if args.ignore_constraints {
         info!("Ignoring database constraints");
@@ -37,7 +38,7 @@ async fn main() {
     let mut rabbitmq_publisher = match initialize_rabbitmq().await {
         Ok(publisher) => Some(publisher),
         Err(e) => {
-            log::warn!("Failed to initialize RabbitMQ: {}. Continuing without messaging.", e);
+            warn!("Failed to initialize RabbitMQ: {}. Continuing without messaging.", e);
             None
         }
     };
@@ -57,7 +58,7 @@ async fn main() {
         let players = client.get_players().await;
 
         if matches.is_empty() {
-            log::warn!("No matches found to process! Check that matches have verification_status=4");
+            warn!("No matches found to process! Check that matches have verification_status=4");
         } else {
             info!("Found {} matches ready for processing", matches.len());
         }
@@ -98,7 +99,7 @@ async fn main() {
 
                 // Ensure connection is healthy before publishing
                 if let Err(e) = publisher.ensure_connected().await {
-                    log::error!("Failed to ensure RabbitMQ connection: {}", e);
+                    error!("Failed to ensure RabbitMQ connection: {}", e);
                     continue;
                 }
 
@@ -107,7 +108,7 @@ async fn main() {
                         "Published tournament stats message for tournament {}: {}",
                         tournament_id, tournament_data.name
                     ),
-                    Err(e) => log::error!("Failed to publish message for tournament {}: {}", tournament_id, e)
+                    Err(e) => error!("Failed to publish message for tournament {}: {}", tournament_id, e)
                 }
             }
         }
@@ -120,11 +121,11 @@ async fn main() {
         Ok(()) => {
             // COMMIT TRANSACTION
             if let Err(e) = transaction_guard.commit().await {
-                log::error!("Failed to commit transaction: {}", e);
+                error!("Failed to commit transaction: {}", e);
                 if let Err(rollback_err) = transaction_guard.rollback().await {
-                    log::error!("Failed to rollback transaction after commit failure: {}", rollback_err);
+                    error!("Failed to rollback transaction after commit failure: {}", rollback_err);
                 } else {
-                    log::error!("Transaction rolled back due to commit failure");
+                    error!("Transaction rolled back due to commit failure");
                 }
                 cleanup_rabbitmq(&mut rabbitmq_publisher).await;
                 std::process::exit(1);
@@ -135,12 +136,12 @@ async fn main() {
         }
         Err(e) => {
             // ROLLBACK TRANSACTION
-            log::error!("Processing failed: {}", e);
+            error!("Processing failed: {}", e);
             if let Err(rollback_err) = transaction_guard.rollback().await {
-                log::error!("Failed to rollback transaction: {}", rollback_err);
-                log::error!("WARNING: Transaction may be left in an inconsistent state");
+                error!("Failed to rollback transaction: {}", rollback_err);
+                error!("WARNING: Transaction may be left in an inconsistent state");
             } else {
-                log::error!("ROLLBACK TRANSACTION completed");
+                error!("ROLLBACK TRANSACTION completed");
             }
             cleanup_rabbitmq(&mut rabbitmq_publisher).await;
             std::process::exit(1);
@@ -158,8 +159,8 @@ async fn client(args: &Args) -> DbClient {
     match DbClient::connect(&connection_string, args.ignore_constraints).await {
         Ok(client) => client,
         Err(e) => {
-            log::error!("Failed to connect to database: {}", e);
-            log::error!("Application cannot start without a valid database connection");
+            error!("Failed to connect to database: {}", e);
+            error!("Application cannot start without a valid database connection");
             std::process::exit(1);
         }
     }
@@ -181,7 +182,18 @@ async fn initialize_rabbitmq() -> Result<RabbitMqPublisher, Box<dyn std::error::
 async fn cleanup_rabbitmq(publisher: &mut Option<RabbitMqPublisher>) {
     if let Some(mut publisher) = publisher.take() {
         if let Err(e) = publisher.close().await {
-            log::error!("Failed to close RabbitMQ connection: {}", e);
+            error!("Failed to close RabbitMQ connection: {}", e);
         }
     }
+}
+
+fn init_tracing(log_level: &str) {
+    let indicatif_layer = IndicatifLayer::new();
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level));
+
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(tracing_subscriber::fmt::layer().with_writer(indicatif_layer.get_stderr_writer()))
+        .with(indicatif_layer)
+        .init();
 }

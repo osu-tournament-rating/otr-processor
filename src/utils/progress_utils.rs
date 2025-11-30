@@ -1,55 +1,42 @@
-use indicatif::ProgressBar;
-use log::{info, log_enabled, Level};
+use indicatif::ProgressStyle;
+use tracing::{info_span, Span};
+use tracing_indicatif::span_ext::IndicatifSpanExt;
 
-pub fn progress_bar(len: u64, msg: String) -> Option<ProgressBar> {
-    // Only show progress bars if INFO logging is enabled
-    if !log_enabled!(Level::Info) {
-        info!("{}", msg);
-        return None;
-    }
-
-    let bar = ProgressBar::new(len).with_message(msg);
-    bar.set_style(
-        indicatif::ProgressStyle::default_bar()
+pub fn progress_span(len: u64, msg: impl Into<String>) -> Span {
+    let msg = msg.into();
+    let span = info_span!("progress", %msg);
+    span.pb_set_style(
+        &ProgressStyle::default_bar()
             .template("[{elapsed_precise} / {eta_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}")
             .unwrap()
             .progress_chars("##-")
     );
-
-    Some(bar)
+    span.pb_set_length(len);
+    span.pb_set_message(&msg);
+    span
 }
 
-pub fn progress_bar_spinner(len: u64, msg: String) -> Option<ProgressBar> {
-    // Only show progress bars if INFO logging is enabled
-    if !log_enabled!(Level::Info) {
-        info!("{}", msg);
-        return None;
-    }
-
-    let bar = ProgressBar::new(len).with_message(msg);
-    bar.set_style(
-        indicatif::ProgressStyle::default_spinner()
+pub fn spinner_span(len: u64, msg: impl Into<String>) -> Span {
+    let msg = msg.into();
+    let span = info_span!("spinner", %msg);
+    span.pb_set_style(
+        &ProgressStyle::default_spinner()
             .template("[{elapsed_precise} / {eta_precise}] {spinner:.green} {msg}")
             .unwrap()
     );
-
-    Some(bar)
+    span.pb_set_length(len);
+    span.pb_set_message(&msg);
+    span
 }
 
-pub fn indeterminate_bar(msg: String) -> Option<ProgressBar> {
-    // Only show progress bars if INFO logging is enabled
-    if !log_enabled!(Level::Info) {
-        info!("{}", msg);
-        return None;
-    }
-
-    let bar = ProgressBar::new_spinner().with_message(msg);
-
-    bar.set_style(
-        indicatif::ProgressStyle::default_spinner()
+pub fn indeterminate_span(msg: impl Into<String>) -> Span {
+    let msg = msg.into();
+    let span = info_span!("indeterminate", %msg);
+    span.pb_set_style(
+        &ProgressStyle::default_spinner()
             .template("[{elapsed_precise}] {spinner:.green} {msg}")
             .unwrap()
     );
-
-    Some(bar)
+    span.pb_set_message(&msg);
+    span
 }
