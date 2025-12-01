@@ -5,19 +5,20 @@ use crate::{
         constants::{DEFAULT_VOLATILITY, INITIAL_RATING_CEILING, INITIAL_RATING_FLOOR, MULTIPLIER},
         structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
     },
-    utils::progress_utils::progress_bar
+    utils::progress_utils::progress_span
 };
 use chrono::{DateTime, Duration, FixedOffset};
 use std::{collections::HashMap, ops::Sub};
+use tracing::debug;
+use tracing_indicatif::span_ext::IndicatifSpanExt;
 
 pub fn create_initial_ratings(players: &[Player], matches: &[Match]) -> Vec<PlayerRating> {
     // Identify which players have played in each ruleset
     let mut ruleset_activity: HashMap<Ruleset, HashMap<i32, DateTime<FixedOffset>>> = HashMap::new();
 
-    let p_bar = progress_bar(
-        matches.len() as u64,
-        "Identifying player ruleset participation".to_string()
-    );
+    let span = progress_span(matches.len() as u64, "Scanning match participation");
+    let _guard = span.enter();
+
     for match_ in matches {
         for game in &match_.games {
             for score in &game.scores {
@@ -32,15 +33,9 @@ pub fn create_initial_ratings(players: &[Player], matches: &[Match]) -> Vec<Play
                     .or_insert(match_.start_time);
             }
         }
-
-        if let Some(bar) = &p_bar {
-            bar.inc(1);
-        }
+        span.pb_inc(1);
     }
-
-    if let Some(bar) = &p_bar {
-        bar.finish_with_message("Initial ratings created");
-    }
+    drop(_guard);
 
     let mut ratings = Vec::new();
     for player in players {
@@ -112,8 +107,8 @@ fn initial_rating(player: &Player, ruleset: &Ruleset) -> f64 {
                     return mu_from_rank(ruleset_data.global_rank, *ruleset);
                 }
 
-                // If no data found, use fallback rating and log a warning
-                log::debug!("No data found for player, falling back to default initial rating: [player_id: {:?}, ruleset: {:?}]", player.id, ruleset);
+                // If no data found, use fallback rating
+                debug!(player_id = player.id, ruleset = ?ruleset, "No data found for player, using fallback initial rating");
                 return FALLBACK_RATING;
             }
 

@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::time::sleep;
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 #[derive(Debug, Error)]
@@ -135,12 +136,11 @@ impl RabbitMqPublisher {
         self.connection = Some(connection);
         self.channel = Some(channel);
 
-        // Use safe URL for logging (without credentials)
-        log::info!("Connected to RabbitMQ at {}", self.config.connection_url_safe());
-        log::info!(
-            "Queue '{}' declared and bound to exchange '{}'",
-            self.config.routing_key,
-            self.config.exchange
+        info!(url = %self.config.connection_url_safe(), "Connected to RabbitMQ");
+        info!(
+            queue = %self.config.routing_key,
+            exchange = %self.config.exchange,
+            "Queue declared and bound to exchange"
         );
 
         Ok(())
@@ -159,16 +159,16 @@ impl RabbitMqPublisher {
                 Ok(_) => return Ok(()),
                 Err(e) => {
                     if attempt >= self.config.retry_attempts {
-                        log::error!("Failed to connect to RabbitMQ after {} attempts: {}", attempt, e);
+                        error!(attempts = attempt, "Failed to connect to RabbitMQ: {}", e);
                         return Err(e);
                     }
 
-                    log::warn!(
-                        "Failed to connect to RabbitMQ (attempt {}/{}): {}. Retrying in {:?}...",
+                    warn!(
                         attempt,
-                        self.config.retry_attempts,
-                        e,
-                        delay
+                        max_attempts = self.config.retry_attempts,
+                        delay_ms = delay.as_millis() as u64,
+                        "Failed to connect to RabbitMQ: {}. Retrying...",
+                        e
                     );
 
                     sleep(delay).await;
@@ -183,7 +183,7 @@ impl RabbitMqPublisher {
     /// Checks if the connection is healthy and attempts to reconnect if not
     pub async fn ensure_connected(&mut self) -> Result<(), PublisherError> {
         if !self.is_connected() {
-            log::info!("Connection lost, attempting to reconnect...");
+            info!("Connection lost, attempting to reconnect...");
             self.connect_with_retry().await?;
         }
 
@@ -195,7 +195,7 @@ impl RabbitMqPublisher {
         }
 
         // Channel is not healthy, reconnect
-        log::info!("Channel not healthy, reconnecting...");
+        info!("Channel not healthy, reconnecting...");
         self.connection = None;
         self.channel = None;
         self.connect_with_retry().await
@@ -239,11 +239,11 @@ impl RabbitMqPublisher {
             )
             .await?;
 
-        log::debug!(
-            "Published tournament stats message for tournament {} to exchange '{}' with routing key '{}'",
+        debug!(
             tournament_id,
-            self.config.exchange,
-            self.config.routing_key
+            exchange = %self.config.exchange,
+            routing_key = %self.config.routing_key,
+            "Published tournament stats message"
         );
 
         Ok(())
@@ -279,7 +279,7 @@ impl RabbitMqPublisher {
             }
         }
 
-        log::info!("RabbitMQ connection closed");
+        info!("RabbitMQ connection closed");
         Ok(())
     }
 }
@@ -287,7 +287,7 @@ impl RabbitMqPublisher {
 impl Drop for RabbitMqPublisher {
     fn drop(&mut self) {
         if self.is_connected() {
-            log::warn!("RabbitMQ publisher dropped without proper closure");
+            warn!("RabbitMQ publisher dropped without proper closure");
         }
     }
 }

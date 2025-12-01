@@ -15,7 +15,7 @@ path = "src/main.rs"
 
 [dependencies]
 dotenv = "0.15.0"
-indicatif = "0.17.7"
+indicatif = "0.18"
 serde = { version = "1.0.196", features = ["derive"] }
 tokio = { version = "1.36.0", features = ["full"] }
 chrono = {  version = "0.4.33", features = ["serde"] }
@@ -32,9 +32,10 @@ postgres-types = "0.2.7"
 rand_chacha = "0.9.0"
 rand = "0.9.1"
 thiserror = "2.0.12"
-env_logger = "0.11.6"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+tracing-indicatif = "0.3"
 clap = { version = "4.5.37", features = ["derive", "env"] }
-log = "0.4.22"
 bytes = "1.10.1"
 futures = "0.3.31"
 lapin = "2.3.1"
