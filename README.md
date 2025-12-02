@@ -1,3 +1,7 @@
 # otr-processor
 
-All information regarding the o!TR Processor can be found on [this page](https://docs.otr.stagec.xyz/o-tr-processor.html) of the [o!TR Documentation](https://docs.otr.stagec.xyz).
+Rating calculation engine for the o!TR platform. Processes osu! tournament
+data to calculate player skill ratings using a PlackettLuce model.
+
+Please see the
+[Development Guide](https://docs.otr.stagec.xyz/Development/Development-Guide) for more information.
