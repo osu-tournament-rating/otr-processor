@@ -116,8 +116,8 @@ async fn main() {
                     }
 
                     match publisher.publish_tournament_stats(tournament_id, correlation_id).await {
-                        Ok(_) => debug!(
-                            "Published tournament stats message for tournament {}: {}",
+                        Ok(_) => info!(
+                            "Enqueued stats: [{}] {}",
                             tournament_id, tournament_data.name
                         ),
                         Err(e) => error!("Failed to publish message for tournament {}: {}", tournament_id, e)
