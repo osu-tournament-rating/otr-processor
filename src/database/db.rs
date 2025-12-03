@@ -798,7 +798,6 @@ impl DbClient {
                 JOIN game_scores gs ON g.id = gs.game_id
                 WHERE t.id = ANY(ARRAY[{}])
                   AND t.verification_status = 4
-                  AND m.verification_status = 4
                 GROUP BY t.id
             ),
             tournament_stats_timestamps AS (
