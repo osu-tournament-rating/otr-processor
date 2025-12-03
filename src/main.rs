@@ -92,23 +92,36 @@ async fn main() {
         client.save_results(&results).await;
         info!("Results saved to database.");
 
-        // 8. Emit messages for processed tournaments
+        // 8. Emit messages for tournaments needing stats refresh
         if let Some(ref mut publisher) = rabbitmq_publisher {
-            for (tournament_id, tournament_data) in &tournament_info {
-                let correlation_id = Some(Uuid::new_v4().to_string());
+            let all_tournament_ids: Vec<i32> = tournament_info.keys().cloned().collect();
 
-                // Ensure connection is healthy before publishing
-                if let Err(e) = publisher.ensure_connected().await {
-                    error!("Failed to ensure RabbitMQ connection: {}", e);
-                    continue;
-                }
+            let tournaments_needing_refresh = client.get_tournaments_needing_stats_refresh(&all_tournament_ids).await;
 
-                match publisher.publish_tournament_stats(*tournament_id, correlation_id).await {
-                    Ok(_) => debug!(
-                        "Published tournament stats message for tournament {}: {}",
-                        tournament_id, tournament_data.name
-                    ),
-                    Err(e) => error!("Failed to publish message for tournament {}: {}", tournament_id, e)
+            let skipped = tournament_info.len() - tournaments_needing_refresh.len();
+            info!(
+                "Enqueueing {} of {} tournaments for stats refresh ({} unchanged)",
+                tournaments_needing_refresh.len(),
+                tournament_info.len(),
+                skipped
+            );
+
+            for tournament_id in tournaments_needing_refresh {
+                if let Some(tournament_data) = tournament_info.get(&tournament_id) {
+                    let correlation_id = Some(Uuid::new_v4().to_string());
+
+                    if let Err(e) = publisher.ensure_connected().await {
+                        error!("Failed to ensure RabbitMQ connection: {}", e);
+                        continue;
+                    }
+
+                    match publisher.publish_tournament_stats(tournament_id, correlation_id).await {
+                        Ok(_) => info!(
+                            "Enqueued stats: [{}] {}",
+                            tournament_id, tournament_data.name
+                        ),
+                        Err(e) => error!("Failed to publish message for tournament {}: {}", tournament_id, e)
+                    }
                 }
             }
         }

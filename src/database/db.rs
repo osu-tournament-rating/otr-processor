@@ -771,4 +771,59 @@ impl DbClient {
             )
         }
     }
+
+    /// Returns tournament IDs that need stats refresh based on timestamp comparison.
+    /// A tournament needs refresh if:
+    /// - No player_tournament_stats exist for it, OR
+    /// - Any match/game/game_score has been updated after the stats were created
+    pub async fn get_tournaments_needing_stats_refresh(&self, tournament_ids: &[i32]) -> Vec<i32> {
+        if tournament_ids.is_empty() {
+            return Vec::new();
+        }
+
+        let id_list = tournament_ids.iter().map(|id| id.to_string()).join(",");
+
+        let query = format!(
+            "WITH tournament_data_timestamps AS (
+                SELECT
+                    t.id AS tournament_id,
+                    GREATEST(
+                        COALESCE(MAX(m.updated), '1970-01-01'::timestamptz),
+                        COALESCE(MAX(g.updated), '1970-01-01'::timestamptz),
+                        COALESCE(MAX(gs.updated), '1970-01-01'::timestamptz)
+                    ) AS latest_data_update
+                FROM tournaments t
+                JOIN matches m ON t.id = m.tournament_id
+                JOIN games g ON m.id = g.match_id
+                JOIN game_scores gs ON g.id = gs.game_id
+                WHERE t.id = ANY(ARRAY[{}])
+                  AND t.verification_status = 4
+                  AND m.verification_status = 4
+                GROUP BY t.id
+            ),
+            tournament_stats_timestamps AS (
+                SELECT
+                    tournament_id,
+                    MAX(created) AS latest_stats_created
+                FROM player_tournament_stats
+                WHERE tournament_id = ANY(ARRAY[{}])
+                GROUP BY tournament_id
+            )
+            SELECT tdt.tournament_id
+            FROM tournament_data_timestamps tdt
+            LEFT JOIN tournament_stats_timestamps tst
+                ON tdt.tournament_id = tst.tournament_id
+            WHERE tst.latest_stats_created IS NULL
+               OR tdt.latest_data_update > tst.latest_stats_created",
+            id_list, id_list
+        );
+
+        match self.client.query(&query, &[]).await {
+            Ok(rows) => rows.iter().map(|row| row.get::<_, i32>("tournament_id")).collect(),
+            Err(e) => {
+                error!("Failed to query tournaments needing stats refresh: {}", e);
+                tournament_ids.to_vec()
+            }
+        }
+    }
 }
