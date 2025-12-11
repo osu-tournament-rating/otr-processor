@@ -17,6 +17,9 @@ pub const DECAY_RATE: f64 = 0.05 * MULTIPLIER;
 /// Initial volatility, higher values indicate more uncertainty in the rating
 pub const DEFAULT_VOLATILITY: f64 = 6.0 * MULTIPLIER;
 
+/// Maximum volatility that weekly volatility decay can increase to
+pub const VOLATILITY_DECAY_CAP: f64 = (2.0 / 3.0) * DEFAULT_VOLATILITY;
+
 /// Fallback default rating used when rating cannot be identified from osu! rank information
 pub const FALLBACK_RATING: f64 = 15.0 * MULTIPLIER;
 

@@ -1,6 +1,6 @@
 use super::{
     constants::{BETA, FALLBACK_RATING, KAPPA},
-    decay::DecaySystem
+    decay::UnifiedDecaySystem
 };
 use crate::{
     database::db_structs::{Game, GameScore, Match, PlayerRating, RatingAdjustment},
@@ -50,7 +50,9 @@ pub struct OtrModel {
     /// The underlying PlackettLuce rating model
     pub model: PlackettLuce,
     /// Tracks and maintains all player ratings
-    pub rating_tracker: RatingTracker
+    pub rating_tracker: RatingTracker,
+    /// Unified system for rating and volatility decay at Wednesday 12:00 UTC
+    decay_system: UnifiedDecaySystem
 }
 
 impl OtrModel {
@@ -67,7 +69,8 @@ impl OtrModel {
 
         OtrModel {
             rating_tracker: tracker,
-            model: PlackettLuce::new(BETA, KAPPA, Self::gamma_override)
+            model: PlackettLuce::new(BETA, KAPPA, Self::gamma_override),
+            decay_system: UnifiedDecaySystem::new()
         }
     }
 
@@ -75,8 +78,8 @@ impl OtrModel {
     ///
     /// This function determines how quickly player volatility changes based on performance.
     /// A higher gamma means volatility changes more slowly.
-    fn gamma_override(_: f64, k: f64, _: &TeamRating) -> f64 {
-        1.0 / k
+    fn gamma_override(_: f64, _k: f64, _: &TeamRating) -> f64 {
+        2.0
     }
 
     /// Processes a batch of matches chronologically, updating player ratings.
@@ -127,14 +130,16 @@ impl OtrModel {
     /// Processes a single match, calculating and applying rating changes for all participants.
     ///
     /// # Processing Steps
-    /// 1. Apply decay to all participating players
-    /// 2. Calculate ratings using both methods:
+    /// 1. Apply unified decay (rating + volatility) at Wednesday 12:00 UTC timestamps
+    /// 2. Ensure any new players have initial ratings
+    /// 3. Calculate ratings using both methods:
     ///    - Method A: Considers only played games
     ///    - Method B: Assumes last place for unplayed games
-    /// 3. Combine results using weighted average
-    /// 4. Update player ratings in the tracker
+    /// 4. Combine results using weighted average
+    /// 5. Update player ratings in the tracker
     fn process_match(&mut self, match_: &Match) {
-        self.apply_decay(match_);
+        self.apply_unified_decay(match_.start_time);
+        self.ensure_player_ratings(match_);
 
         let ratings_a = self.generate_ratings_a(match_);
         let ratings_b = self.generate_ratings_b(match_);
@@ -373,57 +378,44 @@ impl OtrModel {
     /// even if they haven't participated in recent matches.
     fn final_decay_pass(&mut self) {
         let current_time = Utc::now().fixed_offset();
-        let decay_system = DecaySystem::new(current_time);
+        self.apply_unified_decay(current_time);
+    }
+
+    /// Applies unified decay (rating + volatility) to all players across all rulesets
+    /// up to the given time.
+    ///
+    /// This applies decay adjustments at every Wednesday 12:00 UTC between the last
+    /// processed time and the given `up_to` time:
+    /// - For inactive players (>184 days): both rating and volatility decay
+    /// - For active players: volatility decay only
+    fn apply_unified_decay(&mut self, up_to: chrono::DateTime<chrono::FixedOffset>) {
+        // Early exit if no Wednesdays to process (avoids expensive leaderboard cloning)
+        if !self.decay_system.has_pending_wednesdays(up_to) {
+            return;
+        }
 
         let leaderboards: Vec<Vec<PlayerRating>> = Ruleset::iter()
             .map(|ruleset| self.rating_tracker.get_leaderboard(ruleset))
             .filter(|lb| !lb.is_empty())
             .collect();
 
-        let mut total_decayed = 0usize;
-
         for leaderboard in leaderboards {
-            let ruleset = leaderboard
-                .first()
-                .map(|r| r.ruleset)
-                .expect("Leaderboard should not be empty");
+            let mut ratings = leaderboard;
+            let count = self.decay_system.apply_decay(&mut ratings, up_to);
 
-            let span = progress_span(leaderboard.len() as u64, format!("Applying decay [{ruleset:?}]"));
-            let _guard = span.enter();
-
-            let mut updated_ratings = Vec::new();
-            for rating in leaderboard {
-                let mut current = rating.clone();
-                if let Ok(Some(updated)) = decay_system.decay(&mut current) {
-                    updated_ratings.push(updated.clone());
-                }
-                span.pb_inc(1);
+            if count > 0 {
+                self.rating_tracker.insert_or_update(&ratings);
             }
-
-            if !updated_ratings.is_empty() {
-                debug!(ruleset = ?ruleset, decayed_count = updated_ratings.len(), "Decay pass completed for ruleset");
-                total_decayed += updated_ratings.len();
-                self.rating_tracker.insert_or_update(&updated_ratings);
-            }
-        }
-
-        if total_decayed > 0 {
-            info!(total_decayed, "Final decay pass complete");
         }
     }
 
-    /// Applies decay to all players in a match before processing their results.
-    fn apply_decay(&mut self, match_: &Match) {
-        let decay_system = DecaySystem::new(match_.start_time);
+    /// Ensures all match participants have ratings in the tracker.
+    /// Creates fallback initial ratings for players not yet in the system.
+    fn ensure_player_ratings(&mut self, match_: &Match) {
         let player_ids: Vec<i32> = self.get_match_participants(match_);
 
         for player_id in player_ids {
-            if let Some(rating) = self.rating_tracker.get_rating(player_id, match_.ruleset) {
-                let mut current = rating.clone();
-                if let Ok(Some(updated)) = decay_system.decay(&mut current) {
-                    self.rating_tracker.insert_or_update(from_ref(updated));
-                }
-            } else {
+            if self.rating_tracker.get_rating(player_id, match_.ruleset).is_none() {
                 // Player not present in the rating tracker.
                 // Create a fallback initial rating for them and add to tracker.
 
@@ -515,7 +507,6 @@ mod tests {
             structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset::*}
         }
     };
-    use approx::assert_abs_diff_eq;
     use chrono::Utc;
 
     #[test]
