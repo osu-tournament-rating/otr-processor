@@ -79,7 +79,7 @@ impl OtrModel {
     /// This function determines how quickly player volatility changes based on performance.
     /// A higher gamma means volatility changes more slowly.
     fn gamma_override(_: f64, _k: f64, _: &TeamRating) -> f64 {
-        2.0
+        1.0
     }
 
     /// Processes a batch of matches chronologically, updating player ratings.
