@@ -4,6 +4,7 @@ use super::db_structs::{
 };
 use crate::{model::structures::ruleset::Ruleset, utils::progress_utils::progress_span};
 use bytes::Bytes;
+use chrono::{DateTime, FixedOffset};
 use futures::SinkExt;
 use itertools::Itertools;
 use postgres_types::ToSql;
@@ -12,6 +13,17 @@ use tokio::runtime::Handle;
 use tokio_postgres::{Client, Error, NoTls, Row};
 use tracing::{debug, error, info, warn};
 use tracing_indicatif::span_ext::IndicatifSpanExt;
+
+const MATCH_BATCH_SIZE: usize = 500;
+const PLAYER_BATCH_SIZE: i64 = 5000;
+
+struct MatchMetadata {
+    id: i32,
+    name: String,
+    start_time: DateTime<FixedOffset>,
+    end_time: DateTime<FixedOffset>,
+    ruleset: Ruleset
+}
 
 enum TransactionState {
     Pending,
@@ -113,138 +125,184 @@ impl DbClient {
     }
 
     pub async fn get_matches(&self) -> Vec<Match> {
-        let mut matches_map: HashMap<i32, Match> = HashMap::new();
-        let mut games_map: HashMap<i32, Game> = HashMap::new();
-        let mut scores_map: HashMap<i32, GameScore> = HashMap::new();
+        info!("Fetching match metadata...");
 
-        // Link match ids and game ids
-        let mut match_games_link_map: HashMap<i32, Vec<i32>> = HashMap::new();
+        let mut match_metadata = self.fetch_match_metadata().await;
 
-        // Link game ids and score ids
-        let mut game_scores_link_map: HashMap<i32, Vec<i32>> = HashMap::new();
-
-        // The WHERE query here does the following:
-        //
-        // 1. Only consider verified tournaments with verified matches.
-        // 2. From these matches, we only include the games and scores which are verified.
-        //
-        info!("Fetching matches...");
-        let rows = self.client.query("
-            SELECT
-                t.id AS tournament_id, t.name AS tournament_name, t.ruleset AS tournament_ruleset,
-                m.id AS match_id, m.name AS match_name, m.start_time AS match_start_time, m.end_time AS match_end_time, m.tournament_id AS match_tournament_id,
-                g.id AS game_id, g.ruleset AS game_ruleset, g.start_time AS game_start_time, g.end_time AS game_end_time, g.match_id AS game_match_id,
-                gs.id AS game_score_id, gs.player_id AS game_score_player_id, gs.game_id AS game_score_game_id, gs.score AS game_score_score, gs.placement AS game_score_placement
-            FROM tournaments t
-                     JOIN matches m ON t.id = m.tournament_id
-                     JOIN games g ON m.id = g.match_id
-                     JOIN game_scores gs ON g.id = gs.game_id
-            WHERE t.verification_status = 4 AND m.verification_status = 4 AND g.verification_status = 4
-              AND gs.verification_status = 4
-            ORDER BY gs.id;", &[]).await.unwrap();
-
-        info!("Matches fetched, iterating...");
-
-        for row in rows {
-            let match_id = row.get::<_, i32>("match_id");
-            let game_id = row.get::<_, i32>("game_id");
-            let score_id = row.get::<_, i32>("game_score_id");
-
-            matches_map
-                .entry(match_id)
-                .or_insert_with(|| Self::match_from_row(&row));
-
-            games_map.entry(game_id).or_insert_with(|| Self::game_from_row(&row));
-            scores_map.entry(score_id).or_insert_with(|| Self::score_from_row(&row));
-
-            // Link ids back to parents
-            match_games_link_map.entry(match_id).or_default().push(game_id);
-            game_scores_link_map.entry(game_id).or_default().push(score_id);
+        if match_metadata.is_empty() {
+            info!("No matches found to process");
+            return Vec::new();
         }
 
-        info!("Linking ids...");
-        for (game_id, mut score_ids) in game_scores_link_map {
-            score_ids.dedup();
+        info!(
+            "Found {} matches, fetching games and scores in batches...",
+            match_metadata.len()
+        );
 
-            for score_id in score_ids {
-                games_map
-                    .get_mut(&game_id)
-                    .unwrap()
-                    .scores
-                    .push(scores_map.get(&score_id).unwrap().clone());
-            }
-        }
+        match_metadata.sort_by(|a, b| a.start_time.cmp(&b.start_time));
 
-        for (match_id, mut game_ids) in match_games_link_map {
-            game_ids.dedup();
+        let matches = self.assemble_matches_batched(&match_metadata).await;
 
-            for game_id in game_ids {
-                matches_map
-                    .get_mut(&match_id)
-                    .unwrap()
-                    .games
-                    .push(games_map.get(&game_id).unwrap().clone());
-            }
-        }
-
-        let mut matches = matches_map.values().cloned().collect_vec();
-        matches.sort_by(|a, b| a.start_time.cmp(&b.start_time));
-
-        // Log any matches that have no games or games with no scores
-        for match_ in &matches {
-            if match_.games.is_empty() {
-                error!(
-                    match_id = match_.id,
-                    match_name = %match_.name,
-                    "Match has no games - will be skipped during processing"
-                );
-            } else {
-                for game in &match_.games {
-                    if game.scores.is_empty() {
-                        error!(
-                            game_id = game.id,
-                            match_id = match_.id,
-                            match_name = %match_.name,
-                            "Game has no scores - will cause issues during processing"
-                        );
-                    }
-                }
-            }
-        }
+        self.log_match_warnings(&matches);
 
         info!("Match fetching complete - {} matches will be processed", matches.len());
 
         matches
     }
 
-    fn match_from_row(row: &Row) -> Match {
-        Match {
-            id: row.get("match_id"),
-            name: row.get("match_name"),
-            start_time: row.get("match_start_time"),
-            end_time: row.get("match_end_time"),
-            ruleset: Ruleset::try_from(row.get::<_, i32>("tournament_ruleset")).unwrap(),
-            games: Vec::new()
-        }
+    async fn fetch_match_metadata(&self) -> Vec<MatchMetadata> {
+        let query = "
+            SELECT m.id, m.name, m.start_time, m.end_time, t.ruleset
+            FROM matches m
+            JOIN tournaments t ON t.id = m.tournament_id
+            WHERE t.verification_status = 4 AND m.verification_status = 4
+            ORDER BY m.id";
+
+        let rows = self.client.query(query, &[]).await.unwrap();
+
+        rows.iter()
+            .map(|row| MatchMetadata {
+                id: row.get("id"),
+                name: row.get("name"),
+                start_time: row.get("start_time"),
+                end_time: row.get("end_time"),
+                ruleset: Ruleset::try_from(row.get::<_, i32>("ruleset")).unwrap()
+            })
+            .collect()
     }
 
-    fn game_from_row(row: &Row) -> Game {
-        Game {
-            id: row.get("game_id"),
-            ruleset: Ruleset::try_from(row.get::<_, i32>("game_ruleset")).unwrap(),
-            start_time: row.get("game_start_time"),
-            end_time: row.get("game_end_time"),
-            scores: Vec::new()
+    async fn assemble_matches_batched(&self, metadata: &[MatchMetadata]) -> Vec<Match> {
+        let span = progress_span(metadata.len() as u64, "Fetching match data");
+        let _guard = span.enter();
+
+        let mut matches = Vec::with_capacity(metadata.len());
+
+        for batch in metadata.chunks(MATCH_BATCH_SIZE) {
+            let match_ids: Vec<i32> = batch.iter().map(|m| m.id).collect();
+
+            let games_by_match = self.fetch_games_for_matches(&match_ids).await;
+
+            let game_ids: Vec<i32> = games_by_match
+                .values()
+                .flat_map(|games| games.iter().map(|g| g.id))
+                .collect();
+
+            let scores_by_game = self.fetch_scores_for_games(&game_ids).await;
+
+            for meta in batch {
+                let mut match_games = games_by_match.get(&meta.id).cloned().unwrap_or_default();
+
+                for game in &mut match_games {
+                    game.scores = scores_by_game.get(&game.id).cloned().unwrap_or_default();
+                }
+
+                let valid_games: Vec<Game> = match_games
+                    .into_iter()
+                    .filter(|g| {
+                        if g.scores.len() < 2 {
+                            warn!(
+                                game_id = g.id,
+                                match_id = meta.id,
+                                match_name = %meta.name,
+                                score_count = g.scores.len(),
+                                "DATA INTEGRITY: Verified game has <2 verified scores - skipping (requires o!TR Admin inspection)"
+                            );
+                            false
+                        } else {
+                            true
+                        }
+                    })
+                    .collect();
+
+                matches.push(Match {
+                    id: meta.id,
+                    name: meta.name.clone(),
+                    start_time: meta.start_time,
+                    end_time: meta.end_time,
+                    ruleset: meta.ruleset,
+                    games: valid_games
+                });
+
+                span.pb_inc(1);
+            }
         }
+
+        matches
     }
 
-    fn score_from_row(row: &Row) -> GameScore {
-        GameScore {
-            id: row.get("game_score_id"),
-            player_id: row.get("game_score_player_id"),
-            game_id: row.get("game_score_game_id"),
-            score: row.get("game_score_score"),
-            placement: row.get("game_score_placement")
+    async fn fetch_games_for_matches(&self, match_ids: &[i32]) -> HashMap<i32, Vec<Game>> {
+        if match_ids.is_empty() {
+            return HashMap::new();
+        }
+
+        let id_list = match_ids.iter().map(|id| id.to_string()).join(",");
+        let query = format!(
+            "SELECT id, ruleset, start_time, end_time, match_id
+             FROM games
+             WHERE match_id = ANY(ARRAY[{}]) AND verification_status = 4
+             ORDER BY id",
+            id_list
+        );
+
+        let rows = self.client.query(&query, &[]).await.unwrap();
+
+        let mut result: HashMap<i32, Vec<Game>> = HashMap::new();
+        for row in rows {
+            let match_id: i32 = row.get("match_id");
+            let game = Game {
+                id: row.get("id"),
+                ruleset: Ruleset::try_from(row.get::<_, i32>("ruleset")).unwrap(),
+                start_time: row.get("start_time"),
+                end_time: row.get("end_time"),
+                scores: Vec::new()
+            };
+            result.entry(match_id).or_default().push(game);
+        }
+
+        result
+    }
+
+    async fn fetch_scores_for_games(&self, game_ids: &[i32]) -> HashMap<i32, Vec<GameScore>> {
+        if game_ids.is_empty() {
+            return HashMap::new();
+        }
+
+        let id_list = game_ids.iter().map(|id| id.to_string()).join(",");
+        let query = format!(
+            "SELECT id, player_id, game_id, score, placement
+             FROM game_scores
+             WHERE game_id = ANY(ARRAY[{}]) AND verification_status = 4
+             ORDER BY game_id, id",
+            id_list
+        );
+
+        let rows = self.client.query(&query, &[]).await.unwrap();
+
+        let mut result: HashMap<i32, Vec<GameScore>> = HashMap::new();
+        for row in rows {
+            let game_id: i32 = row.get("game_id");
+            let score = GameScore {
+                id: row.get("id"),
+                player_id: row.get("player_id"),
+                game_id,
+                score: row.get("score"),
+                placement: row.get("placement")
+            };
+            result.entry(game_id).or_default().push(score);
+        }
+
+        result
+    }
+
+    fn log_match_warnings(&self, matches: &[Match]) {
+        for match_ in matches {
+            if match_.games.is_empty() {
+                warn!(
+                    match_id = match_.id,
+                    match_name = %match_.name,
+                    "DATA INTEGRITY: Match has no valid games after filtering - will be skipped (requires o!TR Admin inspection)"
+                );
+            }
         }
     }
 
@@ -254,58 +312,98 @@ impl DbClient {
     /// be waiting for the dataworker to process their data.
     pub async fn get_players(&self) -> Vec<Player> {
         info!("Fetching players...");
-        let mut players: Vec<Player> = Vec::new();
-        let rows = self
+
+        let total_count: i64 = self
             .client
-            .query(
-                "SELECT p.id AS player_id, p.username AS username, \
-        p.country AS country, prd.ruleset AS ruleset, prd.earliest_global_rank AS earliest_global_rank,\
-          prd.global_rank AS global_rank FROM players p \
-        JOIN player_osu_ruleset_data prd ON prd.player_id = p.id \
-        ORDER BY p.id",
+            .query_one(
+                "SELECT COUNT(DISTINCT p.id) as cnt FROM players p
+                 JOIN player_osu_ruleset_data prd ON prd.player_id = p.id",
                 &[]
             )
             .await
+            .map(|r| r.get("cnt"))
+            .unwrap_or(0);
+
+        let span = progress_span(total_count as u64, "Fetching players");
+        let _guard = span.enter();
+
+        let mut all_players: Vec<Player> = Vec::new();
+        let mut last_id: i32 = 0;
+
+        loop {
+            let batch = self.fetch_player_batch(last_id).await;
+
+            if batch.is_empty() {
+                break;
+            }
+
+            last_id = batch.last().map(|p| p.id).unwrap_or(last_id);
+            span.pb_inc(batch.len() as u64);
+            all_players.extend(batch);
+        }
+
+        info!("Players fetched: {} total", all_players.len());
+        all_players
+    }
+
+    async fn fetch_player_batch(&self, after_id: i32) -> Vec<Player> {
+        let query = "
+            SELECT p.id AS player_id, p.username AS username,
+                   p.country AS country, prd.ruleset AS ruleset,
+                   prd.earliest_global_rank AS earliest_global_rank,
+                   prd.global_rank AS global_rank
+            FROM players p
+            JOIN player_osu_ruleset_data prd ON prd.player_id = p.id
+            WHERE p.id > $1
+            ORDER BY p.id
+            LIMIT $2";
+
+        let rows = self
+            .client
+            .query(query, &[&after_id, &PLAYER_BATCH_SIZE])
+            .await
             .unwrap();
 
+        self.assemble_players_from_rows(&rows)
+    }
+
+    fn assemble_players_from_rows(&self, rows: &[Row]) -> Vec<Player> {
+        let mut players: Vec<Player> = Vec::new();
         let mut current_player_id = -1;
         let mut current_ruleset_data: Vec<RulesetData> = Vec::new();
 
         for (i, row) in rows.iter().enumerate() {
             let player_id = row.get::<_, i32>("player_id");
 
-            // If we're at the end of the loop, or the player id has changed, save the previous player's ruleset data.
-            if player_id != current_player_id || i == rows.len() - 1 {
-                // If they had no ruleset data, the `current_ruleset_data` vector will be empty.
+            if player_id != current_player_id {
                 if current_player_id != -1 {
                     if let Some(last_player) = players.last_mut() {
                         last_player.ruleset_data = Some(current_ruleset_data.clone());
                     }
                 }
 
-                // Start a new player
                 current_player_id = player_id;
-
-                // Clear out previous player's ruleset data
                 current_ruleset_data.clear();
 
-                let player = Player {
+                players.push(Player {
                     id: row.get("player_id"),
                     username: row.get("username"),
                     country: row.get("country"),
-                    // Saved when the player id changes or the last row is reached.
                     ruleset_data: Some(Vec::new())
-                };
-                players.push(player);
+                });
             }
 
-            // Push this row's ruleset data
             if let Some(ruleset_data) = self.ruleset_data_from_row(row) {
                 current_ruleset_data.push(ruleset_data);
             }
+
+            if i == rows.len() - 1 {
+                if let Some(last_player) = players.last_mut() {
+                    last_player.ruleset_data = Some(current_ruleset_data.clone());
+                }
+            }
         }
 
-        info!("Players fetched");
         players
     }
 
