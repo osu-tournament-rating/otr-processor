@@ -13,7 +13,7 @@ use super::{
 };
 use crate::{
     database::db_structs::{PlayerRating, RatingAdjustment},
-    model::structures::rating_adjustment_type::RatingAdjustmentType::Decay
+    model::structures::rating_adjustment_type::RatingAdjustmentType::{Decay, VolatilityDecay}
 };
 use chrono::{DateTime, Duration, FixedOffset};
 use tracing::{debug, trace};
@@ -192,16 +192,22 @@ impl UnifiedDecaySystem {
             return None;
         }
 
-        if is_inactive {
+        // Use Decay for inactive players, VolatilityDecay for active players
+        // This is based on player activity status, not on whether rating actually changed
+        // (an inactive player at the floor still gets Decay type)
+        let adjustment_type = if is_inactive {
             debug!(
                 player_id = player_rating.player_id,
                 rating_before = current_rating,
                 rating_after = new_rating,
                 volatility_before = current_volatility,
                 volatility_after = new_volatility,
-                "Applying combined decay (inactive player)"
+                "Applying decay (inactive player)"
             );
-        }
+            Decay
+        } else {
+            VolatilityDecay
+        };
 
         Some(RatingAdjustment {
             player_id: player_rating.player_id,
@@ -212,7 +218,7 @@ impl UnifiedDecaySystem {
             volatility_before: current_volatility,
             volatility_after: new_volatility,
             timestamp: wednesday,
-            adjustment_type: Decay
+            adjustment_type
         })
     }
 
@@ -370,7 +376,7 @@ mod tests {
 
         // Check the decay adjustment
         let last_adj = ratings[0].adjustments.last().unwrap();
-        assert_eq!(last_adj.adjustment_type, Decay);
+        assert_eq!(last_adj.adjustment_type, VolatilityDecay); // Active player gets VolatilityDecay
 
         // Rating should be unchanged (active player)
         assert_abs_diff_eq!(last_adj.rating_before, last_adj.rating_after);
@@ -451,23 +457,24 @@ mod tests {
         // Process up to July 3 (182 days)
         system.apply_decay(&mut ratings, july_3);
 
-        // Find all decay adjustments
-        let decay_adjustments: Vec<_> = ratings[0]
+        // Find all volatility decay adjustments (before 184 days, player is still active)
+        let volatility_decay_adjustments: Vec<_> = ratings[0]
             .adjustments
             .iter()
-            .filter(|a| a.adjustment_type == Decay)
+            .filter(|a| a.adjustment_type == VolatilityDecay)
             .collect();
 
         // All should be volatility-only (rating unchanged)
-        for adj in &decay_adjustments {
+        for adj in &volatility_decay_adjustments {
             assert_abs_diff_eq!(adj.rating_before, adj.rating_after, epsilon = 0.01);
         }
 
         // Now process to July 10 (188 days)
         system.apply_decay(&mut ratings, july_10);
 
-        // The July 10 adjustment should have rating decay
+        // The July 10 adjustment should have rating decay (Decay type, not VolatilityDecay)
         let last_adj = ratings[0].adjustments.last().unwrap();
+        assert_eq!(last_adj.adjustment_type, Decay);
         assert!(
             last_adj.rating_after < last_adj.rating_before,
             "Rating should decrease after 184 days"
@@ -542,7 +549,8 @@ mod tests {
         assert_eq!(count, 1, "Should still create adjustment for volatility");
 
         let last_adj = ratings[0].adjustments.last().unwrap();
-        assert_abs_diff_eq!(last_adj.rating_before, last_adj.rating_after); // Rating unchanged
+        assert_eq!(last_adj.adjustment_type, Decay); // Player IS inactive, even though at floor
+        assert_abs_diff_eq!(last_adj.rating_before, last_adj.rating_after); // Rating unchanged (at floor)
         assert!(last_adj.volatility_after > last_adj.volatility_before); // Volatility increased
     }
 
@@ -573,6 +581,7 @@ mod tests {
         assert_eq!(count, 1, "Should still create adjustment for rating decay");
 
         let last_adj = ratings[0].adjustments.last().unwrap();
+        assert_eq!(last_adj.adjustment_type, Decay); // Rating changes, so it's Decay
         assert!(last_adj.rating_after < last_adj.rating_before); // Rating decreased
         assert_abs_diff_eq!(last_adj.volatility_before, last_adj.volatility_after);
         // Volatility unchanged
@@ -593,16 +602,31 @@ mod tests {
         let later_time = Utc.with_ymd_and_hms(2024, 12, 1, 12, 0, 0).unwrap().fixed_offset();
         system.apply_decay(&mut ratings, later_time);
 
-        // All decay adjustments should be volatility-only
+        // All adjustments should be VolatilityDecay (player never played, so not "inactive")
+        let volatility_decay_adjustments: Vec<_> = ratings[0]
+            .adjustments
+            .iter()
+            .filter(|a| a.adjustment_type == VolatilityDecay)
+            .collect();
+
+        assert!(
+            !volatility_decay_adjustments.is_empty(),
+            "Should have VolatilityDecay adjustments"
+        );
+        for adj in &volatility_decay_adjustments {
+            assert_abs_diff_eq!(adj.rating_before, adj.rating_after, epsilon = 0.01);
+        }
+
+        // Should have no Decay adjustments
         let decay_adjustments: Vec<_> = ratings[0]
             .adjustments
             .iter()
             .filter(|a| a.adjustment_type == Decay)
             .collect();
-
-        for adj in decay_adjustments {
-            assert_abs_diff_eq!(adj.rating_before, adj.rating_after, epsilon = 0.01);
-        }
+        assert!(
+            decay_adjustments.is_empty(),
+            "Should have no Decay adjustments for player who never played"
+        );
     }
 
     #[test]
@@ -618,13 +642,14 @@ mod tests {
         let later_time = Utc.with_ymd_and_hms(2024, 2, 1, 12, 0, 0).unwrap().fixed_offset();
         system.apply_decay(&mut ratings, later_time);
 
-        // All decay adjustments should be on Wednesdays at 12:00 UTC
+        // All decay adjustments (both Decay and VolatilityDecay) should be on Wednesdays at 12:00 UTC
         let decay_adjustments: Vec<_> = ratings[0]
             .adjustments
             .iter()
-            .filter(|a| a.adjustment_type == Decay)
+            .filter(|a| a.adjustment_type == Decay || a.adjustment_type == VolatilityDecay)
             .collect();
 
+        assert!(!decay_adjustments.is_empty(), "Should have decay adjustments");
         for adj in decay_adjustments {
             assert_eq!(adj.timestamp.weekday(), chrono::Weekday::Wed);
             assert_eq!(adj.timestamp.with_timezone(&Utc).hour(), 12);
