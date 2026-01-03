@@ -6,7 +6,8 @@ use std::convert::TryFrom;
 pub enum RatingAdjustmentType {
     Initial = 0,
     Decay = 1,
-    Match = 2
+    Match = 2,
+    VolatilityDecay = 3
 }
 
 impl TryFrom<i32> for RatingAdjustmentType {
@@ -16,6 +17,7 @@ impl TryFrom<i32> for RatingAdjustmentType {
             0 => Ok(RatingAdjustmentType::Initial),
             1 => Ok(RatingAdjustmentType::Decay),
             2 => Ok(RatingAdjustmentType::Match),
+            3 => Ok(RatingAdjustmentType::VolatilityDecay),
             _ => Err(())
         }
     }
@@ -42,7 +44,15 @@ mod tests {
     }
 
     #[test]
+    fn test_convert_volatility_decay() {
+        assert_eq!(
+            RatingAdjustmentType::try_from(3),
+            Ok(RatingAdjustmentType::VolatilityDecay)
+        );
+    }
+
+    #[test]
     fn test_convert_error() {
-        assert_eq!(RatingAdjustmentType::try_from(3), Err(()));
+        assert_eq!(RatingAdjustmentType::try_from(4), Err(()));
     }
 }
