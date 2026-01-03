@@ -192,17 +192,16 @@ impl UnifiedDecaySystem {
             return None;
         }
 
-        // Use Decay for inactive players, VolatilityDecay for active players
-        // This is based on player activity status, not on whether rating actually changed
-        // (an inactive player at the floor still gets Decay type)
-        let adjustment_type = if is_inactive {
+        let rating_changed = (new_rating - current_rating).abs() >= f64::EPSILON;
+
+        let adjustment_type = if rating_changed {
             debug!(
                 player_id = player_rating.player_id,
                 rating_before = current_rating,
                 rating_after = new_rating,
                 volatility_before = current_volatility,
                 volatility_after = new_volatility,
-                "Applying decay (inactive player)"
+                "Applying decay (rating decreased)"
             );
             Decay
         } else {
@@ -549,7 +548,7 @@ mod tests {
         assert_eq!(count, 1, "Should still create adjustment for volatility");
 
         let last_adj = ratings[0].adjustments.last().unwrap();
-        assert_eq!(last_adj.adjustment_type, Decay); // Player IS inactive, even though at floor
+        assert_eq!(last_adj.adjustment_type, VolatilityDecay); // Rating unchanged, so VolatilityDecay
         assert_abs_diff_eq!(last_adj.rating_before, last_adj.rating_after); // Rating unchanged (at floor)
         assert!(last_adj.volatility_after > last_adj.volatility_before); // Volatility increased
     }
