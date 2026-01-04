@@ -42,7 +42,7 @@ pub const TAU: f64 = DEFAULT_VOLATILITY / 100.0;
 
 /// Rate at which volatility increases during decay periods
 /// Squared due to working with variance rather than standard deviation
-pub const DECAY_VOLATILITY_GROWTH_RATE: f64 = 0.08 * (MULTIPLIER * MULTIPLIER);
+pub const DECAY_VOLATILITY_GROWTH_RATE: f64 = 0.12 * (MULTIPLIER * MULTIPLIER);
 
 /// Weight applied to Method A in the final rating calculation
 /// Method A: Uses current rating for unplayed games
