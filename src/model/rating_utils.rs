@@ -22,15 +22,16 @@ pub fn create_initial_ratings(players: &[Player], matches: &[Match]) -> Vec<Play
     for match_ in matches {
         for game in &match_.games {
             for score in &game.scores {
-                // Store the player id and match start time.
+                // Store the player id and match time (prefer end_time, fallback to start_time).
                 // Allows us to accurately set the timestamp of the initial rating adjustment
                 // and avoid creating initial adjustments for players who are inactive in
                 // any ruleset.
+                let match_time = match_.end_time.unwrap_or(match_.start_time);
                 ruleset_activity
                     .entry(match_.ruleset)
                     .or_default()
                     .entry(score.player_id)
-                    .or_insert(match_.start_time);
+                    .or_insert(match_time);
             }
         }
         span.pb_inc(1);

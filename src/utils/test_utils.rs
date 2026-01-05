@@ -147,7 +147,7 @@ pub fn generate_match(id: i32, ruleset: Ruleset, games: &[Game], start_time: Dat
         name: "Test Match".to_string(),
         ruleset,
         start_time,
-        end_time: start_time.add(chrono::Duration::hours(1)),
+        end_time: Some(start_time.add(chrono::Duration::hours(1))),
         games: games.to_vec()
     }
 }

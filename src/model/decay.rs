@@ -690,4 +690,442 @@ mod tests {
         let second_time = Utc.with_ymd_and_hms(2024, 1, 2, 12, 0, 0).unwrap().fixed_offset();
         assert!(!system.has_pending_wednesdays(second_time));
     }
+
+    fn create_inactive_player_for_ruleset(ruleset: Ruleset, rating: f64, volatility: f64) -> PlayerRating {
+        let last_played = Utc.with_ymd_and_hms(2023, 1, 1, 12, 0, 0).unwrap().fixed_offset();
+        generate_player_rating(1, ruleset, rating, volatility, 2, Some(last_played), Some(last_played))
+    }
+
+    fn create_active_player_for_ruleset(ruleset: Ruleset, rating: f64, volatility: f64) -> PlayerRating {
+        let last_played = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap().fixed_offset();
+        generate_player_rating(1, ruleset, rating, volatility, 2, Some(last_played), Some(last_played))
+    }
+
+    #[test]
+    fn test_decay_rating_decrease_exactly_decay_rate() {
+        let mut system = UnifiedDecaySystem::new();
+        let initial_rating = 1500.0;
+        let initial_volatility = 200.0;
+
+        let last_played = Utc.with_ymd_and_hms(2023, 1, 1, 12, 0, 0).unwrap().fixed_offset();
+        let mut ratings = vec![generate_player_rating(
+            1,
+            Ruleset::Osu,
+            initial_rating,
+            initial_volatility,
+            2,
+            Some(last_played),
+            Some(last_played)
+        )];
+
+        let baseline = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap().fixed_offset();
+        system.apply_decay(&mut ratings, baseline);
+
+        let after_one_wednesday = Utc.with_ymd_and_hms(2024, 1, 10, 12, 0, 0).unwrap().fixed_offset();
+        system.apply_decay(&mut ratings, after_one_wednesday);
+
+        let decay_adj = ratings[0]
+            .adjustments
+            .iter()
+            .find(|a| a.adjustment_type == Decay)
+            .expect("Should have Decay adjustment");
+
+        let expected_decrease = DECAY_RATE;
+        assert_abs_diff_eq!(
+            decay_adj.rating_before - decay_adj.rating_after,
+            expected_decrease,
+            epsilon = 0.001
+        );
+    }
+
+    #[test]
+    fn test_decay_volatility_increase_formula_exact() {
+        let mut system = UnifiedDecaySystem::new();
+        let initial_volatility = 200.0;
+
+        let last_played = Utc.with_ymd_and_hms(2023, 1, 1, 12, 0, 0).unwrap().fixed_offset();
+        let mut ratings = vec![generate_player_rating(
+            1,
+            Ruleset::Osu,
+            1500.0,
+            initial_volatility,
+            2,
+            Some(last_played),
+            Some(last_played)
+        )];
+
+        let baseline = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap().fixed_offset();
+        system.apply_decay(&mut ratings, baseline);
+
+        let after_one_wednesday = Utc.with_ymd_and_hms(2024, 1, 10, 12, 0, 0).unwrap().fixed_offset();
+        system.apply_decay(&mut ratings, after_one_wednesday);
+
+        let decay_adj = ratings[0]
+            .adjustments
+            .iter()
+            .find(|a| a.adjustment_type == Decay)
+            .expect("Should have Decay adjustment");
+
+        let expected_volatility = (initial_volatility.powi(2) + DECAY_VOLATILITY_GROWTH_RATE)
+            .sqrt()
+            .min(VOLATILITY_DECAY_CAP);
+
+        assert_abs_diff_eq!(decay_adj.volatility_after, expected_volatility, epsilon = 0.001);
+    }
+
+    #[test]
+    fn test_decay_floor_formula_low_peak() {
+        let ratings = vec![generate_player_rating(1, Ruleset::Osu, 500.0, 200.0, 2, None, None)];
+
+        let floor = UnifiedDecaySystem::calculate_decay_floor(&ratings[0]);
+
+        assert_abs_diff_eq!(floor, DECAY_MINIMUM, epsilon = 0.001);
+    }
+
+    #[test]
+    fn test_decay_floor_formula_high_peak() {
+        let peak_rating = 2000.0;
+        let ratings = vec![generate_player_rating(
+            1,
+            Ruleset::Osu,
+            peak_rating,
+            200.0,
+            2,
+            None,
+            None
+        )];
+
+        let floor = UnifiedDecaySystem::calculate_decay_floor(&ratings[0]);
+        let expected_floor = 0.5 * (DECAY_MINIMUM + peak_rating);
+
+        assert_abs_diff_eq!(floor, expected_floor, epsilon = 0.001);
+    }
+
+    #[test]
+    fn test_decay_all_non_osu_rulesets() {
+        use Ruleset::*;
+        let baseline = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap().fixed_offset();
+        let after_one_wednesday = Utc.with_ymd_and_hms(2024, 1, 4, 12, 0, 0).unwrap().fixed_offset();
+
+        for ruleset in [Taiko, Catch, ManiaOther, Mania4k, Mania7k] {
+            let mut system = UnifiedDecaySystem::new();
+            let mut ratings = vec![create_inactive_player_for_ruleset(ruleset, 1500.0, 200.0)];
+
+            system.apply_decay(&mut ratings, baseline);
+            let count = system.apply_decay(&mut ratings, after_one_wednesday);
+
+            assert_eq!(count, 1, "{ruleset:?}");
+            let adj = ratings[0].adjustments.last().unwrap();
+            assert_eq!(adj.adjustment_type, Decay, "{ruleset:?}");
+            assert!(adj.rating_after < adj.rating_before, "{ruleset:?}");
+            assert!(adj.volatility_after > adj.volatility_before, "{ruleset:?}");
+        }
+    }
+
+    #[test]
+    fn test_volatility_decay_all_non_osu_rulesets() {
+        use Ruleset::*;
+        let first_time = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap().fixed_offset();
+        let second_time = Utc.with_ymd_and_hms(2024, 1, 8, 12, 0, 0).unwrap().fixed_offset();
+
+        for ruleset in [Taiko, Catch, ManiaOther, Mania4k, Mania7k] {
+            let mut system = UnifiedDecaySystem::new();
+            let mut ratings = vec![create_active_player_for_ruleset(ruleset, 1000.0, 200.0)];
+
+            system.apply_decay(&mut ratings, first_time);
+            let count = system.apply_decay(&mut ratings, second_time);
+
+            assert_eq!(count, 1, "{ruleset:?}");
+            let adj = ratings[0].adjustments.last().unwrap();
+            assert_eq!(adj.adjustment_type, VolatilityDecay, "{ruleset:?}");
+            assert_abs_diff_eq!(adj.rating_before, adj.rating_after);
+            assert!(adj.volatility_after > adj.volatility_before, "{ruleset:?}");
+        }
+    }
+
+    #[test]
+    fn test_decay_exactly_at_184_day_boundary() {
+        let mut system = UnifiedDecaySystem::new();
+        let initial_rating = 1500.0;
+        let initial_volatility = 200.0;
+
+        let last_played = Utc.with_ymd_and_hms(2024, 1, 4, 12, 0, 0).unwrap().fixed_offset();
+        let mut ratings = vec![generate_player_rating(
+            1,
+            Ruleset::Osu,
+            initial_rating,
+            initial_volatility,
+            2,
+            Some(last_played),
+            Some(last_played)
+        )];
+
+        system.apply_decay(&mut ratings, last_played);
+
+        let day_183 = Utc.with_ymd_and_hms(2024, 7, 5, 12, 0, 0).unwrap().fixed_offset();
+        system.apply_decay(&mut ratings, day_183);
+
+        let volatility_decay_count = ratings[0]
+            .adjustments
+            .iter()
+            .filter(|a| a.adjustment_type == VolatilityDecay)
+            .count();
+        let decay_count = ratings[0]
+            .adjustments
+            .iter()
+            .filter(|a| a.adjustment_type == Decay)
+            .count();
+
+        assert!(volatility_decay_count > 0, "Should have VolatilityDecay adjustments");
+        assert_eq!(decay_count, 0, "Should NOT have Decay adjustments before 184 days");
+
+        let day_188 = Utc.with_ymd_and_hms(2024, 7, 10, 12, 0, 0).unwrap().fixed_offset();
+        system.apply_decay(&mut ratings, day_188);
+
+        let decay_count_after = ratings[0]
+            .adjustments
+            .iter()
+            .filter(|a| a.adjustment_type == Decay)
+            .count();
+
+        assert!(decay_count_after > 0, "Should have Decay adjustments after 184 days");
+    }
+
+    #[test]
+    fn test_volatility_approaches_cap_gradually() {
+        let mut system = UnifiedDecaySystem::new();
+        let initial_volatility = 200.0;
+        let mut ratings = vec![create_active_player_for_ruleset(
+            Ruleset::Osu,
+            1000.0,
+            initial_volatility
+        )];
+
+        let first_time = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap().fixed_offset();
+        system.apply_decay(&mut ratings, first_time);
+
+        let many_weeks_later = Utc.with_ymd_and_hms(2024, 6, 1, 12, 0, 0).unwrap().fixed_offset();
+        system.apply_decay(&mut ratings, many_weeks_later);
+
+        let volatility_decay_adjs: Vec<_> = ratings[0]
+            .adjustments
+            .iter()
+            .filter(|a| a.adjustment_type == VolatilityDecay)
+            .collect();
+
+        for adj in &volatility_decay_adjs {
+            assert!(
+                adj.volatility_after <= VOLATILITY_DECAY_CAP,
+                "Volatility should never exceed cap"
+            );
+        }
+
+        let last_volatility = ratings[0].volatility;
+        assert!(
+            last_volatility <= VOLATILITY_DECAY_CAP,
+            "Final volatility should not exceed cap"
+        );
+    }
+
+    #[test]
+    fn test_volatility_at_cap_no_further_increase() {
+        let mut system = UnifiedDecaySystem::new();
+        let mut ratings = vec![create_active_player_for_ruleset(
+            Ruleset::Osu,
+            1000.0,
+            VOLATILITY_DECAY_CAP
+        )];
+
+        let first_time = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap().fixed_offset();
+        system.apply_decay(&mut ratings, first_time);
+
+        let second_time = Utc.with_ymd_and_hms(2024, 1, 8, 12, 0, 0).unwrap().fixed_offset();
+        let count = system.apply_decay(&mut ratings, second_time);
+
+        assert_eq!(
+            count, 0,
+            "Should not create adjustment when at volatility cap and active"
+        );
+    }
+
+    #[test]
+    fn test_decay_stops_exactly_at_floor() {
+        let mut system = UnifiedDecaySystem::new();
+
+        let last_played = Utc.with_ymd_and_hms(2023, 1, 1, 12, 0, 0).unwrap().fixed_offset();
+        let mut ratings = vec![generate_player_rating(
+            1,
+            Ruleset::Osu,
+            1000.0,
+            200.0,
+            2,
+            Some(last_played),
+            Some(last_played)
+        )];
+
+        // Calculate the actual decay floor based on the generated player's peak rating
+        let actual_decay_floor = UnifiedDecaySystem::calculate_decay_floor(&ratings[0]);
+
+        let baseline = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap().fixed_offset();
+        system.apply_decay(&mut ratings, baseline);
+
+        let many_weeks_later = Utc.with_ymd_and_hms(2024, 6, 1, 12, 0, 0).unwrap().fixed_offset();
+        system.apply_decay(&mut ratings, many_weeks_later);
+
+        assert!(
+            ratings[0].rating >= actual_decay_floor - 0.001,
+            "Rating should not fall below floor"
+        );
+    }
+
+    #[test]
+    fn test_both_at_caps_produces_no_adjustment() {
+        let mut system = UnifiedDecaySystem::new();
+
+        let last_played = Utc.with_ymd_and_hms(2023, 1, 1, 12, 0, 0).unwrap().fixed_offset();
+        let mut ratings = vec![generate_player_rating(
+            1,
+            Ruleset::Osu,
+            DECAY_MINIMUM,
+            VOLATILITY_DECAY_CAP,
+            2,
+            Some(last_played),
+            Some(last_played)
+        )];
+
+        let baseline = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap().fixed_offset();
+        system.apply_decay(&mut ratings, baseline);
+
+        let adj_count_before = ratings[0].adjustments.len();
+        let second_time = Utc.with_ymd_and_hms(2024, 1, 8, 12, 0, 0).unwrap().fixed_offset();
+        let count = system.apply_decay(&mut ratings, second_time);
+
+        assert_eq!(count, 0, "Should not create adjustment when at both caps");
+        assert_eq!(
+            ratings[0].adjustments.len(),
+            adj_count_before,
+            "Adjustment count should not change"
+        );
+    }
+
+    #[test]
+    fn test_multiple_players_independent_decay() {
+        let mut system = UnifiedDecaySystem::new();
+
+        let last_played_active = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap().fixed_offset();
+        let last_played_inactive = Utc.with_ymd_and_hms(2023, 1, 1, 12, 0, 0).unwrap().fixed_offset();
+
+        let active_player = generate_player_rating(
+            1,
+            Ruleset::Osu,
+            1000.0,
+            200.0,
+            2,
+            Some(last_played_active),
+            Some(last_played_active)
+        );
+
+        let inactive_player = generate_player_rating(
+            2,
+            Ruleset::Osu,
+            1500.0,
+            200.0,
+            2,
+            Some(last_played_inactive),
+            Some(last_played_inactive)
+        );
+
+        let mut ratings = vec![active_player, inactive_player];
+
+        let baseline = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap().fixed_offset();
+        system.apply_decay(&mut ratings, baseline);
+
+        // 2024-01-04 is Thursday, so only one Wednesday (2024-01-03) is between baseline and this
+        let after_one_wednesday = Utc.with_ymd_and_hms(2024, 1, 4, 12, 0, 0).unwrap().fixed_offset();
+        let count = system.apply_decay(&mut ratings, after_one_wednesday);
+
+        assert_eq!(count, 2, "Should create adjustment for each player");
+
+        let active_adj = ratings[0].adjustments.last().unwrap();
+        let inactive_adj = ratings[1].adjustments.last().unwrap();
+
+        assert_eq!(active_adj.adjustment_type, VolatilityDecay);
+        assert_eq!(inactive_adj.adjustment_type, Decay);
+    }
+
+    #[test]
+    fn test_active_player_gets_only_volatility_decay() {
+        let mut system = UnifiedDecaySystem::new();
+        let last_played = Utc.with_ymd_and_hms(2023, 1, 1, 12, 0, 0).unwrap().fixed_offset();
+        let mut ratings = vec![generate_player_rating(
+            1,
+            Ruleset::Osu,
+            1500.0,
+            200.0,
+            2,
+            Some(last_played),
+            Some(last_played)
+        )];
+
+        system.apply_decay(&mut ratings, last_played);
+        let end_date = last_played + Duration::days(25);
+        let total_count = system.apply_decay(&mut ratings, end_date);
+
+        let expected = UnifiedDecaySystem::get_wednesdays_between(last_played, end_date).len();
+        let volatility_count = ratings[0]
+            .adjustments
+            .iter()
+            .filter(|a| a.adjustment_type == VolatilityDecay)
+            .count();
+        let decay_count = ratings[0]
+            .adjustments
+            .iter()
+            .filter(|a| a.adjustment_type == Decay)
+            .count();
+
+        assert_eq!(volatility_count, expected);
+        assert_eq!(decay_count, 0);
+        assert_eq!(total_count, expected);
+    }
+
+    #[test]
+    fn test_decay_transition_at_threshold() {
+        let mut system = UnifiedDecaySystem::new();
+        let last_played = Utc.with_ymd_and_hms(2023, 1, 1, 12, 0, 0).unwrap().fixed_offset();
+        let mut ratings = vec![generate_player_rating(
+            1,
+            Ruleset::Osu,
+            1500.0,
+            200.0,
+            2,
+            Some(last_played),
+            Some(last_played)
+        )];
+
+        system.apply_decay(&mut ratings, last_played);
+        let end_date = last_played + Duration::days(DECAY_DAYS as i64 + 60);
+        let total_count = system.apply_decay(&mut ratings, end_date);
+
+        let all_wednesdays = UnifiedDecaySystem::get_wednesdays_between(last_played, end_date);
+        let expected_active = all_wednesdays
+            .iter()
+            .filter(|w| (**w - last_played).num_days() < DECAY_DAYS as i64)
+            .count();
+        let expected_inactive = all_wednesdays.len() - expected_active;
+
+        let volatility_count = ratings[0]
+            .adjustments
+            .iter()
+            .filter(|a| a.adjustment_type == VolatilityDecay)
+            .count();
+        let decay_count = ratings[0]
+            .adjustments
+            .iter()
+            .filter(|a| a.adjustment_type == Decay)
+            .count();
+
+        assert_eq!(volatility_count, expected_active);
+        assert_eq!(decay_count, expected_inactive);
+        assert_eq!(total_count, all_wednesdays.len());
+    }
 }
