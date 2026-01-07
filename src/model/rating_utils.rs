@@ -127,14 +127,14 @@ fn initial_rating(player: &Player, ruleset: &Ruleset) -> f64 {
 }
 
 fn mu_from_rank(rank: i32, ruleset: Ruleset) -> f64 {
-    let left_slope = 4.0;
-    let right_slope = 3.0;
+    let left_slope = 250;
+    let right_slope = 200;
 
     let mean = mean_from_ruleset(ruleset);
     let std_dev = std_dev_from_ruleset(ruleset);
 
     let z = (rank as f64 / mean.exp()).ln() / std_dev;
-    let val = MULTIPLIER * (18.0 - (if z > 0.0 { left_slope } else { right_slope }) * z);
+    let val = 1200 - (if z > 0.0 { left_slope } else { right_slope }) * z;
 
     if val < INITIAL_RATING_FLOOR {
         return INITIAL_RATING_FLOOR;
