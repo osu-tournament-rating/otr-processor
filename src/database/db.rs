@@ -21,7 +21,7 @@ struct MatchMetadata {
     id: i32,
     name: String,
     start_time: DateTime<FixedOffset>,
-    end_time: DateTime<FixedOffset>,
+    end_time: Option<DateTime<FixedOffset>>,
     ruleset: Ruleset
 }
 
@@ -165,7 +165,7 @@ impl DbClient {
                 id: row.get("id"),
                 name: row.get("name"),
                 start_time: row.get("start_time"),
-                end_time: row.get("end_time"),
+                end_time: row.try_get("end_time").ok(),
                 ruleset: Ruleset::try_from(row.get::<_, i32>("ruleset")).unwrap()
             })
             .collect()

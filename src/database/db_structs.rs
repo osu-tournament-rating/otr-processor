@@ -29,7 +29,7 @@ pub struct Match {
     pub id: i32,
     pub name: String,
     pub start_time: DateTime<FixedOffset>,
-    pub end_time: DateTime<FixedOffset>,
+    pub end_time: Option<DateTime<FixedOffset>>,
     // Populated in the db query (uses the tournament's ruleset)
     pub ruleset: Ruleset,
     pub games: Vec<Game>

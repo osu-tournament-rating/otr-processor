@@ -1,6 +1,6 @@
 use super::{
     constants::{BETA, FALLBACK_RATING, KAPPA},
-    decay::DecaySystem
+    decay::UnifiedDecaySystem
 };
 use crate::{
     database::db_structs::{Game, GameScore, Match, PlayerRating, RatingAdjustment},
@@ -50,7 +50,9 @@ pub struct OtrModel {
     /// The underlying PlackettLuce rating model
     pub model: PlackettLuce,
     /// Tracks and maintains all player ratings
-    pub rating_tracker: RatingTracker
+    pub rating_tracker: RatingTracker,
+    /// Unified system for rating and volatility decay at Wednesday 12:00 UTC
+    decay_system: UnifiedDecaySystem
 }
 
 impl OtrModel {
@@ -67,7 +69,8 @@ impl OtrModel {
 
         OtrModel {
             rating_tracker: tracker,
-            model: PlackettLuce::new(BETA, KAPPA, Self::gamma_override)
+            model: PlackettLuce::new(BETA, KAPPA, Self::gamma_override),
+            decay_system: UnifiedDecaySystem::new()
         }
     }
 
@@ -75,8 +78,8 @@ impl OtrModel {
     ///
     /// This function determines how quickly player volatility changes based on performance.
     /// A higher gamma means volatility changes more slowly.
-    fn gamma_override(_: f64, k: f64, _: &TeamRating) -> f64 {
-        1.0 / k
+    fn gamma_override(_: f64, _k: f64, _: &TeamRating) -> f64 {
+        1.0
     }
 
     /// Processes a batch of matches chronologically, updating player ratings.
@@ -127,14 +130,16 @@ impl OtrModel {
     /// Processes a single match, calculating and applying rating changes for all participants.
     ///
     /// # Processing Steps
-    /// 1. Apply decay to all participating players
-    /// 2. Calculate ratings using both methods:
+    /// 1. Apply unified decay (rating + volatility) at Wednesday 12:00 UTC timestamps
+    /// 2. Ensure any new players have initial ratings
+    /// 3. Calculate ratings using both methods:
     ///    - Method A: Considers only played games
     ///    - Method B: Assumes last place for unplayed games
-    /// 3. Combine results using weighted average
-    /// 4. Update player ratings in the tracker
+    /// 4. Combine results using weighted average
+    /// 5. Update player ratings in the tracker
     fn process_match(&mut self, match_: &Match) {
-        self.apply_decay(match_);
+        self.apply_unified_decay(match_.start_time);
+        self.ensure_player_ratings(match_);
 
         let ratings_a = self.generate_ratings_a(match_);
         let ratings_b = self.generate_ratings_b(match_);
@@ -373,60 +378,51 @@ impl OtrModel {
     /// even if they haven't participated in recent matches.
     fn final_decay_pass(&mut self) {
         let current_time = Utc::now().fixed_offset();
-        let decay_system = DecaySystem::new(current_time);
+        self.apply_unified_decay(current_time);
+    }
 
-        let leaderboards: Vec<Vec<PlayerRating>> = Ruleset::iter()
-            .map(|ruleset| self.rating_tracker.get_leaderboard(ruleset))
-            .filter(|lb| !lb.is_empty())
-            .collect();
-
-        let mut total_decayed = 0usize;
-
-        for leaderboard in leaderboards {
-            let ruleset = leaderboard
-                .first()
-                .map(|r| r.ruleset)
-                .expect("Leaderboard should not be empty");
-
-            let span = progress_span(leaderboard.len() as u64, format!("Applying decay [{ruleset:?}]"));
-            let _guard = span.enter();
-
-            let mut updated_ratings = Vec::new();
-            for rating in leaderboard {
-                let mut current = rating.clone();
-                if let Ok(Some(updated)) = decay_system.decay(&mut current) {
-                    updated_ratings.push(updated.clone());
-                }
-                span.pb_inc(1);
-            }
-
-            if !updated_ratings.is_empty() {
-                debug!(ruleset = ?ruleset, decayed_count = updated_ratings.len(), "Decay pass completed for ruleset");
-                total_decayed += updated_ratings.len();
-                self.rating_tracker.insert_or_update(&updated_ratings);
-            }
+    /// Applies unified decay (rating + volatility) to all players across all rulesets
+    /// up to the given time.
+    ///
+    /// This applies decay adjustments at every Wednesday 12:00 UTC between the last
+    /// processed time and the given `up_to` time:
+    /// - For inactive players (>184 days): both rating and volatility decay
+    /// - For active players: volatility decay only
+    fn apply_unified_decay(&mut self, up_to: chrono::DateTime<chrono::FixedOffset>) {
+        // Early exit if no Wednesdays to process (avoids expensive leaderboard cloning)
+        if !self.decay_system.prepare_decay_pass(up_to) {
+            return;
         }
 
-        if total_decayed > 0 {
-            info!(total_decayed, "Final decay pass complete");
+        // Collect ALL ratings from ALL rulesets into a single Vec.
+        // This ensures decay is applied uniformly across all rulesets in one pass,
+        // rather than consuming all Wednesdays on the first ruleset.
+        let mut all_ratings: Vec<PlayerRating> = Ruleset::iter()
+            .flat_map(|ruleset| self.rating_tracker.get_leaderboard(ruleset))
+            .collect();
+
+        if all_ratings.is_empty() {
+            return;
+        }
+
+        let count = self.decay_system.apply_decay(&mut all_ratings);
+
+        if count > 0 {
+            self.rating_tracker.insert_or_update(&all_ratings);
         }
     }
 
-    /// Applies decay to all players in a match before processing their results.
-    fn apply_decay(&mut self, match_: &Match) {
-        let decay_system = DecaySystem::new(match_.start_time);
+    /// Ensures all match participants have ratings in the tracker.
+    /// Creates fallback initial ratings for players not yet in the system.
+    fn ensure_player_ratings(&mut self, match_: &Match) {
         let player_ids: Vec<i32> = self.get_match_participants(match_);
 
         for player_id in player_ids {
-            if let Some(rating) = self.rating_tracker.get_rating(player_id, match_.ruleset) {
-                let mut current = rating.clone();
-                if let Ok(Some(updated)) = decay_system.decay(&mut current) {
-                    self.rating_tracker.insert_or_update(from_ref(updated));
-                }
-            } else {
+            if self.rating_tracker.get_rating(player_id, match_.ruleset).is_none() {
                 // Player not present in the rating tracker.
                 // Create a fallback initial rating for them and add to tracker.
 
+                let match_time = match_.end_time.unwrap_or(match_.start_time);
                 let adjustment = RatingAdjustment {
                     player_id,
                     ruleset: match_.ruleset,
@@ -435,7 +431,7 @@ impl OtrModel {
                     rating_after: FALLBACK_RATING,
                     volatility_before: 0.0,
                     volatility_after: DEFAULT_VOLATILITY,
-                    timestamp: match_.start_time.sub(Duration::seconds(1)),
+                    timestamp: match_time.sub(Duration::seconds(1)),
                     adjustment_type: RatingAdjustmentType::Initial
                 };
 
@@ -480,6 +476,7 @@ impl OtrModel {
             };
 
             // Create the adjustment
+            let match_time = match_.end_time.unwrap_or(match_.start_time);
             let adjustment = RatingAdjustment {
                 player_id: *k,
                 ruleset: player_rating.ruleset,
@@ -488,7 +485,7 @@ impl OtrModel {
                 rating_after: v.mu,
                 volatility_before: player_rating.volatility,
                 volatility_after: v.sigma,
-                timestamp: match_.start_time,
+                timestamp: match_time,
                 adjustment_type: RatingAdjustmentType::Match
             };
 
@@ -510,13 +507,12 @@ mod tests {
     use crate::{
         database::db_structs::{Game, PlayerPlacement, PlayerRating},
         model::{
-            constants::{ABSOLUTE_RATING_FLOOR, DEFAULT_VOLATILITY},
+            constants::{ABSOLUTE_RATING_FLOOR, DECAY_DAYS, DEFAULT_VOLATILITY},
             otr_model::OtrModel,
             structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset::*}
         }
     };
-    use approx::assert_abs_diff_eq;
-    use chrono::Utc;
+    use chrono::{Duration, TimeZone, Utc};
 
     #[test]
     fn test_rate() {
@@ -650,11 +646,6 @@ mod tests {
         assert_eq!(rating_3.country_rank, 2);
         assert_eq!(rating_2.country_rank, 3);
         assert_eq!(rating_1.country_rank, 4);
-    }
-
-    #[test]
-    fn test_initial_rating_not_generated_when_no_match_data() {
-        let player_rating = generate_player_rating(1, Osu, 1000.0, 100.0, 1, None, None);
     }
 
     /// Tests that the rating system correctly handles matches with players
@@ -1007,6 +998,261 @@ mod tests {
         assert!(
             adjustments_2[1].rating_after < FALLBACK_RATING,
             "Should lose rating from fallback"
+        );
+    }
+
+    fn generate_match_without_end_time(
+        id: i32,
+        ruleset: crate::model::structures::ruleset::Ruleset,
+        games: &[Game],
+        start_time: chrono::DateTime<chrono::FixedOffset>
+    ) -> crate::database::db_structs::Match {
+        crate::database::db_structs::Match {
+            id,
+            name: "Test Match".to_string(),
+            ruleset,
+            start_time,
+            end_time: None,
+            games: games.to_vec()
+        }
+    }
+
+    #[test]
+    fn test_rating_adjustment_uses_match_end_time() {
+        let player_ratings = vec![generate_player_rating(1, Osu, 1000.0, 100.0, 1, None, None)];
+        let countries = generate_country_mapping_player_ratings(&player_ratings, "US");
+        let mut model = OtrModel::new(&player_ratings, &countries);
+
+        let placements = vec![generate_placement(1, 1), generate_placement(2, 2)];
+        let games = vec![generate_game(1, &placements)];
+
+        let start_time = Utc.with_ymd_and_hms(2024, 1, 1, 10, 0, 0).unwrap().fixed_offset();
+        let end_time = start_time + chrono::Duration::hours(2);
+
+        let match_ = crate::database::db_structs::Match {
+            id: 1,
+            name: "Test Match".to_string(),
+            ruleset: Osu,
+            start_time,
+            end_time: Some(end_time),
+            games: games.clone()
+        };
+
+        model.process(&[match_]);
+
+        let adjustments = model.rating_tracker.get_rating_adjustments(1, Osu).unwrap();
+        let match_adj = adjustments
+            .iter()
+            .find(|a| a.adjustment_type == RatingAdjustmentType::Match)
+            .unwrap();
+
+        assert_eq!(match_adj.timestamp, end_time, "Match adjustment should use end_time");
+    }
+
+    #[test]
+    fn test_rating_adjustment_falls_back_to_start_time() {
+        let player_ratings = vec![generate_player_rating(1, Osu, 1000.0, 100.0, 1, None, None)];
+        let countries = generate_country_mapping_player_ratings(&player_ratings, "US");
+        let mut model = OtrModel::new(&player_ratings, &countries);
+
+        let placements = vec![generate_placement(1, 1), generate_placement(2, 2)];
+        let games = vec![generate_game(1, &placements)];
+
+        let start_time = Utc.with_ymd_and_hms(2024, 1, 1, 10, 0, 0).unwrap().fixed_offset();
+        let match_ = generate_match_without_end_time(1, Osu, &games, start_time);
+
+        model.process(&[match_]);
+
+        let adjustments = model.rating_tracker.get_rating_adjustments(1, Osu).unwrap();
+        let match_adj = adjustments
+            .iter()
+            .find(|a| a.adjustment_type == RatingAdjustmentType::Match)
+            .unwrap();
+
+        assert_eq!(
+            match_adj.timestamp, start_time,
+            "Match adjustment should fall back to start_time when end_time is None"
+        );
+    }
+
+    #[test]
+    fn test_initial_rating_timestamp_uses_end_time() {
+        let player_ratings = vec![generate_player_rating(1, Osu, 1000.0, 100.0, 1, None, None)];
+        let countries = generate_country_mapping_player_ratings(&player_ratings, "US");
+        let mut model = OtrModel::new(&player_ratings, &countries);
+
+        let placements = vec![generate_placement(1, 1), generate_placement(2, 2)];
+        let games = vec![generate_game(1, &placements)];
+
+        let start_time = Utc.with_ymd_and_hms(2024, 1, 1, 10, 0, 0).unwrap().fixed_offset();
+        let end_time = start_time + chrono::Duration::hours(2);
+
+        let match_ = crate::database::db_structs::Match {
+            id: 1,
+            name: "Test Match".to_string(),
+            ruleset: Osu,
+            start_time,
+            end_time: Some(end_time),
+            games: games.clone()
+        };
+
+        model.process(&[match_]);
+
+        let adjustments = model.rating_tracker.get_rating_adjustments(2, Osu).unwrap();
+        let initial_adj = adjustments
+            .iter()
+            .find(|a| a.adjustment_type == RatingAdjustmentType::Initial)
+            .unwrap();
+
+        let expected_timestamp = end_time - chrono::Duration::seconds(1);
+        assert_eq!(
+            initial_adj.timestamp, expected_timestamp,
+            "Initial adjustment should use end_time - 1 second"
+        );
+    }
+
+    #[test]
+    fn test_initial_rating_timestamp_fallback() {
+        let player_ratings = vec![generate_player_rating(1, Osu, 1000.0, 100.0, 1, None, None)];
+        let countries = generate_country_mapping_player_ratings(&player_ratings, "US");
+        let mut model = OtrModel::new(&player_ratings, &countries);
+
+        let placements = vec![generate_placement(1, 1), generate_placement(2, 2)];
+        let games = vec![generate_game(1, &placements)];
+
+        let start_time = Utc.with_ymd_and_hms(2024, 1, 1, 10, 0, 0).unwrap().fixed_offset();
+        let match_ = generate_match_without_end_time(1, Osu, &games, start_time);
+
+        model.process(&[match_]);
+
+        let adjustments = model.rating_tracker.get_rating_adjustments(2, Osu).unwrap();
+        let initial_adj = adjustments
+            .iter()
+            .find(|a| a.adjustment_type == RatingAdjustmentType::Initial)
+            .unwrap();
+
+        let expected_timestamp = start_time - chrono::Duration::seconds(1);
+        assert_eq!(
+            initial_adj.timestamp, expected_timestamp,
+            "Initial adjustment should fall back to start_time - 1 second when end_time is None"
+        );
+    }
+
+    fn generate_game_for_ruleset(
+        id: i32,
+        ruleset: crate::model::structures::ruleset::Ruleset,
+        placements: &[PlayerPlacement]
+    ) -> Game {
+        let scores = placements
+            .iter()
+            .map(|p| crate::database::db_structs::GameScore {
+                id: 0,
+                player_id: p.player_id,
+                game_id: id,
+                score: 0,
+                placement: p.placement
+            })
+            .collect();
+
+        Game {
+            id,
+            ruleset,
+            start_time: Default::default(),
+            end_time: Default::default(),
+            scores
+        }
+    }
+
+    #[test]
+    fn test_decay_applied_to_all_rulesets() {
+        let old_match_time = Utc.with_ymd_and_hms(2023, 1, 1, 12, 0, 0).unwrap().fixed_offset();
+        let player_ratings = vec![
+            generate_player_rating(1, Osu, 1500.0, 200.0, 2, Some(old_match_time), Some(old_match_time)),
+            generate_player_rating(2, Catch, 1500.0, 200.0, 2, Some(old_match_time), Some(old_match_time)),
+        ];
+
+        let countries = generate_country_mapping_player_ratings(&player_ratings, "US");
+        let mut model = OtrModel::new(&player_ratings, &countries);
+
+        let current_time = old_match_time + Duration::days(DECAY_DAYS as i64 + 30);
+
+        let osu_placements = vec![generate_placement(1, 1), generate_placement(3, 2)];
+        let osu_games = vec![generate_game_for_ruleset(1, Osu, &osu_placements)];
+        let osu_match = generate_match(1, Osu, &osu_games, current_time);
+
+        let catch_placements = vec![generate_placement(2, 1), generate_placement(4, 2)];
+        let catch_games = vec![generate_game_for_ruleset(2, Catch, &catch_placements)];
+        let catch_match = generate_match(2, Catch, &catch_games, current_time + Duration::hours(1));
+
+        model.process(&[osu_match, catch_match]);
+
+        let osu_decay_count = model
+            .rating_tracker
+            .get_rating_adjustments(1, Osu)
+            .unwrap()
+            .iter()
+            .filter(|a| a.adjustment_type == RatingAdjustmentType::Decay)
+            .count();
+        let catch_decay_count = model
+            .rating_tracker
+            .get_rating_adjustments(2, Catch)
+            .unwrap()
+            .iter()
+            .filter(|a| a.adjustment_type == RatingAdjustmentType::Decay)
+            .count();
+
+        assert!(osu_decay_count > 0, "Osu decay: {osu_decay_count}");
+        assert!(catch_decay_count > 0, "Catch decay: {catch_decay_count}");
+    }
+
+    #[test]
+    fn test_cross_ruleset_player_decay_independence() {
+        let now = Utc::now().fixed_offset();
+        let process_time = now - Duration::days(60);
+        let osu_initial_time = process_time - Duration::days(10);
+        let catch_initial_time = now - Duration::days(DECAY_DAYS as i64 + 60);
+
+        let player_ratings = vec![
+            generate_player_rating(1, Osu, 1500.0, 200.0, 2, Some(osu_initial_time), Some(osu_initial_time)),
+            generate_player_rating(
+                1,
+                Catch,
+                1500.0,
+                200.0,
+                2,
+                Some(catch_initial_time),
+                Some(catch_initial_time)
+            ),
+        ];
+
+        let countries = generate_country_mapping_player_ratings(&player_ratings, "US");
+        let mut model = OtrModel::new(&player_ratings, &countries);
+
+        let osu_placements = vec![generate_placement(1, 1), generate_placement(2, 2)];
+        let osu_games = vec![generate_game_for_ruleset(1, Osu, &osu_placements)];
+        let osu_match = generate_match(1, Osu, &osu_games, process_time);
+
+        model.process(&[osu_match]);
+
+        let osu_decay_count = model
+            .rating_tracker
+            .get_rating_adjustments(1, Osu)
+            .unwrap()
+            .iter()
+            .filter(|a| a.adjustment_type == RatingAdjustmentType::Decay)
+            .count();
+        let catch_decay_count = model
+            .rating_tracker
+            .get_rating_adjustments(1, Catch)
+            .unwrap()
+            .iter()
+            .filter(|a| a.adjustment_type == RatingAdjustmentType::Decay)
+            .count();
+
+        assert_eq!(osu_decay_count, 0, "Active Osu should have no decay");
+        assert!(
+            catch_decay_count > 0,
+            "Inactive Catch should have decay: {catch_decay_count}"
         );
     }
 }

@@ -2,7 +2,7 @@ use super::constants::FALLBACK_RATING;
 use crate::{
     database::db_structs::{Match, Player, PlayerRating, RatingAdjustment},
     model::{
-        constants::{DEFAULT_VOLATILITY, INITIAL_RATING_CEILING, INITIAL_RATING_FLOOR, MULTIPLIER},
+        constants::{DEFAULT_VOLATILITY, INITIAL_RATING_CEILING, INITIAL_RATING_FLOOR},
         structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
     },
     utils::progress_utils::progress_span
@@ -22,15 +22,16 @@ pub fn create_initial_ratings(players: &[Player], matches: &[Match]) -> Vec<Play
     for match_ in matches {
         for game in &match_.games {
             for score in &game.scores {
-                // Store the player id and match start time.
+                // Store the player id and match time (prefer end_time, fallback to start_time).
                 // Allows us to accurately set the timestamp of the initial rating adjustment
                 // and avoid creating initial adjustments for players who are inactive in
                 // any ruleset.
+                let match_time = match_.end_time.unwrap_or(match_.start_time);
                 ruleset_activity
                     .entry(match_.ruleset)
                     .or_default()
                     .entry(score.player_id)
-                    .or_insert(match_.start_time);
+                    .or_insert(match_time);
             }
         }
         span.pb_inc(1);
@@ -126,14 +127,14 @@ fn initial_rating(player: &Player, ruleset: &Ruleset) -> f64 {
 }
 
 fn mu_from_rank(rank: i32, ruleset: Ruleset) -> f64 {
-    let left_slope = 4.0;
-    let right_slope = 3.0;
+    let left_slope = 250.0;
+    let right_slope = 200.0;
 
     let mean = mean_from_ruleset(ruleset);
     let std_dev = std_dev_from_ruleset(ruleset);
 
     let z = (rank as f64 / mean.exp()).ln() / std_dev;
-    let val = MULTIPLIER * (18.0 - (if z > 0.0 { left_slope } else { right_slope }) * z);
+    let val = 1200.0 - (if z > 0.0 { left_slope } else { right_slope }) * z;
 
     if val < INITIAL_RATING_FLOOR {
         return INITIAL_RATING_FLOOR;

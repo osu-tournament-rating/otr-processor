@@ -9,40 +9,38 @@ pub const BETA: f64 = DEFAULT_VOLATILITY / 2.0;
 pub const DECAY_DAYS: u64 = 184; // Approximately 6 months
 
 /// Minimum rating that any player can decay to, based on their peak rating
-pub const DECAY_MINIMUM: f64 = 15.0 * MULTIPLIER;
+pub const DECAY_MINIMUM: f64 = 1000.0;
 
 /// Amount of rating lost per decay cycle
-pub const DECAY_RATE: f64 = 0.05 * MULTIPLIER;
+pub const DECAY_RATE: f64 = 3.0;
 
 /// Initial volatility, higher values indicate more uncertainty in the rating
-pub const DEFAULT_VOLATILITY: f64 = 6.0 * MULTIPLIER;
+pub const DEFAULT_VOLATILITY: f64 = 400.0;
+
+/// Maximum volatility that weekly volatility decay can increase to
+pub const VOLATILITY_DECAY_CAP: f64 = DEFAULT_VOLATILITY;
 
 /// Fallback default rating used when rating cannot be identified from osu! rank information
-pub const FALLBACK_RATING: f64 = 15.0 * MULTIPLIER;
+pub const FALLBACK_RATING: f64 = 1000.0;
 
 /// Arbitrary regularization parameter
 pub const KAPPA: f64 = 0.0001;
 
-/// Base multiplier used throughout the system to scale ratings
-/// This brings ratings into a more readable range (e.g., 900 instead of 15)
-pub const MULTIPLIER: f64 = 60.0;
-
 /// Maximum possible initial rating
-pub const INITIAL_RATING_CEILING: f64 = MULTIPLIER * 30.0; // 1800.0
+pub const INITIAL_RATING_CEILING: f64 = 2000.0;
 
 /// Minimum possible initial rating
-pub const INITIAL_RATING_FLOOR: f64 = MULTIPLIER * 5.0; // 300.0
+pub const INITIAL_RATING_FLOOR: f64 = 500.0;
 
 /// Tau parameter for the PlackettLuce rating model
-/// Controls the system's confidence in new ratings
+/// Not currently used; volatility is increased via decay instead
 pub const TAU: f64 = DEFAULT_VOLATILITY / 100.0;
 
-/// Rate at which volatility increases during decay periods
-/// Squared due to working with variance rather than standard deviation
-pub const DECAY_VOLATILITY_GROWTH_RATE: f64 = 0.08 * (MULTIPLIER * MULTIPLIER);
+/// Amount that squared volatility increases by on a weekly basis
+pub const DECAY_VOLATILITY_GROWTH_RATE: f64 = 500.0;
 
 /// Weight applied to Method A in the final rating calculation
-/// Method A: Uses current rating for unplayed games
+/// Method A: Applies zero rating change for unplayed games
 pub const WEIGHT_A: f64 = 0.9;
 
 /// Weight applied to Method B in the final rating calculation
@@ -55,6 +53,6 @@ pub const WEIGHT_B: f64 = 1.0 - WEIGHT_A;
 /// for longer matches.
 pub const GAME_CORRECTION_CONSTANT: f64 = 0.5;
 
-/// Constant representing an approximate match length (in games), used for
+/// Constant representing a typical match length (in games), used for
 /// game correction weighting
 pub const STANDARD_MATCH_LENGTH: f64 = 8.0;
