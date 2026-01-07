@@ -2,7 +2,7 @@ use super::constants::FALLBACK_RATING;
 use crate::{
     database::db_structs::{Match, Player, PlayerRating, RatingAdjustment},
     model::{
-        constants::{DEFAULT_VOLATILITY, INITIAL_RATING_CEILING, INITIAL_RATING_FLOOR, MULTIPLIER},
+        constants::{DEFAULT_VOLATILITY, INITIAL_RATING_CEILING, INITIAL_RATING_FLOOR},
         structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
     },
     utils::progress_utils::progress_span
@@ -127,14 +127,14 @@ fn initial_rating(player: &Player, ruleset: &Ruleset) -> f64 {
 }
 
 fn mu_from_rank(rank: i32, ruleset: Ruleset) -> f64 {
-    let left_slope = 250;
-    let right_slope = 200;
+    let left_slope = 250.0;
+    let right_slope = 200.0;
 
     let mean = mean_from_ruleset(ruleset);
     let std_dev = std_dev_from_ruleset(ruleset);
 
     let z = (rank as f64 / mean.exp()).ln() / std_dev;
-    let val = 1200 - (if z > 0.0 { left_slope } else { right_slope }) * z;
+    let val = 1200.0 - (if z > 0.0 { left_slope } else { right_slope }) * z;
 
     if val < INITIAL_RATING_FLOOR {
         return INITIAL_RATING_FLOOR;
