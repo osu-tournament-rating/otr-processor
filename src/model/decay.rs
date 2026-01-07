@@ -25,24 +25,39 @@ use tracing::{debug, trace};
 /// - Rating decay: Applied to players inactive for more than `DECAY_DAYS` (184 days)
 /// - Volatility decay: Applied to all players not at `VOLATILITY_DECAY_CAP`
 /// - Both changes are combined into a single adjustment per Wednesday per player
+///
+/// # Usage
+/// Call `prepare_decay_pass(up_to)` first to check if there are Wednesdays to process.
+/// If it returns true, call `apply_decay(player_ratings)` to apply the decay.
 pub struct UnifiedDecaySystem {
-    last_processed_wednesday: Option<DateTime<FixedOffset>>
+    last_processed_wednesday: Option<DateTime<FixedOffset>>,
+    pending_wednesdays: Vec<DateTime<FixedOffset>>
 }
 
 impl UnifiedDecaySystem {
     pub fn new() -> Self {
         Self {
-            last_processed_wednesday: None
+            last_processed_wednesday: None,
+            pending_wednesdays: Vec::new()
         }
     }
 
-    /// Check if there are pending Wednesdays to process up to `up_to` time.
-    /// On first call, establishes baseline at `up_to` without processing.
-    pub fn has_pending_wednesdays(&mut self, up_to: DateTime<FixedOffset>) -> bool {
+    /// Prepares for a decay pass by computing pending Wednesdays up to `up_to`.
+    ///
+    /// On the first call, establishes a baseline timestamp and returns false.
+    /// On subsequent calls, computes and caches the Wednesdays that need processing,
+    /// returning true if there are any pending Wednesdays.
+    ///
+    /// If this returns true, call `apply_decay(player_ratings)` to apply the cached decay.
+    pub fn prepare_decay_pass(&mut self, up_to: DateTime<FixedOffset>) -> bool {
         match self.last_processed_wednesday {
-            Some(from) => !Self::get_wednesdays_between(from, up_to).is_empty(),
+            Some(from) => {
+                self.pending_wednesdays = Self::get_wednesdays_between(from, up_to);
+                !self.pending_wednesdays.is_empty()
+            }
             None => {
                 self.last_processed_wednesday = Some(up_to);
+                self.pending_wednesdays.clear();
                 false
             }
         }
@@ -99,8 +114,7 @@ impl UnifiedDecaySystem {
         timestamps
     }
 
-    /// Applies unified decay to all players for Wednesdays between
-    /// last_processed and `up_to`.
+    /// Applies unified decay to all players for the Wednesdays cached by `prepare_decay_pass`.
     ///
     /// For each Wednesday:
     /// 1. Determine if each player is active or inactive AS OF that Wednesday
@@ -108,24 +122,16 @@ impl UnifiedDecaySystem {
     /// 3. For active players: apply volatility decay only
     ///
     /// Returns the number of adjustments created.
-    pub fn apply_decay(&mut self, player_ratings: &mut [PlayerRating], up_to: DateTime<FixedOffset>) -> usize {
-        // On first call, establish baseline
-        let from = match self.last_processed_wednesday {
-            Some(t) => t,
-            None => {
-                self.last_processed_wednesday = Some(up_to);
-                return 0;
-            }
-        };
-
-        let wednesdays = Self::get_wednesdays_between(from, up_to);
-        if wednesdays.is_empty() {
+    ///
+    /// **Note**: Call `prepare_decay_pass(up_to)` first to compute the pending Wednesdays.
+    pub fn apply_decay(&mut self, player_ratings: &mut [PlayerRating]) -> usize {
+        if self.pending_wednesdays.is_empty() {
             return 0;
         }
 
         let mut total_adjustments = 0;
 
-        for wednesday in &wednesdays {
+        for wednesday in &self.pending_wednesdays.clone() {
             for player_rating in player_ratings.iter_mut() {
                 if let Some(adjustment) = self.create_decay_adjustment(player_rating, *wednesday) {
                     // Update player state
@@ -137,16 +143,17 @@ impl UnifiedDecaySystem {
             }
         }
 
-        if let Some(last) = wednesdays.last() {
+        if let Some(last) = self.pending_wednesdays.last() {
             self.last_processed_wednesday = Some(*last);
         }
 
         trace!(
-            wednesdays = wednesdays.len(),
+            wednesdays = self.pending_wednesdays.len(),
             adjustments = total_adjustments,
             "Applied unified decay"
         );
 
+        self.pending_wednesdays.clear();
         total_adjustments
     }
 
@@ -228,7 +235,7 @@ impl UnifiedDecaySystem {
             .adjustments
             .iter()
             .filter(|adj| adj.timestamp <= timestamp)
-            .next_back();
+            .max_by_key(|adj| adj.timestamp);
 
         match last_adj {
             Some(adj) => (adj.rating_after, adj.volatility_after),
@@ -244,7 +251,7 @@ impl UnifiedDecaySystem {
             .iter()
             .filter(|adj| adj.adjustment_type == RatingAdjustmentType::Match)
             .filter(|adj| adj.timestamp <= wednesday)
-            .next_back();
+            .max_by_key(|adj| adj.timestamp);
 
         match last_match {
             Some(adj) => {
@@ -264,7 +271,7 @@ impl UnifiedDecaySystem {
             .adjustments
             .iter()
             .map(|adj| adj.rating_after)
-            .fold(f64::NEG_INFINITY, f64::max);
+            .fold(player_rating.rating, f64::max);
 
         DECAY_MINIMUM.max(0.5 * (DECAY_MINIMUM + peak_rating))
     }
@@ -293,6 +300,16 @@ mod tests {
     use crate::{model::structures::ruleset::Ruleset, utils::test_utils::generate_player_rating};
     use approx::assert_abs_diff_eq;
     use chrono::{Datelike, TimeZone, Timelike, Utc};
+
+    /// Test helper that combines prepare_decay_pass + apply_decay in one call.
+    fn apply_decay_up_to(
+        system: &mut UnifiedDecaySystem,
+        ratings: &mut [PlayerRating],
+        up_to: DateTime<FixedOffset>
+    ) -> usize {
+        system.prepare_decay_pass(up_to);
+        system.apply_decay(ratings)
+    }
 
     #[test]
     fn test_get_wednesdays_between_no_wednesday() {
@@ -337,7 +354,7 @@ mod tests {
         let mut ratings = vec![generate_player_rating(1, Ruleset::Osu, 1000.0, 200.0, 2, None, None)];
 
         let up_to = Utc.with_ymd_and_hms(2024, 1, 10, 12, 0, 0).unwrap().fixed_offset();
-        let count = system.apply_decay(&mut ratings, up_to);
+        let count = apply_decay_up_to(&mut system, &mut ratings, up_to);
 
         assert_eq!(count, 0);
         assert_eq!(system.last_processed_wednesday, Some(up_to));
@@ -364,11 +381,11 @@ mod tests {
 
         // First call establishes baseline (Monday)
         let first_time = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap().fixed_offset();
-        system.apply_decay(&mut ratings, first_time);
+        apply_decay_up_to(&mut system, &mut ratings, first_time);
 
         // Second call spans one Wednesday (still within DECAY_DAYS of last play)
         let second_time = Utc.with_ymd_and_hms(2024, 1, 8, 12, 0, 0).unwrap().fixed_offset();
-        let count = system.apply_decay(&mut ratings, second_time);
+        let count = apply_decay_up_to(&mut system, &mut ratings, second_time);
 
         assert_eq!(count, 1);
         assert_eq!(ratings[0].adjustments.len(), 3); // 2 original + 1 decay
@@ -405,11 +422,11 @@ mod tests {
 
         // First call establishes baseline
         let first_time = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap().fixed_offset();
-        system.apply_decay(&mut ratings, first_time);
+        apply_decay_up_to(&mut system, &mut ratings, first_time);
 
         // Second call spans one Wednesday (player is definitely inactive)
         let second_time = Utc.with_ymd_and_hms(2024, 1, 8, 12, 0, 0).unwrap().fixed_offset();
-        let count = system.apply_decay(&mut ratings, second_time);
+        let count = apply_decay_up_to(&mut system, &mut ratings, second_time);
 
         assert_eq!(count, 1);
 
@@ -445,7 +462,7 @@ mod tests {
         )];
 
         // Establish baseline at last_played
-        system.apply_decay(&mut ratings, last_played);
+        apply_decay_up_to(&mut system, &mut ratings, last_played);
 
         // 184 days later is July 6, 2024 (Saturday)
         // The Wednesday before that (July 3) is only 182 days - should NOT trigger rating decay
@@ -454,7 +471,7 @@ mod tests {
         let july_10 = Utc.with_ymd_and_hms(2024, 7, 10, 12, 0, 0).unwrap().fixed_offset();
 
         // Process up to July 3 (182 days)
-        system.apply_decay(&mut ratings, july_3);
+        apply_decay_up_to(&mut system, &mut ratings, july_3);
 
         // Find all volatility decay adjustments (before 184 days, player is still active)
         let volatility_decay_adjustments: Vec<_> = ratings[0]
@@ -469,7 +486,7 @@ mod tests {
         }
 
         // Now process to July 10 (188 days)
-        system.apply_decay(&mut ratings, july_10);
+        apply_decay_up_to(&mut system, &mut ratings, july_10);
 
         // The July 10 adjustment should have rating decay (Decay type, not VolatilityDecay)
         let last_adj = ratings[0].adjustments.last().unwrap();
@@ -500,11 +517,11 @@ mod tests {
 
         // Establish baseline
         let first_time = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap().fixed_offset();
-        system.apply_decay(&mut ratings, first_time);
+        apply_decay_up_to(&mut system, &mut ratings, first_time);
 
         // Process 3 Wednesdays
         let later_time = Utc.with_ymd_and_hms(2024, 1, 22, 12, 0, 0).unwrap().fixed_offset();
-        system.apply_decay(&mut ratings, later_time);
+        apply_decay_up_to(&mut system, &mut ratings, later_time);
 
         // Check chain consistency
         let decay_adjustments: Vec<_> = ratings[0]
@@ -539,11 +556,11 @@ mod tests {
 
         // Establish baseline
         let first_time = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap().fixed_offset();
-        system.apply_decay(&mut ratings, first_time);
+        apply_decay_up_to(&mut system, &mut ratings, first_time);
 
         // Process one Wednesday
         let second_time = Utc.with_ymd_and_hms(2024, 1, 8, 12, 0, 0).unwrap().fixed_offset();
-        let count = system.apply_decay(&mut ratings, second_time);
+        let count = apply_decay_up_to(&mut system, &mut ratings, second_time);
 
         assert_eq!(count, 1, "Should still create adjustment for volatility");
 
@@ -571,11 +588,11 @@ mod tests {
 
         // Establish baseline
         let first_time = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap().fixed_offset();
-        system.apply_decay(&mut ratings, first_time);
+        apply_decay_up_to(&mut system, &mut ratings, first_time);
 
         // Process one Wednesday
         let second_time = Utc.with_ymd_and_hms(2024, 1, 8, 12, 0, 0).unwrap().fixed_offset();
-        let count = system.apply_decay(&mut ratings, second_time);
+        let count = apply_decay_up_to(&mut system, &mut ratings, second_time);
 
         assert_eq!(count, 1, "Should still create adjustment for rating decay");
 
@@ -595,11 +612,11 @@ mod tests {
 
         // Establish baseline
         let first_time = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap().fixed_offset();
-        system.apply_decay(&mut ratings, first_time);
+        apply_decay_up_to(&mut system, &mut ratings, first_time);
 
         // Process many Wednesdays (even past 184 days)
         let later_time = Utc.with_ymd_and_hms(2024, 12, 1, 12, 0, 0).unwrap().fixed_offset();
-        system.apply_decay(&mut ratings, later_time);
+        apply_decay_up_to(&mut system, &mut ratings, later_time);
 
         // All adjustments should be VolatilityDecay (player never played, so not "inactive")
         let volatility_decay_adjustments: Vec<_> = ratings[0]
@@ -635,11 +652,11 @@ mod tests {
 
         // Establish baseline
         let first_time = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap().fixed_offset();
-        system.apply_decay(&mut ratings, first_time);
+        apply_decay_up_to(&mut system, &mut ratings, first_time);
 
         // Process several weeks
         let later_time = Utc.with_ymd_and_hms(2024, 2, 1, 12, 0, 0).unwrap().fixed_offset();
-        system.apply_decay(&mut ratings, later_time);
+        apply_decay_up_to(&mut system, &mut ratings, later_time);
 
         // All decay adjustments (both Decay and VolatilityDecay) should be on Wednesdays at 12:00 UTC
         let decay_adjustments: Vec<_> = ratings[0]
@@ -656,49 +673,39 @@ mod tests {
     }
 
     #[test]
-    fn test_has_pending_wednesdays_first_call() {
+    fn test_prepare_decay_pass_first_call() {
         let mut system = UnifiedDecaySystem::new();
         let up_to = Utc.with_ymd_and_hms(2024, 1, 10, 12, 0, 0).unwrap().fixed_offset();
 
         // First call should return false and set baseline
-        assert!(!system.has_pending_wednesdays(up_to));
+        assert!(!system.prepare_decay_pass(up_to));
         assert_eq!(system.last_processed_wednesday, Some(up_to));
     }
 
     #[test]
-    fn test_has_pending_wednesdays_with_wednesdays() {
+    fn test_prepare_decay_pass_with_wednesdays() {
         let mut system = UnifiedDecaySystem::new();
 
         // First call establishes baseline
         let first_time = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap().fixed_offset();
-        system.has_pending_wednesdays(first_time);
+        system.prepare_decay_pass(first_time);
 
         // Second call with Wednesday in between should return true
         let second_time = Utc.with_ymd_and_hms(2024, 1, 8, 12, 0, 0).unwrap().fixed_offset();
-        assert!(system.has_pending_wednesdays(second_time));
+        assert!(system.prepare_decay_pass(second_time));
     }
 
     #[test]
-    fn test_has_pending_wednesdays_no_wednesdays() {
+    fn test_prepare_decay_pass_no_wednesdays() {
         let mut system = UnifiedDecaySystem::new();
 
         // First call establishes baseline on Monday
         let first_time = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap().fixed_offset();
-        system.has_pending_wednesdays(first_time);
+        system.prepare_decay_pass(first_time);
 
         // Second call on Tuesday - no Wednesday in between
         let second_time = Utc.with_ymd_and_hms(2024, 1, 2, 12, 0, 0).unwrap().fixed_offset();
-        assert!(!system.has_pending_wednesdays(second_time));
-    }
-
-    fn create_inactive_player_for_ruleset(ruleset: Ruleset, rating: f64, volatility: f64) -> PlayerRating {
-        let last_played = Utc.with_ymd_and_hms(2023, 1, 1, 12, 0, 0).unwrap().fixed_offset();
-        generate_player_rating(1, ruleset, rating, volatility, 2, Some(last_played), Some(last_played))
-    }
-
-    fn create_active_player_for_ruleset(ruleset: Ruleset, rating: f64, volatility: f64) -> PlayerRating {
-        let last_played = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap().fixed_offset();
-        generate_player_rating(1, ruleset, rating, volatility, 2, Some(last_played), Some(last_played))
+        assert!(!system.prepare_decay_pass(second_time));
     }
 
     #[test]
@@ -719,10 +726,10 @@ mod tests {
         )];
 
         let baseline = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap().fixed_offset();
-        system.apply_decay(&mut ratings, baseline);
+        apply_decay_up_to(&mut system, &mut ratings, baseline);
 
         let after_one_wednesday = Utc.with_ymd_and_hms(2024, 1, 10, 12, 0, 0).unwrap().fixed_offset();
-        system.apply_decay(&mut ratings, after_one_wednesday);
+        apply_decay_up_to(&mut system, &mut ratings, after_one_wednesday);
 
         let decay_adj = ratings[0]
             .adjustments
@@ -755,10 +762,10 @@ mod tests {
         )];
 
         let baseline = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap().fixed_offset();
-        system.apply_decay(&mut ratings, baseline);
+        apply_decay_up_to(&mut system, &mut ratings, baseline);
 
         let after_one_wednesday = Utc.with_ymd_and_hms(2024, 1, 10, 12, 0, 0).unwrap().fixed_offset();
-        system.apply_decay(&mut ratings, after_one_wednesday);
+        apply_decay_up_to(&mut system, &mut ratings, after_one_wednesday);
 
         let decay_adj = ratings[0]
             .adjustments
@@ -775,9 +782,9 @@ mod tests {
 
     #[test]
     fn test_decay_floor_formula_low_peak() {
-        let ratings = vec![generate_player_rating(1, Ruleset::Osu, 500.0, 200.0, 2, None, None)];
+        let rating = generate_player_rating(1, Ruleset::Osu, 500.0, 200.0, 2, None, None);
 
-        let floor = UnifiedDecaySystem::calculate_decay_floor(&ratings[0]);
+        let floor = UnifiedDecaySystem::calculate_decay_floor(&rating);
 
         assert_abs_diff_eq!(floor, DECAY_MINIMUM, epsilon = 0.001);
     }
@@ -785,17 +792,9 @@ mod tests {
     #[test]
     fn test_decay_floor_formula_high_peak() {
         let peak_rating = 2000.0;
-        let ratings = vec![generate_player_rating(
-            1,
-            Ruleset::Osu,
-            peak_rating,
-            200.0,
-            2,
-            None,
-            None
-        )];
+        let rating = generate_player_rating(1, Ruleset::Osu, peak_rating, 200.0, 2, None, None);
 
-        let floor = UnifiedDecaySystem::calculate_decay_floor(&ratings[0]);
+        let floor = UnifiedDecaySystem::calculate_decay_floor(&rating);
         let expected_floor = 0.5 * (DECAY_MINIMUM + peak_rating);
 
         assert_abs_diff_eq!(floor, expected_floor, epsilon = 0.001);
@@ -804,15 +803,25 @@ mod tests {
     #[test]
     fn test_decay_all_non_osu_rulesets() {
         use Ruleset::*;
+        // Inactive player: last played 2023-01-01, baseline is 2024-01-01 (1 year inactive)
+        let last_played = Utc.with_ymd_and_hms(2023, 1, 1, 12, 0, 0).unwrap().fixed_offset();
         let baseline = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap().fixed_offset();
         let after_one_wednesday = Utc.with_ymd_and_hms(2024, 1, 4, 12, 0, 0).unwrap().fixed_offset();
 
         for ruleset in [Taiko, Catch, ManiaOther, Mania4k, Mania7k] {
             let mut system = UnifiedDecaySystem::new();
-            let mut ratings = vec![create_inactive_player_for_ruleset(ruleset, 1500.0, 200.0)];
+            let mut ratings = vec![generate_player_rating(
+                1,
+                ruleset,
+                1500.0,
+                200.0,
+                2,
+                Some(last_played),
+                Some(last_played)
+            )];
 
-            system.apply_decay(&mut ratings, baseline);
-            let count = system.apply_decay(&mut ratings, after_one_wednesday);
+            apply_decay_up_to(&mut system, &mut ratings, baseline);
+            let count = apply_decay_up_to(&mut system, &mut ratings, after_one_wednesday);
 
             assert_eq!(count, 1, "{ruleset:?}");
             let adj = ratings[0].adjustments.last().unwrap();
@@ -825,15 +834,24 @@ mod tests {
     #[test]
     fn test_volatility_decay_all_non_osu_rulesets() {
         use Ruleset::*;
+        // Active player: last played matches first_time (still active)
         let first_time = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap().fixed_offset();
         let second_time = Utc.with_ymd_and_hms(2024, 1, 8, 12, 0, 0).unwrap().fixed_offset();
 
         for ruleset in [Taiko, Catch, ManiaOther, Mania4k, Mania7k] {
             let mut system = UnifiedDecaySystem::new();
-            let mut ratings = vec![create_active_player_for_ruleset(ruleset, 1000.0, 200.0)];
+            let mut ratings = vec![generate_player_rating(
+                1,
+                ruleset,
+                1000.0,
+                200.0,
+                2,
+                Some(first_time),
+                Some(first_time)
+            )];
 
-            system.apply_decay(&mut ratings, first_time);
-            let count = system.apply_decay(&mut ratings, second_time);
+            apply_decay_up_to(&mut system, &mut ratings, first_time);
+            let count = apply_decay_up_to(&mut system, &mut ratings, second_time);
 
             assert_eq!(count, 1, "{ruleset:?}");
             let adj = ratings[0].adjustments.last().unwrap();
@@ -860,10 +878,10 @@ mod tests {
             Some(last_played)
         )];
 
-        system.apply_decay(&mut ratings, last_played);
+        apply_decay_up_to(&mut system, &mut ratings, last_played);
 
         let day_183 = Utc.with_ymd_and_hms(2024, 7, 5, 12, 0, 0).unwrap().fixed_offset();
-        system.apply_decay(&mut ratings, day_183);
+        apply_decay_up_to(&mut system, &mut ratings, day_183);
 
         let volatility_decay_count = ratings[0]
             .adjustments
@@ -880,7 +898,7 @@ mod tests {
         assert_eq!(decay_count, 0, "Should NOT have Decay adjustments before 184 days");
 
         let day_188 = Utc.with_ymd_and_hms(2024, 7, 10, 12, 0, 0).unwrap().fixed_offset();
-        system.apply_decay(&mut ratings, day_188);
+        apply_decay_up_to(&mut system, &mut ratings, day_188);
 
         let decay_count_after = ratings[0]
             .adjustments
@@ -895,17 +913,22 @@ mod tests {
     fn test_volatility_approaches_cap_gradually() {
         let mut system = UnifiedDecaySystem::new();
         let initial_volatility = 200.0;
-        let mut ratings = vec![create_active_player_for_ruleset(
+        // Active player: last played matches first_time
+        let first_time = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap().fixed_offset();
+        let mut ratings = vec![generate_player_rating(
+            1,
             Ruleset::Osu,
             1000.0,
-            initial_volatility
+            initial_volatility,
+            2,
+            Some(first_time),
+            Some(first_time)
         )];
 
-        let first_time = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap().fixed_offset();
-        system.apply_decay(&mut ratings, first_time);
+        apply_decay_up_to(&mut system, &mut ratings, first_time);
 
         let many_weeks_later = Utc.with_ymd_and_hms(2024, 6, 1, 12, 0, 0).unwrap().fixed_offset();
-        system.apply_decay(&mut ratings, many_weeks_later);
+        apply_decay_up_to(&mut system, &mut ratings, many_weeks_later);
 
         let volatility_decay_adjs: Vec<_> = ratings[0]
             .adjustments
@@ -930,17 +953,22 @@ mod tests {
     #[test]
     fn test_volatility_at_cap_no_further_increase() {
         let mut system = UnifiedDecaySystem::new();
-        let mut ratings = vec![create_active_player_for_ruleset(
+        // Active player at volatility cap: last played matches first_time
+        let first_time = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap().fixed_offset();
+        let mut ratings = vec![generate_player_rating(
+            1,
             Ruleset::Osu,
             1000.0,
-            VOLATILITY_DECAY_CAP
+            VOLATILITY_DECAY_CAP,
+            2,
+            Some(first_time),
+            Some(first_time)
         )];
 
-        let first_time = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap().fixed_offset();
-        system.apply_decay(&mut ratings, first_time);
+        apply_decay_up_to(&mut system, &mut ratings, first_time);
 
         let second_time = Utc.with_ymd_and_hms(2024, 1, 8, 12, 0, 0).unwrap().fixed_offset();
-        let count = system.apply_decay(&mut ratings, second_time);
+        let count = apply_decay_up_to(&mut system, &mut ratings, second_time);
 
         assert_eq!(
             count, 0,
@@ -967,10 +995,10 @@ mod tests {
         let actual_decay_floor = UnifiedDecaySystem::calculate_decay_floor(&ratings[0]);
 
         let baseline = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap().fixed_offset();
-        system.apply_decay(&mut ratings, baseline);
+        apply_decay_up_to(&mut system, &mut ratings, baseline);
 
         let many_weeks_later = Utc.with_ymd_and_hms(2024, 6, 1, 12, 0, 0).unwrap().fixed_offset();
-        system.apply_decay(&mut ratings, many_weeks_later);
+        apply_decay_up_to(&mut system, &mut ratings, many_weeks_later);
 
         assert!(
             ratings[0].rating >= actual_decay_floor - 0.001,
@@ -994,11 +1022,11 @@ mod tests {
         )];
 
         let baseline = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap().fixed_offset();
-        system.apply_decay(&mut ratings, baseline);
+        apply_decay_up_to(&mut system, &mut ratings, baseline);
 
         let adj_count_before = ratings[0].adjustments.len();
         let second_time = Utc.with_ymd_and_hms(2024, 1, 8, 12, 0, 0).unwrap().fixed_offset();
-        let count = system.apply_decay(&mut ratings, second_time);
+        let count = apply_decay_up_to(&mut system, &mut ratings, second_time);
 
         assert_eq!(count, 0, "Should not create adjustment when at both caps");
         assert_eq!(
@@ -1038,11 +1066,11 @@ mod tests {
         let mut ratings = vec![active_player, inactive_player];
 
         let baseline = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap().fixed_offset();
-        system.apply_decay(&mut ratings, baseline);
+        apply_decay_up_to(&mut system, &mut ratings, baseline);
 
         // 2024-01-04 is Thursday, so only one Wednesday (2024-01-03) is between baseline and this
         let after_one_wednesday = Utc.with_ymd_and_hms(2024, 1, 4, 12, 0, 0).unwrap().fixed_offset();
-        let count = system.apply_decay(&mut ratings, after_one_wednesday);
+        let count = apply_decay_up_to(&mut system, &mut ratings, after_one_wednesday);
 
         assert_eq!(count, 2, "Should create adjustment for each player");
 
@@ -1067,9 +1095,9 @@ mod tests {
             Some(last_played)
         )];
 
-        system.apply_decay(&mut ratings, last_played);
+        apply_decay_up_to(&mut system, &mut ratings, last_played);
         let end_date = last_played + Duration::days(25);
-        let total_count = system.apply_decay(&mut ratings, end_date);
+        let total_count = apply_decay_up_to(&mut system, &mut ratings, end_date);
 
         let expected = UnifiedDecaySystem::get_wednesdays_between(last_played, end_date).len();
         let volatility_count = ratings[0]
@@ -1102,9 +1130,9 @@ mod tests {
             Some(last_played)
         )];
 
-        system.apply_decay(&mut ratings, last_played);
+        apply_decay_up_to(&mut system, &mut ratings, last_played);
         let end_date = last_played + Duration::days(DECAY_DAYS as i64 + 60);
-        let total_count = system.apply_decay(&mut ratings, end_date);
+        let total_count = apply_decay_up_to(&mut system, &mut ratings, end_date);
 
         let all_wednesdays = UnifiedDecaySystem::get_wednesdays_between(last_played, end_date);
         let expected_active = all_wednesdays

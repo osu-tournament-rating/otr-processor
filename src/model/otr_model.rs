@@ -390,7 +390,7 @@ impl OtrModel {
     /// - For active players: volatility decay only
     fn apply_unified_decay(&mut self, up_to: chrono::DateTime<chrono::FixedOffset>) {
         // Early exit if no Wednesdays to process (avoids expensive leaderboard cloning)
-        if !self.decay_system.has_pending_wednesdays(up_to) {
+        if !self.decay_system.prepare_decay_pass(up_to) {
             return;
         }
 
@@ -405,7 +405,7 @@ impl OtrModel {
             return;
         }
 
-        let count = self.decay_system.apply_decay(&mut all_ratings, up_to);
+        let count = self.decay_system.apply_decay(&mut all_ratings);
 
         if count > 0 {
             self.rating_tracker.insert_or_update(&all_ratings);
@@ -646,11 +646,6 @@ mod tests {
         assert_eq!(rating_3.country_rank, 2);
         assert_eq!(rating_2.country_rank, 3);
         assert_eq!(rating_1.country_rank, 4);
-    }
-
-    #[test]
-    fn test_initial_rating_not_generated_when_no_match_data() {
-        let player_rating = generate_player_rating(1, Osu, 1000.0, 100.0, 1, None, None);
     }
 
     /// Tests that the rating system correctly handles matches with players
