@@ -1255,4 +1255,126 @@ mod tests {
             "Inactive Catch should have decay: {catch_decay_count}"
         );
     }
+
+    /// Test that validates the rating calculation algorithm against the documented sample match.
+    /// See: https://docs.otr.stagec.xyz/Rating-Framework/Rating-Calculation/Sample-Match
+    #[test]
+    fn test_documented_sample_match_rating_calculation() {
+        const TOLERANCE: f64 = 0.000009;
+
+        // Use current time to avoid final_decay_pass applying decay after match processing
+        let match_time = Utc::now().fixed_offset();
+
+        // Player IDs:
+        // 1 = thighhigh, 2 = PotjeNutella, 3 = Miori Celesta
+        // 4 = CMeFly, 5 = Piemanray314, 6 = glixh_hunt3r
+        let player_ratings = vec![
+            generate_player_rating(1, Osu, 1300.0, 280.0, 1, Some(match_time), Some(match_time)),
+            generate_player_rating(2, Osu, 1350.0, 180.0, 1, Some(match_time), Some(match_time)),
+            generate_player_rating(3, Osu, 1250.0, 150.0, 1, Some(match_time), Some(match_time)),
+            generate_player_rating(4, Osu, 1200.0, 170.0, 1, Some(match_time), Some(match_time)),
+            generate_player_rating(5, Osu, 1100.0, 280.0, 1, Some(match_time), Some(match_time)),
+            generate_player_rating(6, Osu, 1250.0, 340.0, 1, Some(match_time), Some(match_time)),
+        ];
+
+        let countries = generate_country_mapping_player_ratings(&player_ratings, "US");
+        let mut model = OtrModel::new(&player_ratings, &countries);
+
+        // Game 1: thighhigh(1st), glixh_hunt3r(2nd), Miori Celesta(3rd), PotjeNutella(4th)
+        let game1_placements = vec![
+            generate_placement(1, 1),
+            generate_placement(6, 2),
+            generate_placement(3, 3),
+            generate_placement(2, 4),
+        ];
+
+        // Game 2: CMeFly(1st), PotjeNutella(2nd), thighhigh(3rd), glixh_hunt3r(4th)
+        let game2_placements = vec![
+            generate_placement(4, 1),
+            generate_placement(2, 2),
+            generate_placement(1, 3),
+            generate_placement(6, 4),
+        ];
+
+        // Game 3: PotjeNutella(1st), thighhigh(2nd), Miori Celesta(3rd), Piemanray314(4th)
+        let game3_placements = vec![
+            generate_placement(2, 1),
+            generate_placement(1, 2),
+            generate_placement(3, 3),
+            generate_placement(5, 4),
+        ];
+
+        // Game 4: PotjeNutella(1st), Piemanray314(2nd), glixh_hunt3r(3rd), CMeFly(4th)
+        let game4_placements = vec![
+            generate_placement(2, 1),
+            generate_placement(5, 2),
+            generate_placement(6, 3),
+            generate_placement(4, 4),
+        ];
+
+        // Game 5: thighhigh(1st), Miori Celesta(2nd), PotjeNutella(3rd), Piemanray314(4th)
+        let game5_placements = vec![
+            generate_placement(1, 1),
+            generate_placement(3, 2),
+            generate_placement(2, 3),
+            generate_placement(5, 4),
+        ];
+
+        // Game 6: PotjeNutella(1st), CMeFly(2nd), thighhigh(3rd), glixh_hunt3r(4th)
+        let game6_placements = vec![
+            generate_placement(2, 1),
+            generate_placement(4, 2),
+            generate_placement(1, 3),
+            generate_placement(6, 4),
+        ];
+
+        let games = vec![
+            generate_game(1, &game1_placements),
+            generate_game(2, &game2_placements),
+            generate_game(3, &game3_placements),
+            generate_game(4, &game4_placements),
+            generate_game(5, &game5_placements),
+            generate_game(6, &game6_placements),
+        ];
+
+        let matches = vec![generate_match(1, Osu, &games, match_time)];
+        model.process(&matches);
+
+        // Expected final ratings from documentation
+        let expected = [
+            (1, "thighhigh", 1328.79956, 271.51653),
+            (2, "PotjeNutella", 1358.65964, 177.52478),
+            (3, "Miori Celesta", 1250.49164, 148.8482),
+            (4, "CMeFly", 1200.46325, 168.82928),
+            (5, "Piemanray314", 1076.73905, 272.96965),
+            (6, "glixh_hunt3r", 1206.55769, 322.98816),
+        ];
+
+        for (player_id, name, expected_rating, expected_volatility) in expected {
+            let rating = model
+                .rating_tracker
+                .get_rating(player_id, Osu)
+                .unwrap_or_else(|| panic!("Player {} ({}) should have a rating", player_id, name));
+
+            assert!(
+                (rating.rating - expected_rating).abs() < TOLERANCE,
+                "Player {} ({}) rating mismatch: expected {}, got {} (diff: {})",
+                player_id,
+                name,
+                expected_rating,
+                rating.rating,
+                (rating.rating - expected_rating).abs()
+            );
+
+            assert!(
+                (rating.volatility - expected_volatility).abs() < TOLERANCE,
+                "Player {} ({}) volatility mismatch: expected {}, got {} (diff: {})",
+                player_id,
+                name,
+                expected_volatility,
+                rating.volatility,
+                (rating.volatility - expected_volatility).abs()
+            );
+        }
+    }
 }
