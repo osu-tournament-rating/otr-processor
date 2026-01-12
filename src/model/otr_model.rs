@@ -1347,7 +1347,7 @@ mod tests {
             (3, "Miori Celesta", 1250.49164, 148.8482),
             (4, "CMeFly", 1200.46325, 168.82928),
             (5, "Piemanray314", 1076.73905, 272.96965),
-            (6, "glixh_hunt3r", 1206.55769, 322.98816),
+            (6, "glixh_hunt3r", 1206.55769, 322.98816)
         ];
 
         for (player_id, name, expected_rating, expected_volatility) in expected {
