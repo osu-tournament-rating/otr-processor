@@ -46,7 +46,7 @@ rayon = "1.10.0"
 [dev-dependencies]
 testcontainers = "0.15"
 testcontainers-modules = { version = "0.3", features = ["postgres"] }
-sqlx = { version = "0.7", features = ["runtime-tokio-native-tls", "postgres", "migrate"] }
+sqlx = { version = "0.8", features = ["runtime-tokio-native-tls", "postgres", "migrate"] }
 serial_test = "3.0"
 
 [lints.rust]
