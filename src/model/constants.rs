@@ -56,3 +56,15 @@ pub const GAME_CORRECTION_CONSTANT: f64 = 0.5;
 /// Constant representing a typical match length (in games), used for
 /// game correction weighting
 pub const STANDARD_MATCH_LENGTH: f64 = 8.0;
+
+/// Returns the earliest date at which decay (rating or volatility) is allowed to occur.
+///
+/// Due to limited accessible tournament data before ~May 2018 (only official World Cups),
+/// players active in community tournaments before then appear inactive and accumulate
+/// unfair decay. No decay should occur before this date.
+pub fn decay_start_date() -> chrono::DateTime<chrono::FixedOffset> {
+    use chrono::{TimeZone, Utc};
+    Utc.with_ymd_and_hms(2019, 1, 1, 0, 0, 0)
+        .unwrap()
+        .fixed_offset()
+}

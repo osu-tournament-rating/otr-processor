@@ -8,7 +8,9 @@
 /// - Wednesday Decay: All decay adjustments occur at Wednesday 12:00 UTC
 /// - Unified Adjustments: Rating and volatility changes combined into single adjustments
 use super::{
-    constants::{DECAY_DAYS, DECAY_MINIMUM, DECAY_RATE, DECAY_VOLATILITY_GROWTH_RATE, VOLATILITY_DECAY_CAP},
+    constants::{
+        decay_start_date, DECAY_DAYS, DECAY_MINIMUM, DECAY_RATE, DECAY_VOLATILITY_GROWTH_RATE, VOLATILITY_DECAY_CAP
+    },
     structures::rating_adjustment_type::RatingAdjustmentType
 };
 use crate::{
@@ -110,6 +112,11 @@ impl UnifiedDecaySystem {
             timestamps.push(current);
             current += Duration::weeks(1);
         }
+
+        // Filter out Wednesdays before the decay start date to prevent unfair decay
+        // for players active in community tournaments before accessible data begins (~May 2018)
+        let start = decay_start_date();
+        timestamps.retain(|t| *t >= start);
 
         timestamps
     }
@@ -297,7 +304,10 @@ impl Default for UnifiedDecaySystem {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{model::structures::ruleset::Ruleset, utils::test_utils::generate_player_rating};
+    use crate::{
+        model::{constants::decay_start_date, structures::ruleset::Ruleset},
+        utils::test_utils::generate_player_rating
+    };
     use approx::assert_abs_diff_eq;
     use chrono::{Datelike, TimeZone, Timelike, Utc};
 
@@ -1155,5 +1165,138 @@ mod tests {
         assert_eq!(volatility_count, expected_active);
         assert_eq!(decay_count, expected_inactive);
         assert_eq!(total_count, all_wednesdays.len());
+    }
+
+    // --- Decay window start date tests ---
+
+    #[test]
+    fn test_no_decay_before_start_date() {
+        // No decay adjustments should be created for periods entirely before 2019-01-01
+        let mut system = UnifiedDecaySystem::new();
+        let last_played = Utc.with_ymd_and_hms(2017, 1, 1, 12, 0, 0).unwrap().fixed_offset();
+        let mut ratings = vec![generate_player_rating(
+            1,
+            Ruleset::Osu,
+            1500.0,
+            200.0,
+            2,
+            Some(last_played),
+            Some(last_played)
+        )];
+
+        // Establish baseline
+        let baseline = Utc.with_ymd_and_hms(2018, 1, 1, 12, 0, 0).unwrap().fixed_offset();
+        apply_decay_up_to(&mut system, &mut ratings, baseline);
+
+        // Process up to a date still before 2019-01-01
+        let before_cutoff = Utc.with_ymd_and_hms(2018, 12, 1, 12, 0, 0).unwrap().fixed_offset();
+        let count = apply_decay_up_to(&mut system, &mut ratings, before_cutoff);
+
+        assert_eq!(count, 0, "No decay adjustments should occur before 2019-01-01");
+    }
+
+    #[test]
+    fn test_decay_starts_on_first_wednesday_after_start_date() {
+        // 2019-01-01 is a Tuesday, so the first decay Wednesday should be 2019-01-02
+        let start = decay_start_date();
+        let first_wednesday = Utc.with_ymd_and_hms(2019, 1, 2, 12, 0, 0).unwrap().fixed_offset();
+
+        // Get Wednesdays spanning the start date boundary
+        let from = Utc.with_ymd_and_hms(2018, 12, 20, 12, 0, 0).unwrap().fixed_offset();
+        let to = Utc.with_ymd_and_hms(2019, 1, 10, 12, 0, 0).unwrap().fixed_offset();
+        let wednesdays = UnifiedDecaySystem::get_wednesdays_between(from, to);
+
+        assert!(!wednesdays.is_empty(), "Should have at least one Wednesday");
+        assert_eq!(
+            wednesdays[0], first_wednesday,
+            "First decay Wednesday should be 2019-01-02 (day after start date)"
+        );
+        // All Wednesdays should be on or after the start date
+        for w in &wednesdays {
+            assert!(*w >= start, "Wednesday {w} should be on or after decay start date");
+        }
+    }
+
+    #[test]
+    fn test_no_volatility_decay_before_start_date() {
+        // Active players should also get no volatility decay before the cutoff
+        let mut system = UnifiedDecaySystem::new();
+        let last_played = Utc.with_ymd_and_hms(2018, 6, 1, 12, 0, 0).unwrap().fixed_offset();
+        let mut ratings = vec![generate_player_rating(
+            1,
+            Ruleset::Osu,
+            1500.0,
+            200.0,
+            2,
+            Some(last_played),
+            Some(last_played)
+        )];
+
+        // Establish baseline
+        apply_decay_up_to(&mut system, &mut ratings, last_played);
+
+        // Process to a date before the cutoff
+        let before_cutoff = Utc.with_ymd_and_hms(2018, 12, 31, 12, 0, 0).unwrap().fixed_offset();
+        let count = apply_decay_up_to(&mut system, &mut ratings, before_cutoff);
+
+        assert_eq!(count, 0, "No volatility decay should occur before 2019-01-01");
+    }
+
+    #[test]
+    fn test_get_wednesdays_between_filters_before_start_date() {
+        // Wednesdays generated entirely before the start date should be filtered out
+        let from = Utc.with_ymd_and_hms(2018, 11, 1, 12, 0, 0).unwrap().fixed_offset();
+        let to = Utc.with_ymd_and_hms(2018, 12, 31, 12, 0, 0).unwrap().fixed_offset();
+
+        let wednesdays = UnifiedDecaySystem::get_wednesdays_between(from, to);
+        assert!(
+            wednesdays.is_empty(),
+            "All Wednesdays before 2019-01-01 should be filtered out, got {} Wednesdays",
+            wednesdays.len()
+        );
+    }
+
+    #[test]
+    fn test_decay_spanning_start_date_boundary() {
+        // A decay window crossing 2019-01-01 should only produce post-cutoff adjustments
+        let mut system = UnifiedDecaySystem::new();
+
+        // Player last played in 2017, so they're well past the inactivity threshold
+        let last_played = Utc.with_ymd_and_hms(2017, 1, 1, 12, 0, 0).unwrap().fixed_offset();
+        let mut ratings = vec![generate_player_rating(
+            1,
+            Ruleset::Osu,
+            1500.0,
+            200.0,
+            2,
+            Some(last_played),
+            Some(last_played)
+        )];
+
+        // Establish baseline before the cutoff
+        let baseline = Utc.with_ymd_and_hms(2018, 11, 1, 12, 0, 0).unwrap().fixed_offset();
+        apply_decay_up_to(&mut system, &mut ratings, baseline);
+
+        // Process across the boundary into 2019
+        let after_cutoff = Utc.with_ymd_and_hms(2019, 2, 1, 12, 0, 0).unwrap().fixed_offset();
+        let count = apply_decay_up_to(&mut system, &mut ratings, after_cutoff);
+
+        assert!(count > 0, "Should have decay adjustments after 2019-01-01");
+
+        // All adjustments should be on or after decay_start_date
+        let start = decay_start_date();
+        let decay_adjs: Vec<_> = ratings[0]
+            .adjustments
+            .iter()
+            .filter(|a| a.adjustment_type == Decay || a.adjustment_type == VolatilityDecay)
+            .collect();
+
+        for adj in &decay_adjs {
+            assert!(
+                adj.timestamp >= start,
+                "Adjustment at {} should be on or after decay start date",
+                adj.timestamp
+            );
+        }
     }
 }
