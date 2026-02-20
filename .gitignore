@@ -3,4 +3,4 @@
 **/*.idea
 .vscode/
 .aider*
-CLAUDE.md
+.claude/

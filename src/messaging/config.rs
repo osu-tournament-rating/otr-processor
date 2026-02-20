@@ -155,8 +155,8 @@ impl Default for RabbitMqConfig {
         let routing_key = "processing.stats.tournaments".to_string();
         Self {
             host: "localhost".to_string(),
-            username: "guest".to_string(),
-            password: "guest".to_string(),
+            username: "admin".to_string(),
+            password: "admin".to_string(),
             vhost: "/".to_string(),
             port: 5672,
             exchange: routing_key.clone(),
@@ -278,8 +278,8 @@ mod tests {
         let config = RabbitMqConfig::from_url("amqp://localhost").unwrap();
 
         assert_eq!(config.host, "localhost");
-        assert_eq!(config.username, "guest");
-        assert_eq!(config.password, "guest");
+        assert_eq!(config.username, "admin");
+        assert_eq!(config.password, "admin");
         assert_eq!(config.port, 5672);
         assert_eq!(config.vhost, "/");
     }
@@ -289,8 +289,8 @@ mod tests {
         let config = RabbitMqConfig::default();
 
         assert_eq!(config.host, "localhost");
-        assert_eq!(config.username, "guest");
-        assert_eq!(config.password, "guest");
+        assert_eq!(config.username, "admin");
+        assert_eq!(config.password, "admin");
         assert_eq!(config.vhost, "/");
         assert_eq!(config.port, 5672);
         assert_eq!(config.exchange, "processing.stats.tournaments");
