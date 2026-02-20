@@ -64,7 +64,5 @@ pub const STANDARD_MATCH_LENGTH: f64 = 8.0;
 /// unfair decay. No decay should occur before this date.
 pub fn decay_start_date() -> chrono::DateTime<chrono::FixedOffset> {
     use chrono::{TimeZone, Utc};
-    Utc.with_ymd_and_hms(2019, 1, 1, 0, 0, 0)
-        .unwrap()
-        .fixed_offset()
+    Utc.with_ymd_and_hms(2019, 1, 1, 0, 0, 0).unwrap().fixed_offset()
 }
