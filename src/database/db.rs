@@ -870,6 +870,50 @@ impl DbClient {
         }
     }
 
+    /// Removes lingering player stats for tournaments and matches
+    /// which have been rejected since the last run.
+    pub async fn delete_rejected_player_stats(&self) {
+        // Delete player_tournament_stats for rejected tournaments
+        let pts_deleted = self
+            .client
+            .execute(
+                "DELETE FROM player_tournament_stats pts
+                 WHERE pts.tournament_id IN (
+                     SELECT id FROM tournaments WHERE verification_status != 4
+                 )",
+                &[]
+            )
+            .await
+            .unwrap();
+
+        info!(
+            "Deleted {} lingering player_tournament_stats rows from rejected tournaments",
+            pts_deleted
+        );
+
+        // Delete player_match_stats for rejected matches or matches in rejected tournaments
+        let pms_deleted = self
+            .client
+            .execute(
+                "DELETE FROM player_match_stats pms
+                 WHERE pms.match_id IN (
+                     SELECT m.id FROM matches m
+                     WHERE m.verification_status != 4
+                     OR m.tournament_id IN (
+                         SELECT t.id FROM tournaments t WHERE t.verification_status != 4
+                     )
+                 )",
+                &[]
+            )
+            .await
+            .unwrap();
+
+        info!(
+            "Deleted {} lingering player_match_stats rows from rejected matches/tournaments",
+            pms_deleted
+        );
+    }
+
     /// Returns tournament IDs that need stats refresh based on timestamp comparison.
     /// A tournament needs refresh if:
     /// - No player_tournament_stats exist for it, OR

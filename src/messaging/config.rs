@@ -87,7 +87,7 @@ impl RabbitMqConfig {
         let url = url.trim_start_matches("amqp://");
         let (auth_host, vhost) = url.split_once('/').unwrap_or((url, ""));
         let (auth, host_port) = auth_host.split_once('@').unwrap_or(("", auth_host));
-        let (username, password) = auth.split_once(':').unwrap_or(("guest", "guest"));
+        let (username, password) = auth.split_once(':').unwrap_or(("admin", "admin"));
         let (host, port_str) = host_port.split_once(':').unwrap_or((host_port, "5672"));
         let port = port_str.parse().unwrap_or(5672);
 
