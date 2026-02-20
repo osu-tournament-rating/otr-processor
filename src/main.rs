@@ -92,7 +92,10 @@ async fn main() {
         client.save_results(&results).await;
         info!("Results saved to database.");
 
-        // 8. Emit messages for tournaments needing stats refresh
+        // 8. Remove lingering stats for tournaments/matches rejected since the last run
+        client.delete_rejected_player_stats().await;
+
+        // 9. Emit messages for tournaments needing stats refresh
         if let Some(ref mut publisher) = rabbitmq_publisher {
             let all_tournament_ids: Vec<i32> = tournament_info.keys().cloned().collect();
 
