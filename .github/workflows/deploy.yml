@@ -27,10 +27,10 @@ jobs:
         id: set-tag
         run: |
           image_prefix="${{ secrets.DOCKERHUB_USERNAME }}/otr-processor"
-          if [[ "${{ inputs.target }}" == "Staging" ]]; then
+          if [[ "${{ inputs.target }}" == "staging" ]]; then
             echo "PRIMARY_TAG=staging" >> $GITHUB_OUTPUT
             echo "TAGS=${image_prefix}:staging" >> $GITHUB_OUTPUT
-          elif [[ "${{ inputs.target }}" == "Production" && "${{ github.ref_type }}" == "tag" ]]; then
+          elif [[ "${{ inputs.target }}" == "production" && "${{ github.ref_type }}" == "tag" ]]; then
             echo "PRIMARY_TAG=${{ github.ref_name }}" >> $GITHUB_OUTPUT
             {
               echo 'TAGS<<EOF'
