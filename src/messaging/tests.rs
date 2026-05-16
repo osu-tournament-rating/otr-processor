@@ -191,9 +191,11 @@ mod integration_tests {
     #[tokio::test]
     #[ignore]
     async fn test_reconnection() {
-        let mut config = RabbitMqConfig::default();
-        config.retry_attempts = 2;
-        config.retry_delay = Duration::from_millis(100);
+        let config = RabbitMqConfig {
+            retry_attempts: 2,
+            retry_delay: Duration::from_millis(100),
+            ..Default::default()
+        };
 
         let mut publisher = RabbitMqPublisher::from_config(&config);
 
