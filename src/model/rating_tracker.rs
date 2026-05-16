@@ -180,7 +180,7 @@ impl RatingTracker {
     /// Updates global rankings and percentiles for all rulesets
     fn update_global_rankings(&mut self, rulesets: &[Ruleset]) {
         for ruleset in rulesets {
-            let mut global_rank = 1;
+            let global_rank = 1;
 
             // Get and sort players for this ruleset
             let ruleset_leaderboard: Vec<_> = self
@@ -193,11 +193,10 @@ impl RatingTracker {
             let total_players = ruleset_leaderboard.len() as i32;
 
             // Update rankings and percentiles
-            for (_, rating) in ruleset_leaderboard {
+            for (global_rank, (_, rating)) in (1..).zip(ruleset_leaderboard) {
                 rating.global_rank = global_rank;
                 rating.percentile =
                     Self::calculate_percentile(global_rank, total_players).expect("Invalid rank/total combination");
-                global_rank += 1;
             }
         }
     }
