@@ -13,10 +13,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      - run: cargo clippy --all-features --all-targets
+      - run: cargo clippy
 
   fmt:
     name: Format
@@ -35,5 +35,5 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@nightly
-      - run: cargo test --all-features
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test

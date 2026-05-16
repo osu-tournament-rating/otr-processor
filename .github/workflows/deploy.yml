@@ -11,8 +11,6 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    outputs:
-      TAG: ${{ steps.set-tag.outputs.PRIMARY_TAG }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -28,16 +26,10 @@ jobs:
         run: |
           image_prefix="${{ secrets.DOCKERHUB_USERNAME }}/otr-processor"
           if [[ "${{ inputs.target }}" == "staging" ]]; then
-            echo "PRIMARY_TAG=staging" >> $GITHUB_OUTPUT
-            echo "TAGS=${image_prefix}:staging" >> $GITHUB_OUTPUT
+            echo "${image_prefix}:staging-latest" >> $GITHUB_OUTPUT
           elif [[ "${{ inputs.target }}" == "production" && "${{ github.ref_type }}" == "tag" ]]; then
-            echo "PRIMARY_TAG=${{ github.ref_name }}" >> $GITHUB_OUTPUT
-            {
-              echo 'TAGS<<EOF'
-              echo "${image_prefix}:${{ github.ref_name }}"
-              echo "${image_prefix}:latest"
-              echo 'EOF'
-            } >> "$GITHUB_OUTPUT"
+            echo "${image_prefix}:${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+            echo "${image_prefix}:latest" >> "$GITHUB_OUTPUT"
           else
             echo "Invalid target: ${{ inputs.target }}"
             exit 1

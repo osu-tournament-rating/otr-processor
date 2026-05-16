@@ -11,7 +11,7 @@ fn test_application_exits_on_connection_failure() {
     init_test_env();
     // Build the processor binary
     let build_output = Command::new("cargo")
-        .args(&["build", "--bin", "otr-processor"])
+        .args(["build", "--bin", "otr-processor"])
         .output()
         .expect("Failed to execute cargo build");
 
@@ -61,7 +61,7 @@ fn test_application_exits_on_missing_connection_string() {
     init_test_env();
     // Build the processor binary
     let build_output = Command::new("cargo")
-        .args(&["build", "--bin", "otr-processor"])
+        .args(["build", "--bin", "otr-processor"])
         .output()
         .expect("Failed to execute cargo build");
 
@@ -117,7 +117,7 @@ fn test_ignore_constraints_env_var() {
     init_test_env();
     // Test 1: Environment variable set to true should override default
     std::env::set_var("IGNORE_CONSTRAINTS", "true");
-    let args = Args::parse_from(&["otr-processor"]);
+    let args = Args::parse_from(["otr-processor"]);
     assert!(
         args.ignore_constraints,
         "IGNORE_CONSTRAINTS=true should set ignore_constraints to true"
@@ -126,7 +126,7 @@ fn test_ignore_constraints_env_var() {
 
     // Test 2: Environment variable set to false
     std::env::set_var("IGNORE_CONSTRAINTS", "false");
-    let args = Args::parse_from(&["otr-processor"]);
+    let args = Args::parse_from(["otr-processor"]);
     assert!(
         !args.ignore_constraints,
         "IGNORE_CONSTRAINTS=false should set ignore_constraints to false"
@@ -134,13 +134,13 @@ fn test_ignore_constraints_env_var() {
     std::env::remove_var("IGNORE_CONSTRAINTS");
 
     // Test 3: CLI argument works when no env var is set
-    let args = Args::parse_from(&["otr-processor", "--ignore-constraints"]);
+    let args = Args::parse_from(["otr-processor", "--ignore-constraints"]);
     assert!(
         args.ignore_constraints,
         "CLI argument should work when no env var is set"
     );
 
     // Test 4: Default is false when neither env var nor CLI arg is set
-    let args = Args::parse_from(&["otr-processor"]);
+    let args = Args::parse_from(["otr-processor"]);
     assert!(!args.ignore_constraints, "Default should be false");
 }

@@ -139,7 +139,7 @@ impl DbClient {
             match_metadata.len()
         );
 
-        match_metadata.sort_by(|a, b| a.start_time.cmp(&b.start_time));
+        match_metadata.sort_by_key(|a| a.start_time);
 
         let matches = self.assemble_matches_batched(&match_metadata).await;
 
