@@ -1,24 +1,17 @@
-use lazy_static::lazy_static;
-use std::sync::Arc;
-use testcontainers::{clients::Cli, Container};
+use testcontainers::{runners::AsyncRunner, ContainerAsync};
 use testcontainers_modules::postgres::Postgres;
 use tokio_postgres::{Client, NoTls};
 
 pub struct TestDatabase {
     pub connection_string: String,
-    _container: Container<'static, Postgres>
+    _container: ContainerAsync<Postgres>
 }
 
 impl TestDatabase {
     pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
-        // Create a static CLI instance
-        lazy_static! {
-            static ref DOCKER: Arc<Cli> = Arc::new(Cli::default());
-        }
-
         // Start PostgreSQL container
-        let container = DOCKER.run(Postgres::default());
-        let port = container.get_host_port_ipv4(5432);
+        let container = Postgres::default().start().await?;
+        let port = container.get_host_port_ipv4(5432).await?;
 
         let connection_string = format!(
             "host=localhost port={} user=postgres password=postgres dbname=postgres",
