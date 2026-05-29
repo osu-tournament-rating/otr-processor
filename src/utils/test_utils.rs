@@ -5,7 +5,7 @@ use crate::{
     model::structures::{rating_adjustment_type::RatingAdjustmentType, ruleset::Ruleset}
 };
 use chrono::{DateTime, Duration, FixedOffset, Utc};
-use rand::{Rng, SeedableRng};
+use rand::{RngExt, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 use std::{collections::HashMap, ops::Add};
 

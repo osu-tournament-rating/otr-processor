@@ -102,7 +102,7 @@ impl RabbitMqPublisher {
 
         channel
             .queue_declare(
-                &self.config.routing_key,
+                self.config.routing_key.as_str().into(),
                 QueueDeclareOptions {
                     durable: true,
                     ..Default::default()
@@ -113,7 +113,7 @@ impl RabbitMqPublisher {
 
         channel
             .exchange_declare(
-                &self.config.exchange,
+                self.config.exchange.as_str().into(),
                 ExchangeKind::Fanout,
                 ExchangeDeclareOptions {
                     durable: true,
@@ -125,9 +125,9 @@ impl RabbitMqPublisher {
 
         channel
             .queue_bind(
-                &self.config.routing_key,
-                &self.config.exchange,
-                &self.config.routing_key,
+                self.config.routing_key.as_str().into(),
+                self.config.exchange.as_str().into(),
+                self.config.routing_key.as_str().into(),
                 QueueBindOptions::default(),
                 FieldTable::default()
             )
@@ -225,8 +225,8 @@ impl RabbitMqPublisher {
 
         channel
             .basic_publish(
-                &self.config.exchange,
-                &self.config.routing_key,
+                self.config.exchange.as_str().into(),
+                self.config.routing_key.as_str().into(),
                 BasicPublishOptions::default(),
                 &payload,
                 BasicProperties::default()
@@ -270,12 +270,12 @@ impl RabbitMqPublisher {
     /// Closes the connection to RabbitMQ
     pub async fn close(&mut self) -> Result<(), PublisherError> {
         if let Some(channel) = self.channel.take() {
-            channel.close(200, "Normal shutdown").await?;
+            channel.close(200, "Normal shutdown".into()).await?;
         }
 
         if let Some(connection) = self.connection.take() {
             if let Ok(conn) = Arc::try_unwrap(connection) {
-                conn.close(200, "Normal shutdown").await?;
+                conn.close(200, "Normal shutdown".into()).await?;
             }
         }
 
