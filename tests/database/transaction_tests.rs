@@ -11,6 +11,27 @@ use crate::common::init_test_env;
 
 #[tokio::test]
 #[serial]
+async fn test_begin_transaction_uses_repeatable_read() {
+    init_test_env();
+    let test_db = TestDatabase::new().await.expect("Failed to create test database");
+    let client = DbClient::connect(&test_db.connection_string, false)
+        .await
+        .expect("Failed to connect");
+
+    let mut transaction = client.begin_transaction().await.expect("Failed to begin transaction");
+    let isolation_level: String = client
+        .client()
+        .query_one("SHOW transaction_isolation", &[])
+        .await
+        .expect("Failed to inspect transaction isolation")
+        .get(0);
+
+    assert_eq!(isolation_level, "repeatable read");
+    transaction.rollback().await.expect("Failed to rollback transaction");
+}
+
+#[tokio::test]
+#[serial]
 async fn test_transaction_rollback_on_processing_failure() {
     init_test_env();
     let test_db = TestDatabase::new().await.expect("Failed to create test database");

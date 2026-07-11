@@ -26,11 +26,14 @@ pub fn create_initial_ratings(players: &[Player], matches: &[Match]) -> Vec<Play
                 // Allows us to accurately set the timestamp of the initial rating adjustment
                 // and avoid creating initial adjustments for players who are inactive in
                 // any ruleset.
-                let match_time = match_.end_time.unwrap_or(match_.start_time);
+                let match_time = match_.rating_timestamp();
                 ruleset_activity
                     .entry(match_.ruleset)
                     .or_default()
                     .entry(score.player_id)
+                    .and_modify(|first_match_time| {
+                        *first_match_time = (*first_match_time).min(match_time);
+                    })
                     .or_insert(match_time);
             }
         }
@@ -104,8 +107,12 @@ fn initial_rating(player: &Player, ruleset: &Ruleset) -> f64 {
                 }
 
                 // Fallback: use global_rank from the respective ruleset
-                if let Some(ruleset_data) = data.iter().find(|rd| rd.ruleset == *ruleset) {
-                    return mu_from_rank(ruleset_data.global_rank, *ruleset);
+                if let Some(global_rank) = data
+                    .iter()
+                    .find(|rd| rd.ruleset == *ruleset)
+                    .and_then(|ruleset_data| ruleset_data.global_rank)
+                {
+                    return mu_from_rank(global_rank, *ruleset);
                 }
 
                 // If no data found, use fallback rating
@@ -115,7 +122,7 @@ fn initial_rating(player: &Player, ruleset: &Ruleset) -> f64 {
 
             // Handle other rulesets as normal
             let ruleset_data = data.iter().find(|rd| rd.ruleset == *ruleset);
-            let rank = ruleset_data.and_then(|rd| rd.earliest_global_rank.or(Some(rd.global_rank)));
+            let rank = ruleset_data.and_then(|rd| rd.earliest_global_rank.or(rd.global_rank));
 
             match rank {
                 Some(r) => mu_from_rank(r, *ruleset),
@@ -172,14 +179,15 @@ fn std_dev_from_ruleset(ruleset: Ruleset) -> f64 {
 #[cfg(test)]
 mod tests {
     use crate::{
-        database::db_structs::Player,
+        database::db_structs::{Player, RulesetData},
         model::{
             constants::{FALLBACK_RATING, INITIAL_RATING_CEILING, INITIAL_RATING_FLOOR},
             rating_utils::mu_from_rank,
             structures::ruleset::Ruleset::{Catch, Mania4k, Mania7k, Osu, Taiko}
         },
-        utils::test_utils::generate_ruleset_data
+        utils::test_utils::{generate_game, generate_match, generate_placement, generate_ruleset_data}
     };
+    use chrono::{Duration, TimeZone, Utc};
 
     #[test]
     fn test_mu_from_rank_maximum() {
@@ -254,6 +262,74 @@ mod tests {
     }
 
     #[test]
+    fn test_initial_rating_prefers_earliest_then_current_rank() {
+        let player_with_earliest_only = Player {
+            id: 1,
+            username: None,
+            country: None,
+            ruleset_data: Some(vec![RulesetData {
+                ruleset: Osu,
+                global_rank: None,
+                earliest_global_rank: Some(500)
+            }])
+        };
+        let player_with_current_only = Player {
+            id: 2,
+            username: None,
+            country: None,
+            ruleset_data: Some(vec![RulesetData {
+                ruleset: Osu,
+                global_rank: Some(750),
+                earliest_global_rank: None
+            }])
+        };
+        let player_without_rank = Player {
+            id: 3,
+            username: None,
+            country: None,
+            ruleset_data: Some(vec![RulesetData {
+                ruleset: Osu,
+                global_rank: None,
+                earliest_global_rank: None
+            }])
+        };
+
+        assert_eq!(
+            super::initial_rating(&player_with_earliest_only, &Osu),
+            mu_from_rank(500, Osu)
+        );
+        assert_eq!(
+            super::initial_rating(&player_with_current_only, &Osu),
+            mu_from_rank(750, Osu)
+        );
+        assert_eq!(super::initial_rating(&player_without_rank, &Osu), FALLBACK_RATING);
+    }
+
+    #[test]
+    fn test_initial_adjustment_uses_earliest_rating_timestamp() {
+        let player = Player {
+            id: 1,
+            username: None,
+            country: None,
+            ruleset_data: Some(vec![generate_ruleset_data(Osu, 500, None)])
+        };
+        let placements = vec![generate_placement(1, 1), generate_placement(2, 2)];
+        let games = vec![generate_game(1, &placements)];
+        let early_start = Utc.with_ymd_and_hms(2024, 1, 1, 10, 0, 0).unwrap().fixed_offset();
+        let late_start = Utc.with_ymd_and_hms(2024, 1, 2, 10, 0, 0).unwrap().fixed_offset();
+        let early_match = generate_match(1, Osu, &games, early_start);
+        let late_match = generate_match(2, Osu, &games, late_start);
+
+        let ratings = super::create_initial_ratings(&[player], &[late_match, early_match]);
+
+        assert_eq!(ratings.len(), 1);
+        assert_eq!(
+            ratings[0].adjustments[0].timestamp,
+            early_start + Duration::hours(1) - Duration::seconds(1)
+        );
+    }
+
+    #[test]
     fn test_mania4k_mania7k_initial_rating_logic() {
         use crate::model::structures::ruleset::Ruleset::*;
 
@@ -314,5 +390,30 @@ mod tests {
 
         assert_eq!(mania4k_rating_no_data, FALLBACK_RATING);
         assert_eq!(mania7k_rating_no_data, FALLBACK_RATING);
+
+        // A nullable current rank remains a valid row, but cannot seed a rating
+        // when osu!track also has no overall Mania history.
+        let player_with_null_mania_ranks = Player {
+            id: 4,
+            username: Some("TestPlayer4".to_string()),
+            country: None,
+            ruleset_data: Some(vec![
+                RulesetData {
+                    ruleset: ManiaOther,
+                    global_rank: None,
+                    earliest_global_rank: None
+                },
+                RulesetData {
+                    ruleset: Mania4k,
+                    global_rank: None,
+                    earliest_global_rank: None
+                },
+            ])
+        };
+
+        assert_eq!(
+            super::initial_rating(&player_with_null_mania_ranks, &Mania4k),
+            FALLBACK_RATING
+        );
     }
 }

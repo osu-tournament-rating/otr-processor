@@ -97,7 +97,10 @@ impl OtrModel {
 
         info!(match_count = matches.len(), "Starting to process matches");
 
-        for m in matches.iter() {
+        let mut matches = matches.iter().collect::<Vec<_>>();
+        matches.sort_by_key(|match_| (match_.rating_timestamp(), match_.id));
+
+        for m in matches {
             if m.games.is_empty() {
                 error!(match_id = m.id, match_name = %m.name, "Skipping match - no games found");
                 span.pb_inc(1);
@@ -138,7 +141,7 @@ impl OtrModel {
     /// 4. Combine results using weighted average
     /// 5. Update player ratings in the tracker
     fn process_match(&mut self, match_: &Match) {
-        self.apply_unified_decay(match_.start_time);
+        self.apply_unified_decay(match_.rating_timestamp());
         self.ensure_player_ratings(match_);
 
         let ratings_a = self.generate_ratings_a(match_);
@@ -422,7 +425,7 @@ impl OtrModel {
                 // Player not present in the rating tracker.
                 // Create a fallback initial rating for them and add to tracker.
 
-                let match_time = match_.end_time.unwrap_or(match_.start_time);
+                let match_time = match_.rating_timestamp();
                 let adjustment = RatingAdjustment {
                     player_id,
                     ruleset: match_.ruleset,
@@ -476,7 +479,7 @@ impl OtrModel {
             };
 
             // Create the adjustment
-            let match_time = match_.end_time.unwrap_or(match_.start_time);
+            let match_time = match_.rating_timestamp();
             let adjustment = RatingAdjustment {
                 player_id: *k,
                 ruleset: player_rating.ruleset,
@@ -1072,6 +1075,124 @@ mod tests {
         assert_eq!(
             match_adj.timestamp, start_time,
             "Match adjustment should fall back to start_time when end_time is None"
+        );
+    }
+
+    #[test]
+    fn test_process_sorts_matches_by_rating_timestamp() {
+        let initial_time = Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap().fixed_offset();
+        let player_ratings = vec![
+            generate_player_rating(1, Osu, 1000.0, 100.0, 1, Some(initial_time), Some(initial_time)),
+            generate_player_rating(2, Osu, 1000.0, 100.0, 1, Some(initial_time), Some(initial_time)),
+        ];
+        let countries = generate_country_mapping_player_ratings(&player_ratings, "US");
+        let mut model = OtrModel::new(&player_ratings, &countries);
+
+        let placements = vec![generate_placement(1, 1), generate_placement(2, 2)];
+        let games = vec![generate_game(1, &placements)];
+        let late_ending_start = Utc.with_ymd_and_hms(2024, 1, 2, 10, 0, 0).unwrap().fixed_offset();
+        let early_ending_start = Utc.with_ymd_and_hms(2024, 1, 2, 11, 0, 0).unwrap().fixed_offset();
+
+        let late_ending_match = crate::database::db_structs::Match {
+            id: 2,
+            name: "Late-ending Match".to_string(),
+            ruleset: Osu,
+            start_time: late_ending_start,
+            end_time: Some(late_ending_start + Duration::hours(3)),
+            games: games.clone()
+        };
+        let early_ending_match = crate::database::db_structs::Match {
+            id: 1,
+            name: "Early-ending Match".to_string(),
+            ruleset: Osu,
+            start_time: early_ending_start,
+            end_time: Some(early_ending_start + Duration::hours(1)),
+            games
+        };
+
+        // Start-time ordering would process match 2 first; rating-time ordering
+        // correctly applies the result of match 1 first because it ends earlier.
+        model.process(&[late_ending_match, early_ending_match]);
+
+        let match_ids = model
+            .rating_tracker
+            .get_rating_adjustments(1, Osu)
+            .unwrap()
+            .into_iter()
+            .filter(|adjustment| adjustment.adjustment_type == RatingAdjustmentType::Match)
+            .map(|adjustment| adjustment.match_id.unwrap())
+            .collect::<Vec<_>>();
+
+        assert_eq!(match_ids, vec![1, 2]);
+    }
+
+    #[test]
+    fn test_match_crossing_wednesday_decay_keeps_its_result() {
+        let initial_time = Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap().fixed_offset();
+        let player_ratings = vec![
+            generate_player_rating(1, Osu, 1000.0, 100.0, 1, Some(initial_time), Some(initial_time)),
+            generate_player_rating(2, Osu, 1000.0, 100.0, 1, Some(initial_time), Some(initial_time)),
+        ];
+        let countries = generate_country_mapping_player_ratings(&player_ratings, "US");
+        let mut model = OtrModel::new(&player_ratings, &countries);
+
+        let placements = vec![generate_placement(1, 1), generate_placement(2, 2)];
+        let games = vec![generate_game(1, &placements)];
+        let first_start = Utc.with_ymd_and_hms(2024, 1, 1, 10, 0, 0).unwrap().fixed_offset();
+        let crossing_start = Utc.with_ymd_and_hms(2024, 1, 3, 11, 0, 0).unwrap().fixed_offset();
+        let final_start = Utc.with_ymd_and_hms(2024, 1, 3, 14, 0, 0).unwrap().fixed_offset();
+
+        let matches = [
+            crate::database::db_structs::Match {
+                id: 1,
+                name: "Baseline Match".to_string(),
+                ruleset: Osu,
+                start_time: first_start,
+                end_time: Some(first_start + Duration::hours(1)),
+                games: games.clone()
+            },
+            crate::database::db_structs::Match {
+                id: 2,
+                name: "Crossing Match".to_string(),
+                ruleset: Osu,
+                start_time: crossing_start,
+                end_time: Some(crossing_start + Duration::hours(2)),
+                games: games.clone()
+            },
+            crate::database::db_structs::Match {
+                id: 3,
+                name: "Following Match".to_string(),
+                ruleset: Osu,
+                start_time: final_start,
+                end_time: Some(final_start + Duration::hours(1)),
+                games
+            }
+        ];
+
+        for match_ in &matches {
+            model.process_match(match_);
+        }
+
+        let adjustments = model.rating_tracker.get_rating_adjustments(1, Osu).unwrap();
+        let match_adjustments = adjustments
+            .iter()
+            .filter(|adjustment| adjustment.adjustment_type == RatingAdjustmentType::Match)
+            .collect::<Vec<_>>();
+        let decay_time = Utc.with_ymd_and_hms(2024, 1, 3, 12, 0, 0).unwrap().fixed_offset();
+        let decay_index = adjustments
+            .iter()
+            .position(|adjustment| adjustment.timestamp == decay_time)
+            .expect("Expected decay at Wednesday noon before the crossing match result");
+        let crossing_index = adjustments
+            .iter()
+            .position(|adjustment| adjustment.match_id == Some(2))
+            .unwrap();
+
+        assert!(decay_index < crossing_index);
+        assert_eq!(match_adjustments[2].rating_before, match_adjustments[1].rating_after);
+        assert_eq!(
+            match_adjustments[2].volatility_before,
+            match_adjustments[1].volatility_after
         );
     }
 

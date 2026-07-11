@@ -348,15 +348,26 @@ impl DbClient {
 
     async fn fetch_player_batch(&self, after_id: i32) -> Vec<Player> {
         let query = "
+            WITH player_batch AS (
+                SELECT p.id
+                FROM players p
+                WHERE p.id > $1
+                  AND EXISTS (
+                      SELECT 1
+                      FROM player_osu_ruleset_data prd
+                      WHERE prd.player_id = p.id
+                  )
+                ORDER BY p.id
+                LIMIT $2
+            )
             SELECT p.id AS player_id, p.username AS username,
                    p.country AS country, prd.ruleset AS ruleset,
                    prd.earliest_global_rank AS earliest_global_rank,
                    prd.global_rank AS global_rank
-            FROM players p
+            FROM player_batch pb
+            JOIN players p ON p.id = pb.id
             JOIN player_osu_ruleset_data prd ON prd.player_id = p.id
-            WHERE p.id > $1
-            ORDER BY p.id
-            LIMIT $2";
+            ORDER BY p.id, prd.ruleset";
 
         let rows = self
             .client
@@ -409,7 +420,7 @@ impl DbClient {
 
     fn ruleset_data_from_row(&self, row: &Row) -> Option<RulesetData> {
         let ruleset = row.try_get::<_, i32>("ruleset");
-        let global_rank = row.try_get::<_, i32>("global_rank");
+        let global_rank = row.try_get::<_, Option<i32>>("global_rank");
         let earliest_global_rank = row.try_get::<_, Option<i32>>("earliest_global_rank");
 
         if let (Ok(ruleset_val), Ok(global_rank_val), Ok(earliest_global_rank_val)) =
@@ -437,6 +448,101 @@ impl DbClient {
 
         self.save_ratings_and_adjustments_with_mapping(&player_ratings).await;
         self.insert_or_update_highest_ranks(player_ratings).await;
+    }
+
+    /// Snapshots the match-linked rating adjustments that exist before a
+    /// recomputation replaces them. The temporary table is scoped to the
+    /// current transaction and is used to invalidate rating-dependent
+    /// tournament statistics after the new adjustments are written.
+    pub async fn snapshot_match_rating_adjustments(&self) {
+        self.client
+            .batch_execute(
+                "
+                CREATE TEMPORARY TABLE previous_match_rating_adjustments
+                ON COMMIT DROP
+                AS
+                SELECT
+                    ra.match_id,
+                    ra.player_id,
+                    ra.ruleset,
+                    ra.rating_before,
+                    ra.rating_after,
+                    ra.volatility_before,
+                    ra.volatility_after,
+                    m.tournament_id
+                FROM rating_adjustments ra
+                JOIN matches m ON m.id = ra.match_id
+                WHERE ra.match_id IS NOT NULL;
+
+                CREATE INDEX previous_match_rating_adjustments_identity_idx
+                    ON previous_match_rating_adjustments (match_id, player_id);
+                "
+            )
+            .await
+            .expect("Failed to snapshot match rating adjustments");
+    }
+
+    /// Returns accepted tournaments whose match-linked rating adjustments
+    /// differ from the snapshot created by `snapshot_match_rating_adjustments`.
+    /// Regenerated database IDs, creation timestamps, and non-match adjustments
+    /// are intentionally excluded from the comparison.
+    pub async fn get_tournaments_with_changed_rating_adjustments(&self) -> Vec<i32> {
+        let rows = self
+            .client
+            .query(
+                "
+                WITH current_match_rating_adjustments AS (
+                    SELECT
+                        ra.match_id,
+                        ra.player_id,
+                        ra.ruleset,
+                        ra.rating_before,
+                        ra.rating_after,
+                        ra.volatility_before,
+                        ra.volatility_after,
+                        m.tournament_id
+                    FROM rating_adjustments ra
+                    JOIN matches m ON m.id = ra.match_id
+                    WHERE ra.match_id IS NOT NULL
+                ),
+                changed_tournaments AS (
+                    SELECT
+                        previous.tournament_id AS previous_tournament_id,
+                        current.tournament_id AS current_tournament_id
+                    FROM previous_match_rating_adjustments previous
+                    FULL OUTER JOIN current_match_rating_adjustments current
+                        ON current.match_id = previous.match_id
+                        AND current.player_id = previous.player_id
+                    WHERE previous.match_id IS NULL
+                        OR current.match_id IS NULL
+                        OR previous.tournament_id IS DISTINCT FROM current.tournament_id
+                        OR previous.ruleset IS DISTINCT FROM current.ruleset
+                        OR previous.rating_before IS DISTINCT FROM current.rating_before
+                        OR previous.rating_after IS DISTINCT FROM current.rating_after
+                        OR previous.volatility_before IS DISTINCT FROM current.volatility_before
+                        OR previous.volatility_after IS DISTINCT FROM current.volatility_after
+                ),
+                changed_tournament_ids AS (
+                    SELECT previous_tournament_id AS tournament_id
+                    FROM changed_tournaments
+                    WHERE previous_tournament_id IS NOT NULL
+                    UNION
+                    SELECT current_tournament_id AS tournament_id
+                    FROM changed_tournaments
+                    WHERE current_tournament_id IS NOT NULL
+                )
+                SELECT changed.tournament_id
+                FROM changed_tournament_ids changed
+                JOIN tournaments t ON t.id = changed.tournament_id
+                WHERE t.verification_status = 4
+                ORDER BY changed.tournament_id
+                ",
+                &[]
+            )
+            .await
+            .expect("Failed to compare match rating adjustments");
+
+        rows.iter().map(|row| row.get("tournament_id")).collect()
     }
 
     async fn save_ratings_and_adjustments_with_mapping(&self, player_ratings: &&[PlayerRating]) {
@@ -587,7 +693,12 @@ impl DbClient {
 
         for rating in player_ratings {
             if let Some(Some(current_rank)) = current_highest_ranks.get(&(rating.player_id, rating.ruleset)) {
-                if rating.global_rank < current_rank.global_rank {
+                let global_rank_improved = rating.global_rank > 0
+                    && (current_rank.global_rank == 0 || rating.global_rank < current_rank.global_rank);
+                let country_rank_improved = rating.country_rank > 0
+                    && (current_rank.country_rank == 0 || rating.country_rank < current_rank.country_rank);
+
+                if global_rank_improved || country_rank_improved {
                     updates.push(rating);
                 }
             } else {
@@ -686,12 +797,29 @@ impl DbClient {
 
     async fn update_highest_rank(&self, player_id: i32, player_rating: &PlayerRating) {
         let timestamp = player_rating.adjustments.last().unwrap().timestamp;
-        let query = "UPDATE player_highest_ranks SET global_rank = $1, global_rank_date = $2, country_rank = $3, country_rank_date = $4 WHERE player_id = $5 AND ruleset = $6";
+        let query = "
+            UPDATE player_highest_ranks
+            SET global_rank = CASE
+                    WHEN $1 > 0 AND (global_rank = 0 OR $1 < global_rank) THEN $1
+                    ELSE global_rank
+                END,
+                global_rank_date = CASE
+                    WHEN $1 > 0 AND (global_rank = 0 OR $1 < global_rank) THEN $2
+                    ELSE global_rank_date
+                END,
+                country_rank = CASE
+                    WHEN $3 > 0 AND (country_rank = 0 OR $3 < country_rank) THEN $3
+                    ELSE country_rank
+                END,
+                country_rank_date = CASE
+                    WHEN $3 > 0 AND (country_rank = 0 OR $3 < country_rank) THEN $2
+                    ELSE country_rank_date
+                END
+            WHERE player_id = $4 AND ruleset = $5";
         let values: &[&(dyn ToSql + Sync)] = &[
             &player_rating.global_rank,
             &timestamp,
             &player_rating.country_rank,
-            &timestamp,
             &player_id,
             &(player_rating.ruleset as i32)
         ];
@@ -776,7 +904,9 @@ impl DbClient {
     }
 
     pub async fn begin_transaction(&self) -> Result<DbTransactionGuard, Error> {
-        self.client.batch_execute("BEGIN").await?;
+        self.client
+            .batch_execute("BEGIN ISOLATION LEVEL REPEATABLE READ")
+            .await?;
         Ok(DbTransactionGuard::new(Arc::clone(&self.client)))
     }
 

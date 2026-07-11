@@ -56,7 +56,7 @@ CREATE UNIQUE INDEX ix_player_highest_ranks_player_id_ruleset ON public.player_h
 
 -- DROP TABLE player_osu_ruleset_data;
 
-CREATE TABLE player_osu_ruleset_data ( id int4 GENERATED ALWAYS AS IDENTITY( INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START 1 CACHE 1 NO CYCLE) NOT NULL, ruleset int4 NOT NULL, pp float8 NOT NULL, global_rank int4 NOT NULL, earliest_global_rank int4 NULL, earliest_global_rank_date timestamptz NULL, player_id int4 NOT NULL, created timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL, updated timestamptz NULL, CONSTRAINT pk_player_osu_ruleset_data PRIMARY KEY (id), CONSTRAINT fk_player_osu_ruleset_data_players_player_id FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE);
+CREATE TABLE player_osu_ruleset_data ( id int4 GENERATED ALWAYS AS IDENTITY( INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START 1 CACHE 1 NO CYCLE) NOT NULL, ruleset int4 NOT NULL, pp float8 NOT NULL, global_rank int4 NULL, earliest_global_rank int4 NULL, earliest_global_rank_date timestamptz NULL, player_id int4 NOT NULL, created timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL, updated timestamptz NULL, CONSTRAINT pk_player_osu_ruleset_data PRIMARY KEY (id), CONSTRAINT fk_player_osu_ruleset_data_players_player_id FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE);
 CREATE UNIQUE INDEX ix_player_osu_ruleset_data_player_id_ruleset ON public.player_osu_ruleset_data USING btree (player_id, ruleset);
 CREATE UNIQUE INDEX ix_player_osu_ruleset_data_player_id_ruleset_global_rank ON public.player_osu_ruleset_data USING btree (player_id, ruleset, global_rank);
 

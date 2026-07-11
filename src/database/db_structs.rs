@@ -20,7 +20,7 @@ pub struct Player {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RulesetData {
     pub ruleset: Ruleset,
-    pub global_rank: i32,
+    pub global_rank: Option<i32>,
     pub earliest_global_rank: Option<i32>
 }
 
@@ -33,6 +33,16 @@ pub struct Match {
     // Populated in the db query (uses the tournament's ruleset)
     pub ruleset: Ruleset,
     pub games: Vec<Game>
+}
+
+impl Match {
+    /// The point in time at which this match affects ratings.
+    ///
+    /// Match results are applied when the match ends. Some legacy matches do not
+    /// have an end time, so their start time remains the compatibility fallback.
+    pub fn rating_timestamp(&self) -> DateTime<FixedOffset> {
+        self.end_time.unwrap_or(self.start_time)
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
