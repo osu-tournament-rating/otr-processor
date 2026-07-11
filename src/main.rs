@@ -6,7 +6,10 @@ use otr_processor::{
     model::{otr_model::OtrModel, rating_utils::create_initial_ratings},
     utils::test_utils::generate_country_mapping_players
 };
-use std::{collections::HashMap, time::Instant};
+use std::{
+    collections::{BTreeSet, HashMap},
+    time::Instant
+};
 use tracing::{debug, error, info, warn};
 use tracing_indicatif::IndicatifLayer;
 use tracing_subscriber::{prelude::*, EnvFilter};
@@ -71,6 +74,7 @@ async fn main() {
             "Fetched tournament information for {} tournaments.",
             tournament_info.len()
         );
+        let all_tournament_ids: Vec<i32> = tournament_info.keys().copied().collect();
 
         // 3. Generate initial ratings
         let initial_ratings = create_initial_ratings(&players, &matches);
@@ -89,20 +93,52 @@ async fn main() {
         info!("Matches processed.");
 
         // 7. Save results in database
+        let track_rating_changes = rabbitmq_publisher.is_some();
+        if track_rating_changes {
+            client.snapshot_match_rating_adjustments().await;
+        }
+
         client.save_results(&results).await;
         info!("Results saved to database.");
+
+        let rating_changed_tournament_ids = if track_rating_changes {
+            client.get_tournaments_with_changed_rating_adjustments().await
+        } else {
+            Vec::new()
+        };
 
         // 8. Remove lingering stats for tournaments/matches rejected since the last run
         client.delete_rejected_player_stats().await;
 
         // 9. Emit messages for tournaments needing stats refresh
         if let Some(ref mut publisher) = rabbitmq_publisher {
-            let all_tournament_ids: Vec<i32> = tournament_info.keys().cloned().collect();
+            let mut tournaments_needing_refresh: BTreeSet<i32> = client
+                .get_tournaments_needing_stats_refresh(&all_tournament_ids)
+                .await
+                .into_iter()
+                .collect();
 
-            let tournaments_needing_refresh = client.get_tournaments_needing_stats_refresh(&all_tournament_ids).await;
+            let rating_change_count = rating_changed_tournament_ids.len();
+            let unavailable_rating_changes = rating_changed_tournament_ids
+                .iter()
+                .filter(|tournament_id| !tournament_info.contains_key(tournament_id))
+                .count();
+            tournaments_needing_refresh.extend(
+                rating_changed_tournament_ids
+                    .into_iter()
+                    .filter(|tournament_id| tournament_info.contains_key(tournament_id))
+            );
 
-            let skipped = tournament_info.len() - tournaments_needing_refresh.len();
+            if unavailable_rating_changes > 0 {
+                warn!(
+                    unavailable_rating_changes,
+                    "Rating changes were detected for tournaments without currently processable matches"
+                );
+            }
+
+            let skipped = tournament_info.len().saturating_sub(tournaments_needing_refresh.len());
             info!(
+                rating_changed_tournaments = rating_change_count,
                 "Enqueueing {} of {} tournaments for stats refresh ({} unchanged)",
                 tournaments_needing_refresh.len(),
                 tournament_info.len(),
