@@ -13,7 +13,7 @@ Treat that boundary as a cross-repository contract.
 
 ## Setup and commands
 
-- Use stable Rust for builds, Clippy, and tests. CI uses nightly Rust only for
+- Use nightly Rust for builds, Clippy, and tests. CI uses nightly Rust only for
   rustfmt because `rustfmt.toml` enables nightly options.
 - Start from `.env.example` and keep local credentials in the ignored `.env`.
 - `CONNECTION_STRING` is required. `RUST_LOG`, `IGNORE_CONSTRAINTS`,
@@ -22,12 +22,12 @@ Treat that boundary as a cross-repository contract.
 - Never commit credentials or include a RabbitMQ URL with credentials in logs,
   fixtures, or review output.
 
-Useful commands:
+Useful commands (nightly):
 
 ```sh
 cargo run -- --help
 cargo run -- --log-level debug
-cargo +nightly fmt -- --check
+cargo fmt -- --check
 cargo clippy
 cargo test
 ```
@@ -145,10 +145,7 @@ Branch: <short-kebab-case-description>
 
 Commit:
 <Imperative verb> <specific outcome>
-
-<Optional explanation of why, compatibility impact, or validation details>
-
-Refs #<issue>  # optional
+(#<issue>)  # optional
 ```
 
 - Branch names use two to five meaningful lowercase kebab-case terms, such as
