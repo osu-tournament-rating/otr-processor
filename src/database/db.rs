@@ -911,8 +911,10 @@ impl DbClient {
     }
 
     /// Calculate and update placements for all game scores
-    /// Verified scores get placement based on score ranking (1=highest)
-    /// Non-verified scores get placement=0
+    /// Verified scores get placement based on score ranking (1=highest);
+    /// tied scores share the same placement and the following placement is
+    /// skipped (e.g. 1, 1, 3). This tells the model a tie exists for first.
+    /// Non-verified scores receive a fallback placement of 0 but are not considered.
     pub async fn calculate_and_update_game_score_placements(&self) {
         info!("Calculating game score placements...");
         let timer = Instant::now();
@@ -963,12 +965,10 @@ impl DbClient {
                         id,
                         CASE
                             WHEN verification_status = 4 THEN
-                                SUM(CASE WHEN verification_status = 4 THEN 1 ELSE 0 END)
-                                    OVER (
-                                        PARTITION BY game_id
-                                        ORDER BY score DESC, id
-                                        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-                                    )
+                                RANK() OVER (
+                                    PARTITION BY game_id, verification_status
+                                    ORDER BY score DESC
+                                )
                             ELSE 0
                         END AS new_placement
                     FROM game_scores
