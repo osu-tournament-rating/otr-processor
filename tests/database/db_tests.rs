@@ -591,6 +591,28 @@ async fn test_calculate_and_update_game_score_placements() {
         )
         .await
         .expect("Failed to mark a score as unverified");
+    // Force a tied score pair within one game to exercise shared placements
+    admin_client
+        .execute(
+            "
+            UPDATE game_scores
+            SET score = tied.max_score
+            FROM (
+                SELECT game_id, MAX(score) AS max_score
+                FROM game_scores
+                WHERE verification_status = 4
+                GROUP BY game_id
+                HAVING COUNT(*) >= 2
+                ORDER BY game_id
+                LIMIT 1
+            ) AS tied
+            WHERE game_scores.game_id = tied.game_id
+                AND game_scores.verification_status = 4
+        ",
+            &[]
+        )
+        .await
+        .expect("Failed to create tied scores");
 
     let db_client = DbClient::connect(&test_db.connection_string, false)
         .await
@@ -610,32 +632,55 @@ async fn test_calculate_and_update_game_score_placements() {
         .await
         .expect("Failed to fetch placements");
 
-    let mut current_game: Option<i32> = None;
-    let mut expected_placement = 1;
+    // Collect (game_id, score, verification_status, placement) tuples
+    let scores: Vec<(i32, i32, i32, i32)> = rows
+        .iter()
+        .map(|row| {
+            (
+                row.get("game_id"),
+                row.get("score"),
+                row.get("verification_status"),
+                row.get("placement")
+            )
+        })
+        .collect();
 
-    for row in rows {
-        let game_id: i32 = row.get("game_id");
-        let verification_status: i32 = row.get("verification_status");
-        let placement: i32 = row.get("placement");
-
-        if current_game != Some(game_id) {
-            current_game = Some(game_id);
-            expected_placement = 1;
-        }
-
-        if verification_status == 4 {
-            assert_eq!(
-                placement, expected_placement,
-                "Verified score in game {} should have sequential placement",
-                game_id
-            );
-            expected_placement += 1;
-        } else {
+    let mut saw_shared_placement = false;
+    for &(game_id, score, verification_status, placement) in &scores {
+        if verification_status != 4 {
             assert_eq!(
                 placement, 0,
                 "Unverified score in game {} should have placement 0",
                 game_id
             );
+            continue;
+        }
+
+        // Tie-aware rank: 1 + number of verified scores in the same game
+        // with a strictly higher score. Tied scores share a placement and
+        // the following placement is skipped.
+        let expected_placement = 1 + scores
+            .iter()
+            .filter(|&&(g, s, vs, _)| g == game_id && vs == 4 && s > score)
+            .count() as i32;
+
+        assert_eq!(
+            placement, expected_placement,
+            "Verified score in game {} should have tie-aware placement",
+            game_id
+        );
+
+        let sharing = scores
+            .iter()
+            .filter(|&&(g, _, vs, p)| g == game_id && vs == 4 && p == placement)
+            .count();
+        if sharing > 1 {
+            saw_shared_placement = true;
         }
     }
+
+    assert!(
+        saw_shared_placement,
+        "Fixture should include at least one tied pair sharing a placement"
+    );
 }

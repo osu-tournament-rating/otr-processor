@@ -18,7 +18,7 @@ use crate::{
     model::structures::rating_adjustment_type::RatingAdjustmentType::{Decay, VolatilityDecay}
 };
 use chrono::{DateTime, Duration, FixedOffset};
-use tracing::{debug, trace};
+use tracing::{debug, trace, warn};
 
 /// Unified decay system that combines rating decay (for inactive players)
 /// and volatility decay (for all players) into single Wednesday 12:00 UTC adjustments.
@@ -113,8 +113,9 @@ impl UnifiedDecaySystem {
             current += Duration::weeks(1);
         }
 
-        // Filter out Wednesdays before the decay start date to prevent unfair decay
-        // for players active in community tournaments before accessible data begins (~May 2018)
+        // Filter out Wednesdays before the decay start date (2019-01-01) to prevent
+        // unfair decay for players active in community tournaments before tournament
+        // data saving was implemented.
         let start = decay_start_date();
         timestamps.retain(|t| *t >= start);
 
@@ -198,6 +199,18 @@ impl UnifiedDecaySystem {
         } else {
             current_rating
         };
+
+        // Decay must never raise a rating or shrink volatility. Neither is
+        // reachable through the logic above; clamp and warn so a future
+        // regression surfaces in logs instead of silently boosting players.
+        let (new_rating, new_volatility) = Self::enforce_decay_invariants(
+            player_rating.player_id,
+            wednesday,
+            current_rating,
+            new_rating,
+            current_volatility,
+            new_volatility
+        );
 
         // Skip if no actual changes
         if (new_rating - current_rating).abs() < f64::EPSILON
@@ -292,6 +305,45 @@ impl UnifiedDecaySystem {
     /// Calculates new rating after decay, ensuring it doesn't fall below the decay floor.
     fn calculate_decay_rating(current_rating: f64, decay_floor: f64) -> f64 {
         (current_rating - DECAY_RATE).max(decay_floor)
+    }
+
+    /// Guards the decay invariants: a decay adjustment may never increase a
+    /// player's rating or decrease their volatility. Returns clamped values,
+    /// logging a warning if an unexpected decay attempt was blocked.
+    fn enforce_decay_invariants(
+        player_id: i32,
+        wednesday: DateTime<FixedOffset>,
+        current_rating: f64,
+        new_rating: f64,
+        current_volatility: f64,
+        new_volatility: f64
+    ) -> (f64, f64) {
+        let mut rating = new_rating;
+        let mut volatility = new_volatility;
+
+        if rating > current_rating {
+            warn!(
+                player_id,
+                timestamp = %wednesday,
+                rating_before = current_rating,
+                attempted_rating_after = rating,
+                "Unexpected decay attempt would have increased rating; clamping to previous rating"
+            );
+            rating = current_rating;
+        }
+
+        if volatility < current_volatility {
+            warn!(
+                player_id,
+                timestamp = %wednesday,
+                volatility_before = current_volatility,
+                attempted_volatility_after = volatility,
+                "Unexpected decay attempt would have decreased volatility; clamping to previous volatility"
+            );
+            volatility = current_volatility;
+        }
+
+        (rating, volatility)
     }
 }
 
@@ -1165,6 +1217,72 @@ mod tests {
         assert_eq!(volatility_count, expected_active);
         assert_eq!(decay_count, expected_inactive);
         assert_eq!(total_count, all_wednesdays.len());
+    }
+
+    #[test]
+    fn test_enforce_decay_invariants_blocks_rating_increase() {
+        let wednesday = Utc.with_ymd_and_hms(2024, 1, 3, 12, 0, 0).unwrap().fixed_offset();
+
+        // A rating increase must be clamped back to the previous rating
+        let (rating, volatility) =
+            UnifiedDecaySystem::enforce_decay_invariants(1, wednesday, 900.0, 1000.0, 200.0, 210.0);
+        assert_abs_diff_eq!(rating, 900.0);
+        assert_abs_diff_eq!(volatility, 210.0);
+
+        // A volatility decrease must be clamped back to the previous volatility
+        let (rating, volatility) =
+            UnifiedDecaySystem::enforce_decay_invariants(1, wednesday, 1500.0, 1497.0, 200.0, 150.0);
+        assert_abs_diff_eq!(rating, 1497.0);
+        assert_abs_diff_eq!(volatility, 200.0);
+
+        // Valid decay values pass through untouched
+        let (rating, volatility) =
+            UnifiedDecaySystem::enforce_decay_invariants(1, wednesday, 1500.0, 1497.0, 200.0, 210.0);
+        assert_abs_diff_eq!(rating, 1497.0);
+        assert_abs_diff_eq!(volatility, 210.0);
+    }
+
+    #[test]
+    fn test_inactive_player_below_floor_never_boosted() {
+        // A player whose current rating sits below their decay floor must never
+        // have decay raise them toward the floor
+        let mut system = UnifiedDecaySystem::new();
+
+        let last_played = Utc.with_ymd_and_hms(2023, 1, 1, 12, 0, 0).unwrap().fixed_offset();
+        let mut ratings = vec![generate_player_rating(
+            1,
+            Ruleset::Osu,
+            900.0, // Below DECAY_MINIMUM (1000), therefore below any possible floor
+            200.0,
+            2,
+            Some(last_played),
+            Some(last_played)
+        )];
+
+        let baseline = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap().fixed_offset();
+        apply_decay_up_to(&mut system, &mut ratings, baseline);
+
+        let many_weeks_later = Utc.with_ymd_and_hms(2024, 6, 1, 12, 0, 0).unwrap().fixed_offset();
+        apply_decay_up_to(&mut system, &mut ratings, many_weeks_later);
+
+        for adj in ratings[0]
+            .adjustments
+            .iter()
+            .filter(|a| a.adjustment_type == Decay || a.adjustment_type == VolatilityDecay)
+        {
+            assert!(
+                adj.rating_after <= adj.rating_before + f64::EPSILON,
+                "Decay must never increase rating"
+            );
+            assert!(
+                adj.volatility_after >= adj.volatility_before - f64::EPSILON,
+                "Decay must never decrease volatility"
+            );
+        }
+        assert!(
+            ratings[0].rating <= 900.0 + f64::EPSILON,
+            "Rating must not be boosted toward the floor"
+        );
     }
 
     // --- Decay window start date tests ---

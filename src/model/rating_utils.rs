@@ -106,13 +106,14 @@ fn initial_rating(player: &Player, ruleset: &Ruleset) -> f64 {
                     }
                 }
 
-                // Fallback: use global_rank from the respective ruleset
-                if let Some(global_rank) = data
+                // Fallback: use the respective ruleset's own rank,
+                // preferring the earliest-known rank per the closest-known-rank rule
+                if let Some(rank) = data
                     .iter()
                     .find(|rd| rd.ruleset == *ruleset)
-                    .and_then(|ruleset_data| ruleset_data.global_rank)
+                    .and_then(|ruleset_data| ruleset_data.earliest_global_rank.or(ruleset_data.global_rank))
                 {
-                    return mu_from_rank(global_rank, *ruleset);
+                    return mu_from_rank(rank, *ruleset);
                 }
 
                 // If no data found, use fallback rating
@@ -354,7 +355,8 @@ mod tests {
         assert_eq!(mania4k_rating, expected_rating_from_mania_other);
         assert_eq!(mania7k_rating, expected_rating_from_mania_other_7k);
 
-        // Test case 2: Player without ManiaOther earliest_global_rank - should use respective ruleset global_rank
+        // Test case 2: Player without ManiaOther earliest_global_rank - should use the
+        // respective ruleset's own rank, preferring the earliest-known rank
         let player_without_mania_other_earliest = Player {
             id: 2,
             username: Some("TestPlayer2".to_string()),
@@ -368,8 +370,8 @@ mod tests {
 
         let mania4k_rating_fallback = super::initial_rating(&player_without_mania_other_earliest, &Mania4k);
         let mania7k_rating_fallback = super::initial_rating(&player_without_mania_other_earliest, &Mania7k);
-        let expected_mania4k_fallback = mu_from_rank(2000, Mania4k); // Using Mania4k global_rank
-        let expected_mania7k_fallback = mu_from_rank(3000, Mania7k); // Using Mania7k global_rank
+        let expected_mania4k_fallback = mu_from_rank(1500, Mania4k); // Using Mania4k earliest_global_rank
+        let expected_mania7k_fallback = mu_from_rank(2500, Mania7k); // Using Mania7k earliest_global_rank
 
         assert_eq!(mania4k_rating_fallback, expected_mania4k_fallback);
         assert_eq!(mania7k_rating_fallback, expected_mania7k_fallback);

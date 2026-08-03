@@ -196,7 +196,13 @@ impl OtrModel {
     /// - Score of 0
     fn apply_tie_for_last_scores(&self, match_: &mut Match, ids: &[i32]) {
         for game in &mut match_.games {
-            let worst_placement = game.scores.iter().map(|f| f.placement).max().unwrap();
+            let Some(worst_placement) = game.scores.iter().map(|f| f.placement).max() else {
+                warn!(
+                    game_id = game.id,
+                    "Game has no scores, skipping apply_tie_for_last_scores"
+                );
+                continue;
+            };
             let tie_for_last_placement = worst_placement + 1;
 
             let missing_players = ids
@@ -547,6 +553,56 @@ mod tests {
 
         assert!(result_2.mu > result_1.mu);
         assert!(result_1.mu > result_3.mu);
+    }
+
+    #[test]
+    fn test_rate_tied_scores_share_placement() {
+        // Two players tie for 1st (identical scores share a placement), a third is 3rd.
+        // The tied players start identical, so they must receive identical results.
+        let player_ratings = vec![
+            generate_player_rating(1, Osu, 1000.0, 100.0, 1, None, None),
+            generate_player_rating(2, Osu, 1000.0, 100.0, 1, None, None),
+            generate_player_rating(3, Osu, 1000.0, 100.0, 1, None, None),
+        ];
+
+        let countries = generate_country_mapping_player_ratings(player_ratings.as_slice(), "US");
+        let model = OtrModel::new(player_ratings.as_slice(), &countries);
+
+        let tied_placements = vec![
+            generate_placement(1, 1),
+            generate_placement(2, 1),
+            generate_placement(3, 3),
+        ];
+        let tied_result = model.rate(&generate_game(1, &tied_placements), &Osu);
+
+        let tied_1 = tied_result.get(&1).unwrap();
+        let tied_2 = tied_result.get(&2).unwrap();
+        let tied_3 = tied_result.get(&3).unwrap();
+
+        // Tied players are treated identically and both beat the 3rd-place player
+        assert_eq!(tied_1.mu, tied_2.mu, "Tied players must receive the same rating");
+        assert_eq!(
+            tied_1.sigma, tied_2.sigma,
+            "Tied players must receive the same volatility"
+        );
+        assert!(tied_1.mu > tied_3.mu);
+
+        // A tie must not be scored like a sequential 1-2-3 finish
+        let sequential_placements = vec![
+            generate_placement(1, 1),
+            generate_placement(2, 2),
+            generate_placement(3, 3),
+        ];
+        let sequential_result = model.rate(&generate_game(1, &sequential_placements), &Osu);
+        assert!(
+            tied_result.get(&1).unwrap().mu < sequential_result.get(&1).unwrap().mu,
+            "Tying for 1st must award less than winning 1st outright"
+        );
+        assert_ne!(
+            tied_result.get(&2).unwrap().sigma,
+            sequential_result.get(&2).unwrap().sigma,
+            "A tie for 1st must produce a different result than finishing 2nd"
+        );
     }
 
     #[test]
