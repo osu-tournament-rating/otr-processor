@@ -197,7 +197,10 @@ impl OtrModel {
     fn apply_tie_for_last_scores(&self, match_: &mut Match, ids: &[i32]) {
         for game in &mut match_.games {
             let Some(worst_placement) = game.scores.iter().map(|f| f.placement).max() else {
-                warn!(game_id = game.id, "Game has no scores, skipping apply_tie_for_last_scores");
+                warn!(
+                    game_id = game.id,
+                    "Game has no scores, skipping apply_tie_for_last_scores"
+                );
                 continue;
             };
             let tie_for_last_placement = worst_placement + 1;
