@@ -269,7 +269,7 @@ impl DbClient {
 
         let id_list = game_ids.iter().map(|id| id.to_string()).join(",");
         let query = format!(
-            "SELECT id, player_id, game_id, score, placement
+            "SELECT id, player_id, game_id, COALESCE(score_override, score) AS score, placement
              FROM game_scores
              WHERE game_id = ANY(ARRAY[{}]) AND verification_status = 4
              ORDER BY game_id, id",
@@ -911,7 +911,8 @@ impl DbClient {
     }
 
     /// Calculate and update placements for all game scores
-    /// Verified scores get placement based on score ranking (1=highest);
+    /// Verified scores get placement based on the effective score
+    /// (`score_override` when populated, otherwise `score`) ranking (1=highest);
     /// tied scores share the same placement and the following placement is
     /// skipped (e.g. 1, 1, 3). This tells the model a tie exists for first.
     /// Non-verified scores receive a fallback placement of 0 but are not considered.
@@ -967,7 +968,7 @@ impl DbClient {
                             WHEN verification_status = 4 THEN
                                 RANK() OVER (
                                     PARTITION BY game_id, verification_status
-                                    ORDER BY score DESC
+                                    ORDER BY COALESCE(score_override, score) DESC
                                 )
                             ELSE 0
                         END AS new_placement

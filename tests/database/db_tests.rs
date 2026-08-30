@@ -684,3 +684,114 @@ async fn test_calculate_and_update_game_score_placements() {
         "Fixture should include at least one tied pair sharing a placement"
     );
 }
+
+#[tokio::test]
+#[serial]
+async fn test_calculate_and_update_game_score_placements_uses_score_override() {
+    init_test_env();
+    let test_db = TestDatabase::new().await.expect("Failed to create test database");
+    test_db.seed_test_data().await.expect("Failed to seed test data");
+
+    let admin_client = test_db.get_client().await.expect("Failed to get client");
+
+    // Override on the lower-scoring row
+    let game_id: i32 = admin_client
+        .query_one(
+            "
+            SELECT game_id
+            FROM game_scores
+            WHERE verification_status = 4
+            GROUP BY game_id
+            HAVING COUNT(*) = 2
+            ORDER BY game_id
+            LIMIT 1
+        ",
+            &[]
+        )
+        .await
+        .expect("Failed to find a two-score game")
+        .get(0);
+
+    let overridden_id: i32 = admin_client
+        .query_one(
+            "
+            UPDATE game_scores
+            SET score_override = (SELECT MAX(score) + 1 FROM game_scores WHERE game_id = $1)
+            WHERE id = (
+                SELECT id FROM game_scores WHERE game_id = $1 ORDER BY score ASC LIMIT 1
+            )
+            RETURNING id
+        ",
+            &[&game_id]
+        )
+        .await
+        .expect("Failed to set score override")
+        .get(0);
+
+    let db_client = DbClient::connect(&test_db.connection_string, false)
+        .await
+        .expect("Failed to connect");
+
+    db_client.calculate_and_update_game_score_placements().await;
+
+    let rows = admin_client
+        .query(
+            "SELECT id, placement FROM game_scores WHERE game_id = $1 ORDER BY id",
+            &[&game_id]
+        )
+        .await
+        .expect("Failed to fetch placements");
+
+    for row in rows {
+        let id: i32 = row.get("id");
+        let placement: i32 = row.get("placement");
+        let expected = if id == overridden_id { 1 } else { 2 };
+
+        assert_eq!(placement, expected, "Score {} should rank on its effective score", id);
+    }
+}
+
+#[tokio::test]
+#[serial]
+async fn test_get_matches_reads_score_override() {
+    init_test_env();
+    let test_db = TestDatabase::new().await.expect("Failed to create test database");
+    test_db.seed_test_data().await.expect("Failed to seed test data");
+
+    let admin_client = test_db.get_client().await.expect("Failed to get client");
+    let overridden_id: i32 = admin_client
+        .query_one(
+            "
+            UPDATE game_scores
+            SET score_override = 1750000
+            WHERE id = (SELECT id FROM game_scores WHERE verification_status = 4 ORDER BY id LIMIT 1)
+            RETURNING id
+        ",
+            &[]
+        )
+        .await
+        .expect("Failed to set score override")
+        .get(0);
+
+    let db_client = DbClient::connect(&test_db.connection_string, false)
+        .await
+        .expect("Failed to connect");
+
+    let matches = db_client.get_matches().await;
+    let scores: Vec<&GameScore> = matches
+        .iter()
+        .flat_map(|m| m.games.iter().flat_map(|g| g.scores.iter()))
+        .collect();
+
+    let overridden = scores
+        .iter()
+        .find(|s| s.id == overridden_id)
+        .expect("Overridden score should be fetched");
+    assert_eq!(overridden.score, 1750000);
+
+    for score in &scores {
+        if score.id != overridden_id {
+            assert_ne!(score.score, 1750000);
+        }
+    }
+}
