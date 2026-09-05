@@ -2,8 +2,9 @@
 
 Run commands from the repository root with stable Rust (`rust-version` in
 `Cargo.toml`). `cargo +nightly fmt` is the one nightly command because
-`rustfmt.toml` uses unstable options. First read `/home/stage/code/git/otr/AGENTS.md`
-and `/home/stage/code/git/otr/.agents/WORKFLOW.md`.
+`rustfmt.toml` uses unstable options. Expand `$HOME` to the current user's home
+directory, then first read `$HOME/code/git/otr/AGENTS.md` and
+`$HOME/code/git/otr/.agents/WORKFLOW.md`.
 
 This repository owns rating calculation and full-rebuild SQL. `otr-web` owns the
 schema and migrations. Treat the boundary as a contract. Start task
