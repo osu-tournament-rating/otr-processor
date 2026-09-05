@@ -1,6 +1,8 @@
 # otr-processor agent guidance
 
-Run commands from the repository root with nightly Rust.
+Run commands from the repository root with stable Rust (`rust-version` in
+`Cargo.toml`). `cargo +nightly fmt` is the one nightly command;
+`rustfmt.toml` uses unstable options.
 
 - This repository owns the rating calculation and its SQL. The schema and
   migrations are owned by `otr-web`; treat that boundary as a contract.
@@ -32,7 +34,7 @@ derived stats for rejected data, publish stats refresh messages, commit.
 - `src/args.rs` CLI and env parsing. `src/model/` initial ratings,
   Plackett-Luce, decay, ranking, persisted types. `src/database/` SQL, row
   mappings, bulk writes, transactions. `src/messaging/` RabbitMQ topology,
-  envelope, retry, publishing.
+  envelope, retry, publishing. `src/utils/` shared helpers.
 - Keep orchestration in `main`, math in `model`, persistence in `database`,
   broker behavior in `messaging`. Diagnostics use structured `tracing` fields.
 
@@ -54,9 +56,9 @@ derived stats for rejected data, publish stats refresh messages, commit.
 
 ## Database and messaging contracts
 
-- `src/database/db.rs` embeds SQL against
-  `../otr-web/packages/otr-core/src/db/schema.ts`; migrations live in
-  `../otr-web/apps/web/drizzle/`. A physical name, type, nullability, enum,
+- `src/database/db.rs` embeds SQL against the sibling `otr-web` checkout's
+  `packages/otr-core/src/db/schema.ts`; migrations live in its
+  `apps/web/drizzle/`. A physical name, type, nullability, enum,
   verification-rule, or relationship change is one compatibility change across
   both repositories: update row structs, SQL, COPY column lists, and
   `tests/database/schema.sql` together, use additive migrations, and keep the
