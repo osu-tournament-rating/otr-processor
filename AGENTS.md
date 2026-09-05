@@ -1,74 +1,67 @@
 # otr-processor agent guidance
 
 Run commands from the repository root with stable Rust (`rust-version` in
-`Cargo.toml`). `cargo +nightly fmt` is the one nightly command;
-`rustfmt.toml` uses unstable options.
+`Cargo.toml`). `cargo +nightly fmt` is the one nightly command because
+`rustfmt.toml` uses unstable options. First read `/home/stage/code/git/otr/AGENTS.md`
+and `/home/stage/code/git/otr/.agents/WORKFLOW.md`.
 
-- This repository owns the rating calculation and its SQL. The schema and
-  migrations are owned by `otr-web`; treat that boundary as a contract.
-- Start from `.env.example` and keep credentials in the ignored `.env`. Never
-  commit credentials or put a RabbitMQ URL with credentials in logs, fixtures,
-  or review output.
-- Running the binary is destructive. Never `cargo run` against production,
-  staging, or a shared database to verify a change; use a disposable database.
-  `--ignore-constraints` is not a dry run.
+This repository owns rating calculation and full-rebuild SQL. `otr-web` owns the
+schema and migrations. Treat the boundary as a contract. Start task
+configuration from `.env.example`; never copy credentials, commit `.env`, or log
+a credentialed PostgreSQL or RabbitMQ URL.
+
+Running the binary changes its target database. Never use production, staging,
+the user's database, or a shared database for verification. `--ignore-constraints`
+is not a dry run. Use the assigned disposable database on port `5434` for manual
+runs. Existing isolated Testcontainers tests can use their assigned dynamic
+ports. Never connect to the user's port `5432`.
 
 ## Commands
 
-- `cargo run -- --help` lists options. `CONNECTION_STRING` is required.
-- `cargo test` runs unit tests. Database integration tests use Testcontainers
-  and need Docker; real-broker tests are ignored by default and run only
-  against an approved disposable RabbitMQ.
-- Before handing off: `cargo +nightly fmt -- --check`, `cargo clippy`,
-  `cargo test`, `git diff --check`. Report a check infrastructure prevented as
-  skipped, not passed.
+- `cargo run -- --help` lists options; `CONNECTION_STRING` is required to run.
+- `cargo test` runs unit tests. Database tests use Testcontainers and Docker.
+  Real-broker tests are ignored unless an approved disposable broker is assigned.
+- Before handoff: `cargo +nightly fmt -- --check`, `cargo clippy`, `cargo test`,
+  and `git diff --check`. Report unavailable infrastructure as blocked.
 
-## Layout
+## Ownership
 
-`src/main.rs` runs one full recomputation in a single transaction: recalculate
-score placements, load data with verification status `4`, build initial
-ratings, process matches chronologically with `OtrModel`, apply decay, replace
-`player_ratings` and `rating_adjustments`, update `player_highest_ranks`, drop
-derived stats for rejected data, publish stats refresh messages, commit.
+`src/main.rs` orchestrates one recomputation transaction. Keep math in
+`src/model/`, persistence in `src/database/`, RabbitMQ behavior in
+`src/messaging/`, CLI or environment parsing in `src/args.rs`, and shared helpers
+in `src/utils/`. Use structured `tracing` fields for diagnostics.
 
-- `src/args.rs` CLI and env parsing. `src/model/` initial ratings,
-  Plackett-Luce, decay, ranking, persisted types. `src/database/` SQL, row
-  mappings, bulk writes, transactions. `src/messaging/` RabbitMQ topology,
-  envelope, retry, publishing. `src/utils/` shared helpers.
-- Keep orchestration in `main`, math in `model`, persistence in `database`,
-  broker behavior in `messaging`. Diagnostics use structured `tracing` fields.
+Centralize rating constants in their existing domain modules. A constant change
+can rewrite all history; pair it with explicit impact analysis and deterministic
+tests.
 
 ## Rating invariants
 
-- Chronological match order, match-end fallback, decay boundaries, and ranking
-  tie behavior are part of the rating contract.
-- Persisted `Ruleset` is `0..=5` and `RatingAdjustmentType` is `0..=3`. Never
-  reorder or renumber.
-- Match-method weights, initial-rating bounds, decay constants, volatility, and
-  the rating floor move every historical result. Changes need focused unit
-  tests, full rating tests, and a stated expected impact.
-- A verified game with fewer than two verified scores is skipped. Keep the
-  data-integrity warnings and test any eligibility change.
-- Ranking, country ranking, percentile, rating history, and highest rank stay
-  mutually consistent across every ruleset.
-- Use deterministic fixtures with explicit timestamps and placements. Float
-  assertions state a meaningful tolerance.
+- Preserve chronological match order, match-end fallback, decay boundaries,
+  ranking ties, participation behavior, and rating floor semantics.
+- Persisted `Ruleset` is `0..=5`; `RatingAdjustmentType` is `0..=3`. Never
+  reorder or renumber them.
+- Changes to match weights, initial bounds, decay, volatility, or floors need
+  focused unit tests and full-rating tests with expected impact.
+- Skip a verified game with fewer than two verified scores and retain its
+  data-integrity warning.
+- Keep overall ranking, country ranking, percentile, rating history, and highest
+  rank consistent for every ruleset.
+- Use deterministic fixtures with explicit times and placements. Give float
+  assertions a meaningful tolerance.
 
 ## Database and messaging contracts
 
-- `src/database/db.rs` embeds SQL against the sibling `otr-web` checkout's
-  `packages/otr-core/src/db/schema.ts`; migrations live in its
-  `apps/web/drizzle/`. A physical name, type, nullability, enum,
-  verification-rule, or relationship change is one compatibility change across
-  both repositories: update row structs, SQL, COPY column lists, and
-  `tests/database/schema.sql` together, use additive migrations, and keep the
-  deployed web app, processor, and workers compatible. Never edit an applied
-  migration. Test on a fresh disposable database.
-- Recomputation truncates with `RESTART IDENTITY CASCADE`, writes with `COPY`,
-  updates `game_scores`, and deletes stale stats. Keep every write on the same
-  connection inside the transaction guard; do not weaken rollback.
-- The exchange, queue, routing key, AMQP properties, and camel-case JSON of
-  `ProcessTournamentStatsMessage` are contracts with the data worker.
-  Publishing happens before commit, broker failure does not stop processing,
-  and publish failures do not abort the run; never assume exactly-once delivery
-  or committed data at publish time.
+- `src/database/db.rs` consumes the sibling `otr-web` schema at
+  `packages/otr-core/src/db/schema.ts`; migrations live in `apps/web/drizzle/`.
+  Update row structs, raw SQL, `COPY` columns, and `tests/database/schema.sql`
+  for an affected contract. Use additive migrations and test a fresh disposable
+  database.
+- Keep recomputation writes on one connection inside the transaction guard.
+  Preserve rollback around truncation, `COPY`, score updates, and stale-stat
+  deletion.
+- The stats exchange, queue, routing key, AMQP properties, and camel-case
+  `ProcessTournamentStatsMessage` JSON are worker contracts.
+- Publishing can fail independently and occurs before database commit. Preserve
+  publish-failure logs and the current behavior that does not abort the rebuild.
+  Do not assume exactly-once delivery or committed data at publication time.
