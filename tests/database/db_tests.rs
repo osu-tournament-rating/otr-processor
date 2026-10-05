@@ -333,6 +333,182 @@ fn player_rating_with_ranks(
     }
 }
 
+/// Returns the row count and id range of a rating table, as seen by `client`.
+async fn rating_table_summary(client: &tokio_postgres::Client, table: &str) -> (i64, Option<i32>, Option<i32>) {
+    let row = client
+        .query_one(format!("SELECT COUNT(*), MIN(id), MAX(id) FROM {table}").as_str(), &[])
+        .await
+        .unwrap_or_else(|e| panic!("Failed to read {table}: {e:?}"));
+
+    (row.get(0), row.get(1), row.get(2))
+}
+
+#[tokio::test]
+#[serial]
+async fn test_save_results_keeps_previous_ratings_readable_until_commit() {
+    init_test_env();
+    let test_db = TestDatabase::new().await.expect("Failed to create test database");
+    test_db.seed_test_data().await.expect("Failed to seed test data");
+
+    let timestamp = DateTime::parse_from_rfc3339("2025-02-03T04:05:06+00:00").unwrap();
+    let previous_ratings = vec![
+        player_rating_with_ranks(1, 100, 10, timestamp),
+        player_rating_with_ranks(2, 200, 20, timestamp),
+    ];
+    let next_ratings = vec![
+        player_rating_with_ranks(1, 100, 10, timestamp),
+        player_rating_with_ranks(2, 200, 20, timestamp),
+        player_rating_with_ranks(3, 300, 30, timestamp),
+    ];
+
+    let db_client = DbClient::connect(&test_db.connection_string, false)
+        .await
+        .expect("Failed to connect");
+
+    let mut initial_transaction = db_client
+        .begin_transaction()
+        .await
+        .expect("Failed to begin transaction");
+    db_client.save_results(&previous_ratings).await;
+    initial_transaction
+        .commit()
+        .await
+        .expect("Failed to commit initial ratings");
+
+    // A website reader fails instead of waiting if the rewrite holds a blocking lock.
+    let reader = test_db.get_client().await.expect("Failed to get client");
+    reader
+        .batch_execute("SET lock_timeout = '2s'")
+        .await
+        .expect("Failed to set lock timeout");
+
+    let mut transaction = db_client
+        .begin_transaction()
+        .await
+        .expect("Failed to begin transaction");
+    db_client.save_results(&next_ratings).await;
+    let transaction_start: DateTime<FixedOffset> = db_client
+        .client()
+        .query_one("SELECT CURRENT_TIMESTAMP", &[])
+        .await
+        .expect("Failed to read transaction start")
+        .get(0);
+
+    // Before COMMIT, other sessions see the previous run in full.
+    assert_eq!(
+        rating_table_summary(&reader, "player_ratings").await,
+        (2, Some(1), Some(2))
+    );
+    assert_eq!(
+        rating_table_summary(&reader, "rating_adjustments").await,
+        (2, Some(1), Some(2))
+    );
+
+    transaction.commit().await.expect("Failed to commit next ratings");
+
+    // After COMMIT, other sessions see only the new run, with ids restarted at 1.
+    assert_eq!(
+        rating_table_summary(&reader, "player_ratings").await,
+        (3, Some(1), Some(3))
+    );
+    assert_eq!(
+        rating_table_summary(&reader, "rating_adjustments").await,
+        (3, Some(1), Some(3))
+    );
+
+    // The website detects published ratings by max(created), which is the transaction start.
+    let created = reader
+        .query_one("SELECT MIN(created), MAX(created) FROM player_ratings", &[])
+        .await
+        .expect("Failed to read created timestamps");
+    assert_eq!(created.get::<_, DateTime<FixedOffset>>(0), transaction_start);
+    assert_eq!(created.get::<_, DateTime<FixedOffset>>(1), transaction_start);
+}
+
+#[tokio::test]
+#[serial]
+async fn test_save_results_rollback_restores_previous_ratings_and_sequences() {
+    init_test_env();
+    let test_db = TestDatabase::new().await.expect("Failed to create test database");
+    test_db.seed_test_data().await.expect("Failed to seed test data");
+
+    let timestamp = DateTime::parse_from_rfc3339("2025-02-03T04:05:06+00:00").unwrap();
+    let previous_ratings = vec![
+        player_rating_with_ranks(1, 100, 10, timestamp),
+        player_rating_with_ranks(2, 200, 20, timestamp),
+    ];
+    let next_ratings = vec![
+        player_rating_with_ranks(1, 100, 10, timestamp),
+        player_rating_with_ranks(2, 200, 20, timestamp),
+        player_rating_with_ranks(3, 300, 30, timestamp),
+    ];
+
+    let db_client = DbClient::connect(&test_db.connection_string, false)
+        .await
+        .expect("Failed to connect");
+
+    let mut initial_transaction = db_client
+        .begin_transaction()
+        .await
+        .expect("Failed to begin transaction");
+    db_client.save_results(&previous_ratings).await;
+    initial_transaction
+        .commit()
+        .await
+        .expect("Failed to commit initial ratings");
+
+    let reader = test_db.get_client().await.expect("Failed to get client");
+    let sequence_state = "
+        SELECT r.last_value, r.is_called, a.last_value, a.is_called
+        FROM player_ratings_id_seq r, rating_adjustments_id_seq a
+    ";
+    let sequences_before: (i64, bool, i64, bool) = reader
+        .query_one(sequence_state, &[])
+        .await
+        .map(|row| (row.get(0), row.get(1), row.get(2), row.get(3)))
+        .expect("Failed to read sequences");
+
+    let mut failed_transaction = db_client
+        .begin_transaction()
+        .await
+        .expect("Failed to begin transaction");
+    db_client.save_results(&next_ratings).await;
+    failed_transaction.rollback().await.expect("Failed to rollback");
+
+    // A failed run leaves the previous rows and the sequences as they were.
+    assert_eq!(
+        rating_table_summary(&reader, "player_ratings").await,
+        (2, Some(1), Some(2))
+    );
+    assert_eq!(
+        rating_table_summary(&reader, "rating_adjustments").await,
+        (2, Some(1), Some(2))
+    );
+    let sequences_after: (i64, bool, i64, bool) = reader
+        .query_one(sequence_state, &[])
+        .await
+        .map(|row| (row.get(0), row.get(1), row.get(2), row.get(3)))
+        .expect("Failed to read sequences");
+    assert_eq!(sequences_after, sequences_before);
+
+    // The next successful run still restarts ids at 1.
+    let mut next_transaction = db_client
+        .begin_transaction()
+        .await
+        .expect("Failed to begin transaction");
+    db_client.save_results(&next_ratings).await;
+    next_transaction.commit().await.expect("Failed to commit next ratings");
+
+    assert_eq!(
+        rating_table_summary(&reader, "player_ratings").await,
+        (3, Some(1), Some(3))
+    );
+    assert_eq!(
+        rating_table_summary(&reader, "rating_adjustments").await,
+        (3, Some(1), Some(3))
+    );
+}
+
 #[tokio::test]
 #[serial]
 async fn test_detects_tournaments_with_changed_match_rating_adjustments() {

@@ -443,8 +443,12 @@ impl DbClient {
     }
 
     pub async fn save_results(&self, player_ratings: &[PlayerRating]) {
-        self.truncate_table("rating_adjustments").await;
-        self.truncate_table("player_ratings").await;
+        // Delete rather than truncate: TRUNCATE holds an ACCESS EXCLUSIVE lock until COMMIT,
+        // which blocks every website read of these tables for the rest of the run. With DELETE,
+        // other sessions keep reading the previous results until this transaction commits.
+        // rating_adjustments is the only table referencing player_ratings, so it goes first.
+        self.delete_all_rows("rating_adjustments").await;
+        self.delete_all_rows("player_ratings").await;
 
         self.save_ratings_and_adjustments_with_mapping(&player_ratings).await;
         self.insert_or_update_highest_ranks(player_ratings).await;
@@ -875,13 +879,31 @@ impl DbClient {
         tournament_info
     }
 
-    async fn truncate_table(&self, table: &str) {
-        self.client
-            .execute(format!("TRUNCATE TABLE {table} RESTART IDENTITY CASCADE").as_str(), &[])
+    /// Deletes every row of `table` and restarts its `id` identity sequence, as
+    /// `TRUNCATE ... RESTART IDENTITY` did, without blocking readers of the table.
+    /// `ALTER SEQUENCE ... RESTART` is transactional and locks only the sequence,
+    /// so a rollback restores the previous sequence state along with the rows.
+    async fn delete_all_rows(&self, table: &str) {
+        let deleted = self
+            .client
+            .execute(format!("DELETE FROM {table}").as_str(), &[])
             .await
             .unwrap();
 
-        info!("Truncated the {} table!", table);
+        let sequence: Option<String> = self
+            .client
+            .query_one("SELECT pg_get_serial_sequence($1, 'id')", &[&table])
+            .await
+            .unwrap()
+            .get(0);
+        let sequence = sequence.unwrap_or_else(|| panic!("{table}.id has no identity sequence to restart"));
+
+        self.client
+            .execute(format!("ALTER SEQUENCE {sequence} RESTART").as_str(), &[])
+            .await
+            .unwrap();
+
+        info!(table, deleted, "Deleted all rows and restarted the id sequence");
     }
 
     async fn set_replication(&self, replication_role: ReplicationRole) {

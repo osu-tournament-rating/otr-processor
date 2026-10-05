@@ -57,8 +57,11 @@ tests.
   for an affected contract. Use additive migrations and test a fresh disposable
   database.
 - Keep recomputation writes on one connection inside the transaction guard.
-  Preserve rollback around truncation, `COPY`, score updates, and stale-stat
-  deletion.
+  Preserve rollback around the rating-table deletes, `COPY`, score updates, and
+  stale-stat deletion.
+- The website reads `player_ratings` and `rating_adjustments` throughout a run.
+  Never take a lock that blocks readers until commit, such as `TRUNCATE` or
+  `LOCK TABLE`.
 - The stats exchange, queue, routing key, AMQP properties, and camel-case
   `ProcessTournamentStatsMessage` JSON are worker contracts.
 - Publishing can fail independently and occurs before database commit. Preserve
