@@ -110,8 +110,10 @@ async fn main() {
         // 8. Remove lingering stats for tournaments/matches rejected since the last run
         client.delete_rejected_player_stats().await;
 
-        // 9. Emit messages for tournaments needing stats refresh
-        if let Some(ref mut publisher) = rabbitmq_publisher {
+        // 9. Select tournaments needing a stats refresh. Their messages are published only
+        // after COMMIT, so the data worker never reads ratings from an uncommitted run.
+        let mut stats_refresh: Vec<(i32, String)> = Vec::new();
+        if track_rating_changes {
             let mut tournaments_needing_refresh: BTreeSet<i32> = client
                 .get_tournaments_needing_stats_refresh(&all_tournament_ids)
                 .await
@@ -137,37 +139,33 @@ async fn main() {
             }
 
             let skipped = tournament_info.len().saturating_sub(tournaments_needing_refresh.len());
+            // Log every selected ID before COMMIT: if the process dies after COMMIT but before
+            // publishing, a re-run may not select these tournaments again.
             info!(
                 rating_changed_tournaments = rating_change_count,
-                "Enqueueing {} of {} tournaments for stats refresh ({} unchanged)",
+                tournament_ids = ?tournaments_needing_refresh,
+                "Selected {} of {} tournaments for stats refresh after commit ({} unchanged)",
                 tournaments_needing_refresh.len(),
                 tournament_info.len(),
                 skipped
             );
 
-            for tournament_id in tournaments_needing_refresh {
-                if let Some(tournament_data) = tournament_info.get(&tournament_id) {
-                    let correlation_id = Some(Uuid::new_v4().to_string());
-
-                    if let Err(e) = publisher.ensure_connected().await {
-                        error!("Failed to ensure RabbitMQ connection: {}", e);
-                        continue;
-                    }
-
-                    match publisher.publish_tournament_stats(tournament_id, correlation_id).await {
-                        Ok(_) => info!("Enqueued stats: [{}] {}", tournament_id, tournament_data.name),
-                        Err(e) => error!("Failed to publish message for tournament {}: {}", tournament_id, e)
-                    }
-                }
-            }
+            stats_refresh = tournaments_needing_refresh
+                .into_iter()
+                .filter_map(|tournament_id| {
+                    tournament_info
+                        .get(&tournament_id)
+                        .map(|tournament_data| (tournament_id, tournament_data.name.clone()))
+                })
+                .collect();
         }
 
-        Ok::<(), Box<dyn std::error::Error + Send + Sync>>(())
+        Ok::<Vec<(i32, String)>, Box<dyn std::error::Error + Send + Sync>>(stats_refresh)
     }
     .await;
 
     match process_result {
-        Ok(()) => {
+        Ok(stats_refresh) => {
             // COMMIT TRANSACTION
             if let Err(e) = transaction_guard.commit().await {
                 error!("Failed to commit transaction: {}", e);
@@ -180,6 +178,12 @@ async fn main() {
                 std::process::exit(1);
             }
             info!("COMMIT TRANSACTION");
+
+            // 10. Emit messages for tournaments needing stats refresh
+            if let Some(ref mut publisher) = rabbitmq_publisher {
+                publish_stats_refresh(publisher, &stats_refresh).await;
+            }
+
             let end = Instant::now();
             info!("Processing complete in {:.2?}", (end - start));
         }
@@ -226,6 +230,39 @@ async fn initialize_rabbitmq() -> Result<RabbitMqPublisher, Box<dyn std::error::
     publisher.connect(&rabbitmq_url).await?;
 
     Ok(publisher)
+}
+
+/// Publishes stats refresh messages for a committed run. A failure here does not fail
+/// the run: the ratings are already committed, so it is logged with the tournaments
+/// that were not enqueued instead.
+async fn publish_stats_refresh(publisher: &mut RabbitMqPublisher, stats_refresh: &[(i32, String)]) {
+    let mut failed_tournament_ids: Vec<i32> = Vec::new();
+
+    for (index, (tournament_id, tournament_name)) in stats_refresh.iter().enumerate() {
+        if let Err(e) = publisher.ensure_connected().await {
+            error!("Failed to ensure RabbitMQ connection: {}", e);
+            failed_tournament_ids.extend(stats_refresh[index..].iter().map(|(id, _)| *id));
+            break;
+        }
+
+        let correlation_id = Some(Uuid::new_v4().to_string());
+        match publisher.publish_tournament_stats(*tournament_id, correlation_id).await {
+            Ok(_) => info!("Enqueued stats: [{}] {}", tournament_id, tournament_name),
+            Err(e) => {
+                error!("Failed to publish message for tournament {}: {}", tournament_id, e);
+                failed_tournament_ids.push(*tournament_id);
+            }
+        }
+    }
+
+    if !failed_tournament_ids.is_empty() {
+        error!(
+            failed_count = failed_tournament_ids.len(),
+            tournament_ids = ?failed_tournament_ids,
+            "Ratings were committed, but these tournaments were not enqueued for a stats refresh. \
+             Re-running the processor may not enqueue them again; enqueue them directly"
+        );
+    }
 }
 
 async fn cleanup_rabbitmq(publisher: &mut Option<RabbitMqPublisher>) {

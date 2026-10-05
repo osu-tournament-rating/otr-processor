@@ -64,6 +64,8 @@ tests.
   `LOCK TABLE`.
 - The stats exchange, queue, routing key, AMQP properties, and camel-case
   `ProcessTournamentStatsMessage` JSON are worker contracts.
-- Publishing can fail independently and occurs before database commit. Preserve
-  publish-failure logs and the current behavior that does not abort the rebuild.
-  Do not assume exactly-once delivery or committed data at publication time.
+- Stats refresh messages are published only after a successful commit, because
+  the data worker reads the new ratings as soon as it consumes them. A
+  rolled-back run publishes nothing. A publish failure is logged with the
+  tournaments it missed and does not fail the run. Do not assume exactly-once
+  delivery.
