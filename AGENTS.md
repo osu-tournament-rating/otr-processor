@@ -12,8 +12,7 @@ a credentialed PostgreSQL or RabbitMQ URL.
 Running the binary changes its target database. Never use production or a
 shared database for verification. `--ignore-constraints` is not a dry run. Use
 the assigned disposable database on port `5434` for manual runs. Existing
-isolated Testcontainers tests can use their assigned dynamic ports. Never connect
-to the user's port `5432`.
+isolated Testcontainers tests can use their assigned dynamic ports.
 
 ## Commands
 
